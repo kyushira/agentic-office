@@ -1,0 +1,11 @@
+{
+  "name": "agent-office",
+  "label": "Office",
+  "description": "Read-only 3D office showing what each agent is doing right now.",
+  "icon": "Activity",
+  "version": "0.1.0",
+  "tab": { "path": "/office", "position": "end" },
+  "entry": "dist/index.js",
+  "css": "dist/style.css",
+  "api": "plugin_api.py"
+}
