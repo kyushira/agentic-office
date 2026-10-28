@@ -106,12 +106,9 @@
 .ao-runs { position: absolute; left: 10px; bottom: 10px; display: flex; gap: 6px; align-items: center; padding: 6px 8px; border-radius: 12px; font-size: 12px; z-index: 4; }
 .ao-runs > span:first-child { font-size: 10px; letter-spacing: .14em; margin-right: 2px; }
 .ao-chip { border: 1px solid var(--ao-line); background: rgba(255,255,255,.07); border-radius: 7px; padding: 3px 8px; font-size: 12px; font-weight: 550; }
-.ao-controls { position: absolute; right: 10px; bottom: 10px; display: flex; flex-direction: column; gap: 6px; padding: 8px; border-radius: 14px; z-index: 4; width: 176px; }
-.ao-map-head { display: flex; justify-content: space-between; align-items: center; font-size: 10px; letter-spacing: .14em; }
-.ao-map-head .ao-chip { font-size: 11px; padding: 2px 7px; }
-.ao-map { width: 100%; height: 104px; display: block; border-radius: 9px; background: rgba(5, 9, 22, .6); border: 1px solid var(--ao-line); cursor: pointer; }
-.ao-map-btns { display: flex; gap: 6px; justify-content: space-between; }
-.ao-map-btns .ao-icon-btn { flex: 1; height: 30px; width: auto; }
+.ao-controls { position: absolute; right: 10px; bottom: 10px; display: flex; padding: 6px; border-radius: 12px; z-index: 4; }
+.ao-map-btns { display: flex; gap: 6px; align-items: center; }
+.ao-map-btns .ao-icon-btn { width: 34px; height: 32px; }
 
 /* helper tags above the spare desks */
 .ao-subtag { position: absolute; left: 0; top: 0; pointer-events: none; white-space: nowrap; font-size: 10.5px; padding: 4px 8px; border-radius: 8px;
@@ -151,16 +148,16 @@
   .ao-detail { top: auto; left: 6px; right: 6px; bottom: 6px; width: auto; max-height: 62%; border-radius: 18px; animation-name: ao-up; }
   @keyframes ao-up { from { opacity: 0; transform: translateY(16px); } }
   .ao-runs { bottom: 8px; left: 8px; }
-  .ao-controls { bottom: 8px; right: 8px; width: 132px; padding: 6px; gap: 5px; }
-  .ao-map { height: 62px; }
-  .ao-map-btns .ao-icon-btn { height: 28px; }
-  .ao-runs { flex-wrap: wrap; max-width: calc(100% - 160px); }
+  .ao-controls { bottom: 8px; right: 8px; padding: 5px; }
+  .ao-map-btns .ao-icon-btn { width: 32px; height: 30px; }
+  .ao-runs { flex-wrap: wrap; max-width: calc(100% - 16px); }
   .ao-toasts { top: 56px; right: 6px; left: 6px; align-items: stretch; }
   .ao-toast-card { max-width: none; font-size: 12px; }
   .ao-tabs { margin: 0 0 0 auto; }
 }
 .ao-root.has-sheet .ao-runs, .ao-root.has-sheet .ao-controls, .ao-root.has-sheet .ao-brain-label { display: none; }
 .ao-short { display: none; }
+@media (max-width: 720px) and (min-height: 501px) { .ao-runs { bottom: 58px !important; } }
 @media (max-width: 480px) {
   .ao-long { display: none; }
   .ao-short { display: inline; }
@@ -176,9 +173,8 @@
   .ao-label-txt .ao-mono { font-size: 9.5px; }
   .ao-avatars { display: none; }
   .ao-toast-card { font-size: 11.5px; padding: 6px 10px 6px 6px; }
-  .ao-controls { bottom: 6px; right: 6px; width: 140px; padding: 6px; gap: 4px; }
-  .ao-map { height: 50px; }
-  .ao-map-btns .ao-icon-btn { height: 26px; }
+  .ao-controls { bottom: 6px; right: 6px; padding: 5px; }
+  .ao-map-btns .ao-icon-btn { width: 32px; height: 30px; }
   .ao-toasts { top: 56px; }
   .ao-runs { bottom: 6px; left: 6px; }
 }

@@ -124,35 +124,6 @@ function ListPanel({ tab, state, onPick, onClose }) {
   );
 }
 
-/** Top-down minimap in screen-plane units: room diamonds in their colours, the Brain, the view box. */
-function Minimap({ map, onPan, onPick }) {
-  if (!map || !map.rooms.length) return <svg className="ao-map" viewBox="0 0 10 7" />;
-  const d = map.size / Math.SQRT2 + 1;
-  const xs = map.rooms.flatMap(r => [r.x - d, r.x + d]), ys = map.rooms.flatMap(r => [-r.y - d, -r.y + d]);
-  const x0 = Math.min(...xs, -map.hub), x1 = Math.max(...xs, map.hub), y0 = Math.min(...ys, -map.hub), y1 = Math.max(...ys, map.hub);
-  const pad = 2, vb = [x0 - pad, y0 - pad, x1 - x0 + pad * 2, y1 - y0 + pad * 2];
-  const v = map.view;
-  const click = e => {
-    const svg = e.currentTarget, r = svg.getBoundingClientRect();
-    const sx = vb[0] + ((e.clientX - r.left) / r.width) * vb[2], sy = vb[1] + ((e.clientY - r.top) / r.height) * vb[3];
-    const hit = map.rooms.find(rm => Math.abs(sx - rm.x) + Math.abs(sy + rm.y) < d);
-    if (hit) onPick(hit.id); else onPan(sx, -sy);
-  };
-  return (
-    <svg className="ao-map" viewBox={vb.join(' ')} preserveAspectRatio="xMidYMid meet" onClick={click} role="img" aria-label="Minimap">
-      {map.rooms.map(r => <line key={'l' + r.id} x1="0" y1="0" x2={r.x} y2={-r.y} stroke={hex(r.color)} strokeOpacity="0.55" strokeWidth="0.9" />)}
-      <circle cx="0" cy="0" r={map.hub} fill="#0d1733" stroke="#7fe6ff" strokeWidth="0.5" />
-      <circle cx="0" cy="0" r={map.hub * 0.35} fill="#7fe6ff" opacity="0.8" />
-      {map.rooms.map(r => (
-        <g key={r.id}>
-          <polygon points={`${r.x},${-r.y - d + 1} ${r.x + d - 1},${-r.y} ${r.x},${-r.y + d - 1} ${r.x - d + 1},${-r.y}`} fill={hex(r.color)} fillOpacity="0.85" stroke="#fff" strokeOpacity="0.25" strokeWidth="0.4" />
-          {r.status === 'working' && <circle cx={r.x} cy={-r.y} r="1.1" fill="#46e08a" />}
-        </g>
-      ))}
-      <rect x={v.x - v.w} y={-v.y - v.h} width={v.w * 2} height={v.h * 2} fill="none" stroke="#fff" strokeOpacity="0.7" strokeWidth="0.5" rx="0.8" />
-    </svg>
-  );
-}
 
 const isLite = () => {
   try { const v = localStorage.getItem('agent-office.lite'); if (v != null) return v === '1'; } catch (e) { /* private mode */ }
@@ -177,9 +148,9 @@ export default function App() {
     const sheet = w <= 720 && h > 500;               // phone portrait: the panel is a bottom sheet
     insetsRef.current = {
       top: h < 500 ? 64 : 62 + (w <= 720 ? 30 : 56),
-      bottom: panelOpen && sheet ? Math.round(h * 0.62) : (w <= 720 && h > 500 ? 118 : h < 500 ? 30 : 60),
+      bottom: panelOpen && sheet ? Math.round(h * 0.62) : (w <= 720 && h > 500 ? 104 : h < 500 ? 30 : 60),
       left: panelOpen && !sheet ? (h < 500 ? 340 : 380) : 0, right: 0,
-      topBar: h < 500 ? 54 : w <= 720 ? 56 : 62, bottomBar: w <= 720 && h > 500 ? 112 : 56,
+      topBar: h < 500 ? 54 : w <= 720 ? 56 : 62, bottomBar: w <= 720 && h > 500 ? 98 : 56,
     };
     const o = officeRef.current;
     if (o) { if (sel) o.focus(sel); else o.fit(); }
@@ -341,13 +312,6 @@ export default function App() {
   };
   const onEventsRef = useRef(onEvents); onEventsRef.current = onEvents;
 
-  // Minimap: polled from the scene a few times a second (cheap, no React work per frame).
-  const [map, setMap] = useState(null);
-  useEffect(() => {
-    const id = setInterval(() => { const o = officeRef.current; if (o && !document.hidden) setMap(o.mapData()); }, 400);
-    return () => clearInterval(id);
-  }, []);
-
   useEffect(() => { officeRef.current && officeRef.current.select(sel); }, [sel]);
   useEffect(() => { officeRef.current && officeRef.current.setLite(lite); try { localStorage.setItem('agent-office.lite', lite ? '1' : '0'); } catch (e) { /* ignore */ } }, [lite]);
 
@@ -406,10 +370,8 @@ export default function App() {
         {state && state.runsOn.map(m => <span key={m} className="ao-chip">{m}</span>)}
       </footer>
       <div className="ao-controls" ref={ctrlRef}>
-        <div className="ao-map-head"><span className="ao-mono ao-muted">MAP</span>
-          <button className={'ao-chip ao-lite' + (lite ? ' on' : '')} onClick={() => setLite(!lite)} title="Low-power mode: no shadows, fewer pixels, 30 fps">Lite</button></div>
-        <Minimap map={map} onPan={(x, y) => officeRef.current.panTo(x, y)} onPick={pickAgent} />
         <div className="ao-map-btns">
+          <button className={'ao-chip ao-lite' + (lite ? ' on' : '')} onClick={() => setLite(!lite)} title="Low-power mode: no shadows, fewer pixels, 30 fps">Lite</button>
           <button className="ao-icon-btn" onClick={() => officeRef.current.zoom(1 / 1.25)} aria-label="Zoom out"><Icon name="minus" /></button>
           <button className="ao-icon-btn" onClick={() => officeRef.current.zoom(1.25)} aria-label="Zoom in"><Icon name="plus" /></button>
           <button className="ao-icon-btn" onClick={() => officeRef.current.fit()} aria-label="Fit"><Icon name="fit" /></button>
