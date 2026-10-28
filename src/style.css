@@ -120,6 +120,12 @@
 .ao-subtag em { font-style: normal; color: var(--ao-mut); }
 .ao-subtag-t { max-width: 170px; overflow: hidden; text-overflow: ellipsis; }
 
+/* speech bubble over a character visiting another room */
+.ao-bubble { position: absolute; left: 0; top: 0; white-space: nowrap;
+  font-size: 10.5px; padding: 4px 9px; border-radius: 10px; background: rgba(240, 246, 255, .95); color: #101830; font-weight: 600;
+  box-shadow: 0 4px 14px rgba(0,0,0,.35); transition: opacity .3s; will-change: transform; z-index: 3; }
+.ao-bubble::after { content: ''; position: absolute; left: 50%; bottom: -5px; margin-left: -5px; border: 5px solid transparent; border-bottom: 0; border-top-color: rgba(240, 246, 255, .95); }
+
 /* event toasts, top right */
 .ao-toasts { position: absolute; top: 66px; right: 10px; z-index: 7; display: flex; flex-direction: column; gap: 6px; align-items: flex-end; pointer-events: none; }
 .ao-toast-card { display: flex; gap: 8px; align-items: center; padding: 8px 12px 8px 8px; border-radius: 12px; font-size: 12.5px; max-width: 300px;

@@ -249,6 +249,92 @@ def push_events(root: Path, now: float, window: int = EVENT_WINDOW) -> list[dict
     return out
 
 
+WALK_WINDOW = 300
+# Handles other agents use for a profile (message_agent targets).
+ALIASES = {"hermes": "default", "ash": "default", "default": "default"}
+_BRIEF = re.compile(r"^\s*(?:\[[^\]]*\]\s*)?(?:(?:research\s+)?(?:brief|task)\s+)?from\s+ash\b", re.I)
+_DM = re.compile(r"^\s*Message from \S*\s*[^(\n]{0,40}\(@([\w\-]+)\)", re.I)
+
+
+def subject(text: str | None, words: int = 5, n: int = 30) -> str:
+    """First few words of a message as its subject: no paths, URLs, code or secrets-looking tokens."""
+    text = re.sub(r"^\s*Message from [^\n]{0,60}?\(@[\w\-]+\)\s*:?\s*", "", text or "", flags=re.I)
+    t = re.sub(r"^\s*(?:\[[^\]]*\]\s*)?(?:message\s+)?(?:(?:research\s+)?(?:brief|task)\s+)?from\s+\S+?[.:,]?\s+(?:\([^)]*\)\s*)?[.:,]?\s*", "", text or "", flags=re.I)
+    t = re.sub(r"^(?:\(?[^)]{0,40}\)\s*)?(?:resume|task|brief)\s*[.:]\s*", "", t, flags=re.I)
+    out = []
+    for w in re.split(r"\s+", t.strip()):
+        if not w:
+            continue
+        if re.search(r"[/\\@=`{}<>]|https?:|[A-Za-z0-9_\-]{24,}", w):
+            break
+        out.append(w.strip("\"'*_#"))
+        if len(out) >= words:
+            break
+    return _short(" ".join(x for x in out if x), n)
+
+
+def _walk_target(raw: str, ids: set[str]) -> str | None:
+    t = (raw or "").strip().lstrip("@").split("@")[0].lower()
+    t = ALIASES.get(t, t)
+    return t if t in ids else None
+
+
+def messages_walks(pid: str, c: sqlite3.Connection, ids: set[str], now: float, window: int = WALK_WINDOW) -> list[dict]:
+    """Agent-to-agent hand-offs seen from this profile's state.db, newest first.
+
+    - message_agent calls this profile made (target from the call; subject = first words of the message);
+    - briefs it received from Ash (a user message starting "From Ash" / "Research brief from Ash");
+    - the end of the turn that answered such a brief = a report walking back to Ash.
+    Only the sender, receiver, time and a 5-word subject leave this function.
+    """
+    walks = []
+    since = now - window
+    for r in c.execute("select id, session_id, timestamp, tool_calls from messages where role = 'assistant' and timestamp >= ? "
+                       "and tool_calls like '%message_agent%' order by timestamp desc limit 10", (since,)):
+        try:
+            calls = json.loads(r["tool_calls"] or "[]")
+        except ValueError:
+            continue
+        for tc in calls if isinstance(calls, list) else []:
+            fn = tc.get("function", tc) if isinstance(tc, dict) else {}
+            if fn.get("name") != "message_agent":
+                continue
+            try:
+                args = fn.get("arguments")
+                args = json.loads(args) if isinstance(args, str) else (args or {})
+            except ValueError:
+                continue
+            to = _walk_target(args.get("target", ""), ids)
+            if to and to != pid:
+                walks.append({"id": f"ma-{pid}-{r['id']}", "at": r["timestamp"], "from": pid, "to": to,
+                              "kind": "reply" if to == "default" else "message", "subject": subject(args.get("message"))})
+    # Inbound hand-offs: Ash's relayed briefs ("From Ash ...") and bot DMs ("Message from 🤖 X (@handle):").
+    # A brief is drawn here (Ash ran a CLI command, so Ash's db has no message_agent for it); a bot DM is
+    # already drawn from the sender's db. Either way, the end of the turn that answers it walks back.
+    inbound = c.execute("select id, session_id, timestamp, substr(content, 1, 400) as head from messages where role = 'user' "
+                        "and timestamp >= ? order by timestamp desc limit 20", (since - 3600,)).fetchall()
+    for r in inbound:
+        head = r["head"] or ""
+        dm = _DM.match(head)
+        sender = _walk_target(dm.group(1), ids) if dm else ("default" if pid != "default" and _BRIEF.match(head) else None)
+        if not sender or sender == pid:
+            continue
+        if not dm and r["timestamp"] >= since:
+            walks.append({"id": f"br-{pid}-{r['id']}", "at": r["timestamp"], "from": sender, "to": pid,
+                          "kind": "brief", "subject": subject(head)})
+        # The turn is over when its last message (before the next user message) is a plain assistant answer.
+        nxt = c.execute("select min(timestamp) from messages where session_id = ? and role = 'user' and timestamp > ?",
+                        (r["session_id"], r["timestamp"])).fetchone()[0] or now + 1
+        last = c.execute("select id, timestamp, role, tool_calls from messages where session_id = ? and timestamp > ? "
+                         "and timestamp < ? order by timestamp desc limit 1", (r["session_id"], r["timestamp"], nxt)).fetchone()
+        done = last is not None and last["role"] == "assistant" and (last["tool_calls"] or "") in ("", "[]")
+        replied = any(w["from"] == pid and w["to"] == sender and r["timestamp"] <= w["at"] < nxt for w in walks)
+        if done and last["timestamp"] >= since and not replied:
+            walks.append({"id": f"rp-{pid}-{last['id']}", "at": last["timestamp"], "from": pid, "to": sender,
+                          "kind": "reply", "subject": "report"})
+    return walks
+
+
 def _connect(home: Path) -> sqlite3.Connection:
     c = sqlite3.connect(f"file:{home / 'state.db'}?mode=ro", uri=True, timeout=2)
     c.row_factory = sqlite3.Row
@@ -380,6 +466,30 @@ def agent_snapshot(pid: str, home: Path, now: float | None = None, color: str = 
     return a
 
 
+def all_walks(root: Path, ids: list[str], now: float) -> list[dict]:
+    """Hand-offs across every profile, newest first, with the same hop seen twice (sender and receiver) merged."""
+    out: list[dict] = []
+    for p in discover(root):
+        if p["id"] not in ids:
+            continue
+        try:
+            c = _connect(p["home"])
+        except sqlite3.Error:
+            continue
+        try:
+            out += messages_walks(p["id"], c, set(ids), now)
+        except sqlite3.Error:
+            pass
+        finally:
+            c.close()
+    out.sort(key=lambda w: w["at"], reverse=True)
+    merged: list[dict] = []
+    for w in out:
+        if not any(m["from"] == w["from"] and m["to"] == w["to"] and abs(m["at"] - w["at"]) < 45 for m in merged):
+            merged.append(w)
+    return merged[:8]
+
+
 def vault_notes(root: Path) -> int:
     vault = Path(os.environ.get("AGENT_OFFICE_VAULT") or root / "obsidian-vault")
     n = 0
@@ -398,12 +508,18 @@ def snapshot(home: str | None = None, now: float | None = None) -> dict:
         for m in [a["model"], *a["helperModels"]]:
             if m and m not in chips:
                 chips.append(m)
-    events = [e for a in agents for e in a.pop("events", [])] + push_events(root, now)
+    walks = all_walks(root, [a["id"] for a in agents], now)
+    names = {a["id"]: a["name"] for a in agents}
+    label = {"brief": "new brief", "reply": "report", "message": "message"}
+    events = [e for a in agents for e in a.pop("events", [])] + push_events(root, now) + [
+        {"id": "w-" + w["id"], "at": w["at"], "kind": "walk", "agent": w["from"],
+         "text": f"→ {names.get(w['to'], w['to'])} · {label[w['kind']]}"} for w in walks]
     events.sort(key=lambda e: e["at"], reverse=True)
     return {
         "ts": now,
         "agents": agents,
         "events": events[:12],
+        "walks": walks,
         "brain": {"notes": vault_notes(root)},
         "runsOn": chips,
         "counts": {"agents": len(agents), "running": sum(a["status"] in ("working", "waiting") for a in agents),

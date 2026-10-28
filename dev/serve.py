@@ -42,6 +42,9 @@ if DEMO:
         s["events"] = [{"id": f"demo-ev{k}", "at": now - 1, "kind": "helpers", "agent": "dev", "text": f"{2 + k % 2} helpers started"},
                        {"id": f"demo-ev{k}b", "at": now - 2, "kind": "session", "agent": "default", "text": "session started · telegram"}]
         s["counts"]["helpers"] = sum(len(a["helpers"]) for a in s["agents"])
+        s["walks"] = [{"id": f"demo-w{k}", "at": now - 1, "from": "default", "to": "dev", "kind": "brief", "subject": "Agent Office v2.1"},
+                      {"id": f"demo-w{k}r", "at": now - 1, "from": "red", "to": "default", "kind": "reply", "subject": "Jev research notes"}]
+        s["events"] += [{"id": f"demo-ev{k}w", "at": now - 1, "kind": "walk", "agent": "default", "text": "→ Dev · new brief"}]
         return s
 
 app.include_router(api.router, prefix="/api/plugins/agent-office")

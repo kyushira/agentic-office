@@ -652,6 +652,7 @@ export function createOffice(container, opts = {}) {
     const hb = [toPx(v.set(-HUB_R, 0, -HUB_R).project(camera), w, h), toPx(v.set(HUB_R, 0, HUB_R).project(camera), w, h),
       toPx(v.set(HUB_R, 0, -HUB_R).project(camera), w, h), toPx(v.set(-HUB_R, 0, HUB_R).project(camera), w, h), toPx(v.set(0, CORE_Y + 2.2, 0).project(camera), w, h)];
     out.__hubBox = { x0: Math.min(...hb.map(q => q.x)), x1: Math.max(...hb.map(q => q.x)), y0: Math.min(...hb.map(q => q.y)), y1: Math.max(...hb.map(q => q.y)) };
+    out.__visits = visits.filter(vi => vi.showTag).map(vi => ({ id: vi.id, text: vi.text, ...toPx(v.copy(vi.g.position).setY(2.4).project(camera), w, h) }));
     return out;
   }
 
@@ -664,6 +665,68 @@ export function createOffice(container, opts = {}) {
     const lane = L.walkers.length ? -0.38 : 0.38;
     wk.position.set(r.radius - 2.2, 0, lane); L.path.add(wk);
     L.walkers.push({ g: wk, t0: clock.getElapsedTime(), from: r.radius - 2.2, to: HUB_R + 0.9, lane });
+  }
+
+  // ---------- visits: a sender's character carries a tablet to another agent's room ----------
+  const visits = [];                       // active { id, g, pts, cum, len, t0, out, pause, text, from }
+  const visitors = new Map();              // one reusable figure per sender (looks like that agent)
+  const MAX_VISITS = 3, SPEED = 3.0, PAUSE = 4;
+
+  /** Waypoints: sender's desk → its walkway → around the hub junction → receiver's walkway → receiver's desk. */
+  function route(ra, rb, lane) {
+    const dirOf = r => new THREE.Vector3(Math.cos(r.angle), 0, Math.sin(r.angle));
+    const side = d => new THREE.Vector3(-d.z, 0, d.x).multiplyScalar(lane);
+    const edgeOf = r => (ROOM / 2) / Math.max(Math.abs(Math.cos(r.angle)), Math.abs(Math.sin(r.angle)));
+    const desk = r => r.group.position.clone().add(new THREE.Vector3(2.0, 0, 1.7));
+    const leg = r => {
+      const d = dirOf(r), s = side(d);
+      return [desk(r), d.clone().multiplyScalar(r.radius - edgeOf(r) + 0.9).add(s), d.clone().multiplyScalar(HUB_R + 0.6).add(s)];
+    };
+    const A = leg(ra), B = leg(rb).reverse();
+    let a0 = ra.angle, a1 = rb.angle, da = a1 - a0;
+    while (da > Math.PI) da -= Math.PI * 2;
+    while (da < -Math.PI) da += Math.PI * 2;
+    const arc = [], R = HUB_R + 0.6;
+    for (let i = 1; i < 12; i++) { const t = a0 + (da * i) / 12; arc.push(new THREE.Vector3(Math.cos(t) * R, 0, Math.sin(t) * R)); }
+    const pts = [...A, ...arc, ...B];
+    const cum = [0];
+    for (let i = 1; i < pts.length; i++) cum.push(cum[i - 1] + pts[i].distanceTo(pts[i - 1]));
+    return { pts, cum, len: cum[cum.length - 1] };
+  }
+  function along(v, d) {
+    const { pts, cum } = v;
+    let i = 1;
+    while (i < cum.length - 1 && cum[i] < d) i++;
+    const k = (d - cum[i - 1]) / Math.max(1e-6, cum[i] - cum[i - 1]);
+    return [pts[i - 1].clone().lerp(pts[i], Math.min(1, Math.max(0, k))), pts[i].clone().sub(pts[i - 1])];
+  }
+  /** Start a visit (real hand-off). Returns false when skipped (Lite mode, unknown room, busy sender, cap). */
+  function visit(w, text) {
+    if (lite) return false;
+    const ra = rooms.get(w.from), rb = rooms.get(w.to);
+    if (!ra || !rb || ra === rb || visits.length >= MAX_VISITS || visits.some(v => v.from === w.from)) return false;
+    let g = visitors.get(w.from);
+    if (!g) { g = makeWalker(w.from); visitors.set(w.from, g); }
+    scene.add(g);
+    visits.push({ id: w.id, from: w.from, g, ...route(ra, rb, 0.42), t0: clock.getElapsedTime(), text });
+    return true;
+  }
+  function stepVisits(t) {
+    for (let i = visits.length - 1; i >= 0; i--) {
+      const v = visits[i], age = t - v.t0, T = v.len / SPEED;
+      let d, moving = true, back = false;
+      if (age < T) d = age * SPEED;
+      else if (age < T + PAUSE) { d = v.len; moving = false; }
+      else { d = Math.max(0, v.len - (age - T - PAUSE) * SPEED); back = true; }
+      const [p, dir] = along(v, d);
+      v.g.position.copy(p);
+      if (back) dir.negate();
+      if (moving && dir.lengthSq() > 1e-6) v.g.rotation.y = Math.atan2(-dir.z, dir.x);
+      v.g.userData.legs.forEach((leg, j) => { leg.rotation.z = moving ? Math.sin(age * 9 + j * Math.PI) * 0.45 : 0; });
+      v.g.position.y = moving ? Math.abs(Math.sin(age * 9)) * 0.05 : 0;
+      v.showTag = !back;
+      if (back && d <= 0) { scene.remove(v.g); visits.splice(i, 1); }
+    }
   }
 
   /** Minimap data in screen-plane units: rooms, the Brain and the visible rectangle. */
@@ -758,6 +821,7 @@ export function createOffice(container, opts = {}) {
       const lift = selected === r.agent.id ? 0.35 : 0;
       r.group.position.y += (lift - r.group.position.y) * 0.15;
     }
+    if (visits.length) stepVisits(t);
     if (composer) composer.render(); else renderer.render(scene, camera);
     if (opts.onFrame) opts.onFrame();
   }
@@ -768,11 +832,14 @@ export function createOffice(container, opts = {}) {
   raf = requestAnimationFrame(animate);
 
   return {
-    update, project, fit, walk, mapData, panTo,
+    update, project, fit, walk, visit, mapData, panTo,
     isPortrait: () => portrait,
     select(id) { selected = id; },
     zoom(k) { setZoom(zoom * k); },
-    setLite(b) { lite = !!b; applyShadows(); },
+    setLite(b) {
+      lite = !!b; applyShadows();
+      if (lite) while (visits.length) scene.remove(visits.pop().g);     // walks are skipped in Lite mode
+    },
     focus(id) {
       const r = rooms.get(id); if (!r) return;
       const narrow = (container.clientWidth || 1000) < 560;

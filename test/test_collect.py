@@ -1,6 +1,7 @@
 """Unit tests for plugin/agent-office/dashboard/collect.py (run via unittest discover)."""
 import importlib.util
 import json
+import sqlite3
 import tempfile
 import time
 import unittest
@@ -283,6 +284,134 @@ class SnapshotEventsTests(unittest.TestCase):
             for trip in agent["brainTrips"]:
                 with self.subTest(agent=agent.get("id")):
                     self.assertEqual(set(trip.keys()), {"id", "at", "kind"})
+
+
+class SubjectTests(unittest.TestCase):
+    def test_brief_prefix_stripped_and_stops_at_path(self):
+        self.assertEqual(collect.subject("From Ash: new project brief at /opt/x"), "new project brief at")
+
+    def test_dm_header_stripped(self):
+        self.assertTrue(collect.subject("Message from 🤖 Ash (@hermes): I checked v1 today ok").startswith("I checked v1"))
+
+    def test_stops_at_url_at_sign_and_long_token(self):
+        self.assertEqual(collect.subject("look at https://example.com/x now"), "look at")
+        self.assertEqual(collect.subject("ping @bob about it"), "ping")
+        self.assertEqual(collect.subject("see key abcdefghijklmnopqrstuvwxyz0123 later"), "see key")
+        self.assertEqual(collect.subject("check ./src/app.js today"), "check")
+
+    def test_five_word_cap(self):
+        self.assertEqual(collect.subject("alpha beta gamma delta epsilon zeta eta theta"),
+                         "alpha beta gamma delta epsilon")
+
+    def test_result_never_exceeds_30_chars(self):
+        out = collect.subject("abcdefghij klmnopqrst uvwxyzabcd efghijklmn opqrstuvwx yzabcdefgh")
+        self.assertLessEqual(len(out), 30)
+        self.assertTrue(out.endswith("…"))
+
+    def test_empty_and_none(self):
+        self.assertEqual(collect.subject(None), "")
+        self.assertEqual(collect.subject(""), "")
+
+
+NOW = 1_800_000_000.0
+PIDS = {"default", "dev", "red"}
+SCHEMA = """
+    create table sessions (id text primary key, source text, title text, started_at real, ended_at real);
+    create table messages (id integer primary key, session_id text, role text, content text,
+                           tool_calls text, tool_name text, timestamp real);
+"""
+
+
+def _open_db(path):
+    db = sqlite3.connect(path)
+    db.row_factory = sqlite3.Row
+    db.executescript(SCHEMA)
+    return db
+
+
+def _add(db, sid, role, ts, content="", tool_calls=None, tool_name=None):
+    db.execute("insert or ignore into sessions (id, source, started_at) values (?, 'chat', ?)", (sid, ts))
+    cur = db.execute("insert into messages (session_id, role, content, tool_calls, tool_name, timestamp) "
+                     "values (?, ?, ?, ?, ?, ?)", (sid, role, content, tool_calls, tool_name, ts))
+    db.commit()
+    return cur.lastrowid
+
+
+def _message_agent(target, message):
+    return json.dumps([{"function": {"name": "message_agent",
+                                     "arguments": json.dumps({"target": target, "message": message})}}])
+
+
+class MessagesWalksTests(unittest.TestCase):
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.db = _open_db(str(Path(self._tmp.name) / "state.db"))
+
+    def tearDown(self):
+        self.db.close()
+        self._tmp.cleanup()
+
+    def _walks(self, pid="dev", now=NOW):
+        return collect.messages_walks(pid, self.db, PIDS, now)
+
+    def test_message_agent_call_becomes_reply_walk(self):
+        _add(self.db, "s1", "assistant", NOW - 20,
+             tool_calls=_message_agent("hermes", "Agent Office v2 is merged and live"))
+        walks = self._walks()
+        self.assertEqual(len(walks), 1)
+        w = walks[0]
+        self.assertEqual((w["from"], w["to"], w["kind"]), ("dev", "default", "reply"))
+        self.assertTrue(w["subject"].startswith("Agent Office v2"))
+        self.assertNotIn("and live", w["subject"])
+        self.assertEqual(w["at"], NOW - 20)
+        self.assertEqual(set(w), {"id", "at", "from", "to", "kind", "subject"})
+
+    def test_unknown_or_self_target_yields_nothing(self):
+        _add(self.db, "s1", "assistant", NOW - 20, tool_calls=_message_agent("nobody", "hi"))
+        _add(self.db, "s1", "assistant", NOW - 10, tool_calls=_message_agent("dev", "hi me"))
+        self.assertEqual(self._walks(), [])
+
+    def test_brief_then_plain_answer_gives_brief_and_report(self):
+        _add(self.db, "s1", "user", NOW - 100, content="From Ash: build the thing now")
+        _add(self.db, "s1", "assistant", NOW - 50, content="done", tool_calls="[]")
+        walks = self._walks()
+        self.assertEqual(len(walks), 2)
+        by_kind = {w["kind"]: w for w in walks}
+        self.assertEqual(set(by_kind), {"brief", "reply"})
+        self.assertEqual((by_kind["brief"]["from"], by_kind["brief"]["to"]), ("default", "dev"))
+        self.assertEqual(by_kind["brief"]["subject"], "build the thing now")
+        self.assertEqual((by_kind["reply"]["from"], by_kind["reply"]["to"]), ("dev", "default"))
+        self.assertEqual(by_kind["reply"]["subject"], "report")
+
+    def test_turn_still_running_gives_no_reply(self):
+        _add(self.db, "s1", "user", NOW - 100, content="From Ash: build the thing now")
+        _add(self.db, "s1", "assistant", NOW - 80, tool_calls=json.dumps([{"function": {"name": "terminal"}}]))
+        _add(self.db, "s1", "tool", NOW - 40, tool_name="terminal")
+        self.assertEqual([w["kind"] for w in self._walks()], ["brief"])
+
+    def test_messages_outside_window_yield_nothing(self):
+        _add(self.db, "s1", "user", NOW - 400, content="From Ash: old brief")
+        _add(self.db, "s1", "assistant", NOW - 390, content="", tool_calls="[]")
+        _add(self.db, "s2", "assistant", NOW - collect.WALK_WINDOW - 100,
+             tool_calls=_message_agent("hermes", "old news"))
+        self.assertEqual(self._walks(), [])
+
+
+class AllWalksTests(unittest.TestCase):
+    def test_same_hop_seen_twice_is_merged(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "profiles" / "dev").mkdir(parents=True)
+            default_db = _open_db(str(root / "state.db"))
+            _add(default_db, "d1", "assistant", NOW - 10, tool_calls=_message_agent("dev", "go build"))
+            default_db.close()
+            dev_db = _open_db(str(root / "profiles" / "dev" / "state.db"))
+            _add(dev_db, "v1", "user", NOW - 8, content="From Ash: go build")
+            dev_db.close()
+            walks = collect.all_walks(root, ["default", "dev"], NOW)
+            self.assertEqual(len(walks), 1)
+            self.assertEqual((walks[0]["from"], walks[0]["to"]), ("default", "dev"))
+            self.assertEqual(walks[0]["kind"], "brief")  # newest copy kept
 
 
 if __name__ == "__main__":

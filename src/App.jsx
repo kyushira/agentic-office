@@ -161,7 +161,7 @@ const isLite = () => {
 
 export default function App() {
   const rootRef = useRef(null), stageRef = useRef(null), officeRef = useRef(null), labelRefs = useRef({}), brainRef = useRef(null);
-  const helperRefs = useRef({}), ctrlRef = useRef(null), runsRef = useRef(null), toastRef = useRef(null);
+  const helperRefs = useRef({}), ctrlRef = useRef(null), runsRef = useRef(null), toastRef = useRef(null), visitRefs = useRef([]);
   const [state, setState] = useState(null);
   const [error, setError] = useState('');
   const [sel, setSel] = useState(null);
@@ -270,6 +270,25 @@ export default function App() {
           c.y = Math.max(c.y, top);
           c.el.style.transform = `translate(${c.x.toFixed(1)}px, ${c.y.toFixed(1)}px)`;
         }
+        // speech tags over visiting characters (fixed pool of 3, no React work per frame)
+        const bub = [];
+        visitRefs.current.forEach((el, i) => {
+          if (!el) return;
+          const v = pos.__visits && pos.__visits[i];
+          if (!v) { el.style.opacity = '0'; return; }
+          if (el.dataset.id !== v.id) { el.dataset.id = v.id; el.textContent = v.text; }
+          const w = el.offsetWidth, h = el.offsetHeight;
+          bub.push({ el, w, h, x: Math.min(Math.max(v.x, w / 2 + 4), W - w / 2 - 4), y: v.y });
+        });
+        bub.sort((a, b) => a.y - b.y);                   // stack crossing bubbles instead of overlapping them
+        for (let i = 1; i < bub.length; i++) for (let j = 0; j < i; j++) {
+          const a = bub[j], b = bub[i];
+          if (Math.abs(a.x - b.x) < (a.w + b.w) / 2 && b.y - a.y < b.h + 4) a.y = b.y - b.h - 4;
+        }
+        for (const b of bub) {
+          b.el.style.opacity = '1';
+          b.el.style.transform = `translate(-50%, -100%) translate(${b.x.toFixed(1)}px, ${Math.max(b.y, top + b.h).toFixed(1)}px)`;
+        }
       },
       insets: () => insetsRef.current,
     });
@@ -291,7 +310,7 @@ export default function App() {
 
   // Toasts for real events and Brain trips (walkers). On the first load only very recent ones play.
   const [toasts, setToasts] = useState([]);
-  const seen = useRef({ events: new Set(), trips: new Set(), first: true });
+  const seen = useRef({ events: new Set(), trips: new Set(), walks: new Set(), first: true });
   const onEvents = s => {
     const S = seen.current, now = s.ts || Date.now() / 1000, names = Object.fromEntries(s.agents.map(a => [a.id, a.name]));
     const fresh = [];
@@ -299,6 +318,15 @@ export default function App() {
       if (S.events.has(e.id)) continue;
       S.events.add(e.id);
       if (!S.first || now - e.at < 90) fresh.push({ ...e, who: e.agent ? names[e.agent] || e.agent : '' , key: e.id });
+    }
+    // Hand-offs: the sender's character walks to the receiver's room (skipped in Lite mode by the scene).
+    const KIND = { brief: 'brief', reply: 'report', message: 'message' };
+    for (const w of [...(s.walks || [])].reverse()) {
+      if (S.walks.has(w.id)) continue;
+      S.walks.add(w.id);
+      if (S.first && now - w.at > 60) continue;
+      const subj = w.subject && w.subject !== 'report' ? `: ${w.subject}` : '';
+      officeRef.current && officeRef.current.visit(w, `${names[w.from] || w.from} → ${names[w.to] || w.to} · ${KIND[w.kind] || w.kind}${subj}`);
     }
     for (const a of s.agents) for (const tr of a.brainTrips || []) {
       if (S.trips.has(tr.id)) continue;
@@ -342,12 +370,16 @@ export default function App() {
           </div>)))}
       </div>
 
+      <div className="ao-overlay">
+        {[0, 1, 2].map(i => <div key={i} ref={el => { visitRefs.current[i] = el; }} className="ao-bubble ao-mono" style={{ opacity: 0 }} />)}
+      </div>
+
       <div className="ao-toasts" aria-live="polite" ref={toastRef}>
         {toasts.slice(0, narrow ? 1 : 3).map(t => {
           const a = state && state.agents.find(x => x.id === t.agent);
           return <div key={t.key} className="ao-toast-card" style={{ '--ao-c': a ? colorOf(a) : '#5fd8ff' }}>
-            <span className="ao-toast-ico"><Icon name={t.kind === 'push' ? 'code' : t.kind === 'helpers' ? 'bolt' : 'star'} size={13} /></span>
-            <span><b>{t.who || 'Git'}</b> · {t.text}</span></div>;
+            <span className="ao-toast-ico"><Icon name={t.kind === 'push' ? 'code' : t.kind === 'helpers' ? 'bolt' : t.kind === 'walk' ? 'search' : 'star'} size={13} /></span>
+            <span><b>{t.who || 'Git'}</b>{t.kind === 'walk' ? ' ' : ' · '}{t.text}</span></div>;
         })}
       </div>
 
