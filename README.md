@@ -10,7 +10,16 @@ It's read-only, and its data endpoint sits behind the dashboard login.
 
     export PATH=/opt/hermes/tools/node-26.12.1-linux-x64/bin:$PATH
     npm install && npm run build && npm test
-    /opt/hermes/.venv/bin/python -I dev/serve.py 8790   # local harness on 127.0.0.1 only
+    /opt/hermes/.venv/bin/python -I dev/serve.py 8790          # local harness on 127.0.0.1 only
+    /opt/hermes/.venv/bin/python -I dev/serve.py 8790 --demo   # + sample helpers/toasts/Brain trips (harness only)
+
+## What it shows (all from real data)
+
+- Rooms: one per profile (default + profiles/*), status from state.db activity and the latest tool *name*.
+- Helpers: running delegate_task children from `cache/delegation/live/*/manifest.json` beam in at spare desks, tagged
+  "Sub N · short goal · model". They fade out when their task log ends.
+- Brain trips: `memory` / `session_search` calls and vault reads/writes make a character carry a tablet to the Brain.
+- Toasts: sessions started/finished, helpers started/finished, pushes (remote-ref reflogs under /opt/data/projects).
 
 ## Install (default profile)
 

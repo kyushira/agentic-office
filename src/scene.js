@@ -229,7 +229,7 @@ function buildRoom(agent) {
   const lamp = makeLamp(); lamp.position.set(-half + 0.8, 0, -half + 0.8); g.add(lamp);
   // desks: [lead, spare, spare] (spares are where helpers will beam in, v2)
   const desks = [];
-  const spots = [[0.7, 0.9, 0], [-1.9, -1.5, Math.PI / 2], [2.6, -1.3, 0]];
+  const spots = [[0.7, 0.9, 0], [-1.9, -1.5, Math.PI / 2], [2.6, -1.3, 0], [-1.6, 2.9, 0], [3.1, 1.7, -Math.PI / 2]];
   spots.forEach(([x, z, ry], i) => {
     const d = new THREE.Group(); d.position.set(x, 0, z); d.rotation.y = ry; g.add(d);
     d.add(makeDesk(color));
@@ -247,56 +247,135 @@ function buildRoom(agent) {
   const rimM = new THREE.MeshBasicMaterial({ color: shade(color, 0.45) });
   for (const [w, d, x, z] of [[ROOM, 0.07, 0, half], [ROOM, 0.07, 0, -half], [0.07, ROOM, half, 0], [0.07, ROOM, -half, 0]]) g.add(box(w, 0.07, d, rimM, x, 0.01, z));
   g.add(box(ROOM, 0.05, 0.05, rimM, 0, -0.5, half), box(0.05, 0.05, ROOM, rimM, half, -0.5, 0));
-  g.userData.parts = { chart, chartM: scrM, desks, person, lamp, ringM, ring, color };
+  // Spare desks: a helper beams in here inside a light column with a floor ring (hidden until used).
+  const spares = desks.slice(1).map((d, i) => {
+    const seat = new THREE.Group(); seat.position.set(0, 0, 0.78); d.group.add(seat);
+    const person = makeCharacter(agent.id + '-sub' + i); person.scale.setScalar(1.25); person.visible = false; seat.add(person);
+    const colM = glow(shade(color, 0.45), 0); colM.opacity = 0;
+    colM.transparent = true; colM.depthWrite = false; colM.blending = THREE.AdditiveBlending;
+    const column = new THREE.Mesh(new THREE.CylinderGeometry(0.75, 0.85, 4.2, 28, 1, true), colM); column.position.y = 2.1; column.visible = false; seat.add(column);
+    const ringM2 = glow(shade(color, 0.6), 0); ringM2.transparent = true; ringM2.depthWrite = false; ringM2.blending = THREE.AdditiveBlending;
+    const fr = new THREE.Mesh(new THREE.RingGeometry(0.78, 0.95, 40), ringM2); fr.rotation.x = -Math.PI / 2; fr.position.y = 0.03; fr.visible = false; seat.add(fr);
+    for (const s of d.monitors) s.material.emissiveIntensity = 0.1;
+    return { seat, person, column, colM, ring: fr, ringM: ringM2, state: 0, target: 0, helperId: null, monitors: d.monitors };
+  });
+  g.userData.parts = { chart, chartM: scrM, desks, person, lamp, ringM, ring, color, spares };
   g.traverse(o => { o.userData.agentId = agent.id; });
   return g;
 }
 
 // ---------- the Brain ----------
+const glow = (color, opacity = 1) => new THREE.MeshBasicMaterial({ color, transparent: opacity < 1, opacity, depthWrite: opacity >= 1, blending: opacity < 1 ? THREE.AdditiveBlending : THREE.NormalBlending, side: THREE.DoubleSide });
+const CORE_Y = 2.6;
+
+/** THE BRAIN (ref 05): dark round platform with a raised dais, 3 concentric glowing cyan rings,
+ *  a soft core inside a cage of orbit rings, a vertical light beam and rising particles. */
 function buildBrain() {
   const g = new THREE.Group();
-  const disk = cyl(HUB_R, HUB_R + 0.2, 0.45, mat(0x151b30, { metal: 0.5, rough: 0.35 }), 64); disk.position.y = -0.22; g.add(disk);
-  const top = new THREE.Mesh(new THREE.CircleGeometry(HUB_R - 0.05, 64), mat(0x0f1426, { metal: 0.6, rough: 0.3 }));
-  top.rotation.x = -Math.PI / 2; top.position.y = 0.01; top.receiveShadow = true; g.add(top);
-  const rings = [];
-  for (const [r, w, o] of [[HUB_R - 0.25, 0.08, 0.9], [HUB_R - 1.1, 0.05, 0.6], [HUB_R - 1.9, 0.04, 0.45]]) {
-    const m = new THREE.MeshBasicMaterial({ color: 0x5fd8ff, transparent: true, opacity: o, side: THREE.DoubleSide, depthWrite: false, blending: THREE.AdditiveBlending });
-    const ring = new THREE.Mesh(new THREE.RingGeometry(r - w, r, 96, 1, 0, Math.PI * 1.7), m); ring.rotation.x = -Math.PI / 2; ring.position.y = 0.03; g.add(ring); rings.push(ring);
+  const base = cyl(HUB_R + 0.25, HUB_R + 0.45, 0.5, mat(0x111833, { metal: 0.55, rough: 0.35 }), 72); base.position.y = -0.25; g.add(base);
+  const top = new THREE.Mesh(new THREE.CircleGeometry(HUB_R + 0.2, 72), mat(0x0c1229, { metal: 0.6, rough: 0.28 }));
+  top.rotation.x = -Math.PI / 2; top.position.y = 0.005; top.receiveShadow = true; g.add(top);
+  const dais = cyl(HUB_R * 0.58, HUB_R * 0.62, 0.32, mat(0x141d3d, { metal: 0.6, rough: 0.25 }), 64); dais.position.y = 0.16; g.add(dais);
+  // the three bright concentric rings (bloom picks them up)
+  const ringMs = [];
+  for (const [r, t, y] of [[HUB_R + 0.12, 0.075, 0.02], [HUB_R * 0.8, 0.05, 0.02], [HUB_R * 0.6, 0.06, 0.33]]) {
+    const m = glow(0x7fe6ff); ringMs.push(m);
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(r, t, 8, 112), m); ring.rotation.x = Math.PI / 2; ring.position.y = y; g.add(ring);
   }
-  const coreM = new THREE.MeshStandardMaterial({ color: 0x9feaff, emissive: 0x3cc8ff, emissiveIntensity: 2.2, roughness: 0.2 });
-  const core = new THREE.Mesh(new THREE.IcosahedronGeometry(0.75, 2), coreM); core.position.y = 2.2; g.add(core);
-  const shell = new THREE.Mesh(new THREE.IcosahedronGeometry(1.1, 1), new THREE.MeshBasicMaterial({ color: 0x7fe3ff, wireframe: true, transparent: true, opacity: 0.35 }));
-  shell.position.y = 2.2; g.add(shell);
-  const beamM = new THREE.MeshBasicMaterial({ color: 0x5fd8ff, transparent: true, opacity: 0.16, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide });
-  const beam = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.6, 5, 24, 1, true), beamM); beam.position.y = 2.5; g.add(beam);
-  const pedestal = cyl(0.55, 0.8, 0.9, mat(0x1b2340, { metal: 0.6, rough: 0.3 }), 24); pedestal.position.y = 0.45; g.add(pedestal);
-  const rim = new THREE.Mesh(new THREE.TorusGeometry(HUB_R + 0.05, 0.07, 8, 96), new THREE.MeshBasicMaterial({ color: 0x8feaff }));
-  rim.rotation.x = Math.PI / 2; rim.position.y = 0.02; g.add(rim);
-  g.userData = { rings, core, shell, beamM };
+  // faint swirl arcs on the floor
+  const rings = [];
+  for (const [r, w, o, len] of [[HUB_R * 0.92, 0.05, 0.45, 1.3], [HUB_R * 0.7, 0.04, 0.35, 1.1], [HUB_R * 0.42, 0.04, 0.5, 1.5]]) {
+    const ring = new THREE.Mesh(new THREE.RingGeometry(r - w, r, 96, 1, 0, Math.PI * len), glow(0x5fd8ff, o));
+    ring.rotation.x = -Math.PI / 2; ring.position.y = r < HUB_R * 0.6 ? 0.335 : 0.03; g.add(ring); rings.push(ring);
+  }
+  // soft glowing core + halo
+  const core = new THREE.Mesh(new THREE.SphereGeometry(0.85, 32, 20), new THREE.MeshStandardMaterial({ color: 0xc9f3ff, emissive: 0x4fc8f0, emissiveIntensity: 0.75, roughness: 0.35 }));
+  core.position.y = CORE_Y; g.add(core);
+  const halo = new THREE.Mesh(new THREE.SphereGeometry(1.25, 24, 16), glow(0x5fd8ff, 0.06)); halo.position.y = CORE_Y; g.add(halo);
+  // cage of thin orbit rings
+  const cage = new THREE.Group(); cage.position.y = CORE_Y; g.add(cage);
+  const orbitM = glow(0xbff0ff, 0.55);
+  for (let i = 0; i < 6; i++) {
+    const o = new THREE.Mesh(new THREE.TorusGeometry(1.75 + (i % 2) * 0.12, 0.012, 4, 96), orbitM);
+    o.rotation.set((i * Math.PI) / 6, (i * Math.PI) / 3.3, i * 0.4); cage.add(o);
+  }
+  const eq = new THREE.Mesh(new THREE.TorusGeometry(2.05, 0.02, 4, 120), glow(0xdff8ff, 0.8)); eq.rotation.x = Math.PI / 2 + 0.25; cage.add(eq);
+  // vertical light beam
+  const beamM = glow(0x7fe6ff, 0.1);
+  const beam = new THREE.Mesh(new THREE.CylinderGeometry(0.32, 0.5, 12, 24, 1, true), beamM); beam.position.y = 6; g.add(beam);
+  const beamCore = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.14, 12, 12, 1, true), glow(0xe8fbff, 0.22)); beamCore.position.y = 6; g.add(beamCore);
+  // rising particles (fixed count, positions animated in place)
+  const N = 140, pos = new Float32Array(N * 3), seed = new Float32Array(N);
+  for (let i = 0; i < N; i++) {
+    const a = Math.random() * Math.PI * 2, r = 0.6 + Math.sqrt(Math.random()) * (HUB_R - 0.6);
+    pos[i * 3] = Math.cos(a) * r; pos[i * 3 + 1] = Math.random() * 5; pos[i * 3 + 2] = Math.sin(a) * r; seed[i] = 0.25 + Math.random() * 0.6;
+  }
+  const pg = new THREE.BufferGeometry(); pg.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  const particles = new THREE.Points(pg, new THREE.PointsMaterial({ color: 0xbff0ff, size: 2.4, sizeAttenuation: false, transparent: true, opacity: 0.8, depthWrite: false, blending: THREE.AdditiveBlending }));
+  g.add(particles);
+  g.userData = { rings, core, cage, halo, beamM, particles, pseed: seed, ringMs };
+  return g;
+}
+
+/** Standing low-poly character holding a tablet (for Brain trips). Faces +x. */
+function makeWalker(seed) {
+  const g = new THREE.Group();
+  const skin = mat(SKIN[hashN(seed + 's', SKIN.length)], { rough: 0.6 });
+  const shirt = mat(SHIRT[hashN(seed + 'c', SHIRT.length)], { rough: 0.7 }), pants = mat(0x2c3550), hair = mat(HAIR[hashN(seed + 'h', HAIR.length)], { rough: 0.8 });
+  const legs = [];
+  for (const s of [-1, 1]) {
+    const hip = new THREE.Group(); hip.position.set(0, 0.62, 0.11 * s); g.add(hip);
+    hip.add(box(0.15, 0.6, 0.15, pants, 0, -0.3, 0));
+    hip.add(box(0.24, 0.08, 0.16, mat(0x1d2028), 0.04, -0.6, 0));
+    legs.push(hip);
+  }
+  const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.22, 0.34, 6, 12), shirt); body.position.y = 0.98; body.castShadow = true; g.add(body);
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.22, 18, 12), skin); head.position.y = 1.5; head.castShadow = true; g.add(head);
+  const hm = new THREE.Mesh(new THREE.SphereGeometry(0.235, 18, 10, 0, Math.PI * 2, 0, Math.PI * 0.55), hair); hm.position.set(-0.02, 1.53, 0); hm.rotation.z = 0.3; g.add(hm);
+  for (const s of [-1, 1]) {   // forearms forward, holding the tablet
+    const arm = new THREE.Mesh(new THREE.CapsuleGeometry(0.065, 0.32, 4, 8), shirt); arm.rotation.z = Math.PI / 2.3; arm.position.set(0.17, 0.95, 0.2 * s); g.add(arm);
+  }
+  const tab = box(0.06, 0.34, 0.46, mat(0x1d2028), 0.36, 1.02, 0); tab.rotation.z = -0.5; g.add(tab);
+  const scr = new THREE.Mesh(new THREE.BoxGeometry(0.012, 0.27, 0.38), glow(0x7fe6ff)); scr.position.set(0.39, 1.035, 0); scr.rotation.z = -0.5; g.add(scr);
+  g.userData = { legs };
+  g.scale.setScalar(1.15);
   return g;
 }
 
 // ---------- walkway + light line ----------
+/** Dark walkway (dashed centre line, small glowing markers in the room colour) from the Brain to a
+ *  room, plus a curved light line in the room colour with orbs travelling along it. Built in a local
+ *  frame where +x points from the hub to the room; `path` holds the walkers too. */
 function buildLink(angle, radius, color) {
   const g = new THREE.Group();
-  const start = HUB_R + 0.1, end = radius - ROOM * 0.5 * 1.05, len = Math.max(0.5, end - start);
+  const edge = (ROOM / 2) / Math.max(Math.abs(Math.cos(angle)), Math.abs(Math.sin(angle)));
+  const start = HUB_R + 0.35, end = radius - edge + 0.1, len = Math.max(0.5, end - start);
   const path = new THREE.Group(); path.rotation.y = -angle; g.add(path);
-  path.add(box(len, 0.16, 1.5, mat(0x1a2034, { rough: 0.5, metal: 0.3 }), start + len / 2, -0.12, 0));
-  const edgeM = new THREE.MeshBasicMaterial({ color: shade(color, 0.4), transparent: true, opacity: 0.9 });
-  for (const z of [-0.72, 0.72]) path.add(new THREE.Mesh(new THREE.BoxGeometry(len, 0.04, 0.05), edgeM).translateX(start + len / 2).translateY(-0.02).translateZ(z));
-  const dots = [];
-  for (let i = 0; i < 4; i++) {
-    const d = new THREE.Mesh(new THREE.SphereGeometry(0.09, 8, 6), new THREE.MeshBasicMaterial({ color: 0xffffff }));
-    d.position.set(start + (len * i) / 4, 0.08, 0); path.add(d); dots.push(d);
+  path.add(box(len, 0.18, 1.7, mat(0x161c30, { rough: 0.55, metal: 0.25 }), start + len / 2, -0.11, 0));
+  const dashM = new THREE.MeshBasicMaterial({ color: 0xdfe6ff });
+  for (let x = start + 0.25; x < end - 0.2; x += 0.62) path.add(box(0.3, 0.02, 0.06, dashM, x + 0.15, -0.01, 0));
+  const edgeM = glow(shade(color, 0.35), 0.9);
+  const markers = [];
+  for (let x = start + 0.4, i = 0; x < end - 0.2; x += 1.1, i++) {
+    for (const z of [-0.7, 0.7]) {
+      const m = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.14, 0.14), edgeM);
+      m.position.set(x + (z > 0 ? 0.55 : 0), 0.08, z); m.rotation.y = 0.6; path.add(m); markers.push(m);
+    }
   }
-  // arcing light line from the Brain core to above the room
-  const target = new THREE.Vector3(Math.cos(angle) * radius, 4.2, Math.sin(angle) * radius);
-  const curve = new THREE.QuadraticBezierCurve3(new THREE.Vector3(0, 2.2, 0), new THREE.Vector3(target.x * 0.5, 7, target.z * 0.5), target);
-  const lineM = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.45, depthWrite: false, blending: THREE.AdditiveBlending });
-  g.add(new THREE.Mesh(new THREE.TubeGeometry(curve, 48, 0.06, 6), lineM));
-  const pulse = new THREE.Mesh(new THREE.SphereGeometry(0.16, 10, 8), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.95 }));
-  g.add(pulse);
-  g.userData = { dots, start, len, curve, pulse, lineM, edgeM };
+  // curved light line from the Brain core, low over the walkway, into the room
+  const a = new THREE.Vector3(Math.cos(angle), 0, Math.sin(angle));
+  const p0 = new THREE.Vector3(0, CORE_Y, 0).addScaledVector(a, 1.2);
+  const p3 = a.clone().multiplyScalar(radius - ROOM * 0.25).setY(2.2);
+  const side = new THREE.Vector3(-a.z, 0, a.x).multiplyScalar(1.6);
+  const curve = new THREE.CubicBezierCurve3(p0, a.clone().multiplyScalar(radius * 0.35).add(side).setY(4.2), a.clone().multiplyScalar(radius * 0.7).sub(side).setY(3.6), p3);
+  const lineM = glow(shade(color, 0.2), 0.6);
+  g.add(new THREE.Mesh(new THREE.TubeGeometry(curve, 64, 0.045, 6), lineM));
+  const orbs = [];
+  for (let i = 0; i < 3; i++) {
+    const o = new THREE.Mesh(new THREE.SphereGeometry(0.15, 12, 8), glow(shade(color, 0.6)));
+    g.add(o); orbs.push(o);
+  }
+  g.userData = { start, len, end, curve, orbs, lineM, edgeM, markers, path, walkers: [] };
   return g;
 }
 
@@ -327,7 +406,7 @@ export function createOffice(container, opts = {}) {
     if (composer) return;
     composer = new EffectComposer(renderer);
     composer.addPass(new RenderPass(scene, camera));
-    composer.addPass(new UnrealBloomPass(new THREE.Vector2(256, 256), 0.8, 0.5, 0.8));
+    composer.addPass(new UnrealBloomPass(new THREE.Vector2(256, 256), 0.6, 0.45, 0.86));
     composer.addPass(new OutputPass());
   }
   const hemi = new THREE.HemisphereLight(0xbfd0ff, 0x1a1f3a, 1.25); scene.add(hemi);
@@ -347,15 +426,42 @@ export function createOffice(container, opts = {}) {
   let order = [];
   let selected = null;
 
-  function layout(ids) {
-    const n = Math.max(1, ids.length);
-    // Close enough that the walkways are short (as in the reference), never overlapping the hub or each other.
-    const radius = Math.max(10.6, n > 1 ? 7.0 / Math.sin(Math.PI / n) : 10.6);
-    ids.forEach((id, i) => {
+  const SR = new THREE.Vector3(1, 0, -1).normalize(), SU = new THREE.Vector3(-1, 0, -1).normalize();   // screen right / screen up, on the ground
+  let portrait = false;
+
+  /** Room centres on a ring; in portrait the ring is squeezed sideways and stretched vertically (in
+   *  screen terms) as far as it goes without rooms touching each other or the Brain. */
+  function positions(n, squeeze) {
+    const radius = Math.max(14.6, n > 1 ? 7.4 / Math.sin(Math.PI / n) : 14.6);
+    const base = [];
+    for (let i = 0; i < n; i++) {
       const angle = (-3 * Math.PI) / 4 + (i * 2 * Math.PI) / n;   // first room at the back, the rest clockwise
-      const r = rooms.get(id);
+      base.push(new THREE.Vector3(Math.cos(angle) * radius, 0, Math.sin(angle) * radius));
+    }
+    if (!squeeze || n < 2) return base;
+    // Phone portrait, 3 rooms: a vertical composition. Lead room on top, the other two stepped below the
+    // Brain (offset sideways by less than a room width, but far enough apart along a world axis that
+    // their floors never meet), so the scene is ~35% bigger than a squeezed ring.
+    if (n === 3) {
+      const at = (sr, su) => new THREE.Vector3().addScaledVector(SR, sr).addScaledVector(SU, su);
+      return [at(0, 15.5), at(4.6, -18.5), at(-4.6, -12)];
+    }
+    const ok = ps => ps.every((p, i) => Math.hypot(p.x, p.z) - ROOM * 0.72 > HUB_R + 0.6 &&
+      ps.every((q, j) => j <= i || Math.abs(p.x - q.x) > ROOM + 0.8 || Math.abs(p.z - q.z) > ROOM + 0.8));
+    for (let kx = 0.55; kx < 1; kx += 0.05) {
+      const ps = base.map(p => new THREE.Vector3().addScaledVector(SR, p.dot(SR) * kx).addScaledVector(SU, p.dot(SU) * 1.2));
+      if (ok(ps)) return ps;
+    }
+    return base;
+  }
+
+  function layout(ids) {
+    const ps = positions(Math.max(1, ids.length), portrait);
+    ids.forEach((id, i) => {
+      const r = rooms.get(id), p = ps[i];
+      const angle = Math.atan2(p.z, p.x), radius = Math.hypot(p.x, p.z);
       r.angle = angle; r.radius = radius;
-      r.group.position.set(Math.cos(angle) * radius, 0, Math.sin(angle) * radius);
+      r.group.position.copy(p);
       if (r.link) scene.remove(r.link);
       r.link = buildLink(angle, radius, COLORS[r.agent.color] ?? COLORS.blue); scene.add(r.link);
       r.light.position.set(r.group.position.x - ROOM / 2 + 0.8, 2.3, r.group.position.z - ROOM / 2 + 0.8);
@@ -388,6 +494,8 @@ export function createOffice(container, opts = {}) {
     const w = container.clientWidth || 1, h = container.clientHeight || 1;
     renderer.setSize(w, h, false);
     if (composer) composer.setSize(w, h);
+    const p = w / h < 0.8;
+    if (p !== portrait) { portrait = p; if (order.length) { layout(order); return; } }
     if (!userMoved) fit(); else updateCamera();
   }
 
@@ -411,7 +519,8 @@ export function createOffice(container, opts = {}) {
     c.addScaledVector(right, (sc0.x + sc1.x) / 2).addScaledVector(up, (sc0.y + sc1.y) / 2);
     // Fit into the free area between the UI bars (opts.insets: px), leaving headroom for the labels.
     const ins = insets(), fh = Math.max(80, h - ins.top - ins.bottom), fw = Math.max(80, w - ins.left - ins.right);
-    fitted = Math.max(hy * 1.04 * (h / fh), (hx * 1.04 / aspect) * (w / fw));
+    // (portrait: let the outermost floor corners graze the screen edge so the rooms come out bigger)
+    fitted = Math.max(hy * 1.04 * (h / fh), (hx * (portrait ? 0.96 : 1.04) / aspect) * (w / fw));
     // move c along the view direction down to the ground so panning/zoom stay ground-anchored
     target.copy(c).addScaledVector(DIR, -c.y / DIR.y);
     zoom = 1; userMoved = false;
@@ -496,6 +605,14 @@ export function createOffice(container, opts = {}) {
       r.agent = a;
       const p = r.group.userData.parts;
       drawChart(p.chart, a.name, (a.spark && a.spark.toolCalls) || [], p.color);
+      // Helpers keep their desk while they run; new ones take a free desk; finished ones fade out.
+      const ids = (a.helpers || []).map(h => h.id);
+      for (const s of p.spares) if (s.helperId && !ids.includes(s.helperId)) { s.target = 0; s.helperId = null; }
+      for (const h of a.helpers || []) {
+        if (p.spares.some(s => s.helperId === h.id)) continue;
+        const free = p.spares.find(s => !s.helperId && s.state < 0.05) || p.spares.find(s => !s.helperId);
+        if (free) { free.helperId = h.id; free.target = 1; }
+      }
     }
     for (const id of [...rooms.keys()]) if (!ids.includes(id)) {
       const r = rooms.get(id); scene.remove(r.group); scene.remove(r.light); if (r.link) scene.remove(r.link); rooms.delete(id); changed = true;
@@ -503,17 +620,62 @@ export function createOffice(container, opts = {}) {
     if (changed) { layout(ids); applyShadows(); }
   }
 
-  /** Screen positions for the HTML label cards. */
+  const toPx = (v, w, h) => ({ x: ((v.x + 1) / 2) * w, y: ((1 - v.y) / 2) * h });
+
+  /** Screen anchors for the HTML overlay. Room cards sit just outside the room's screen box on the
+   *  side facing away from the Brain (side: above/below/left/right), so they never cover a room's
+   *  floor or the walkways. Helper tags float above their desks. */
   function project() {
-    const out = {}, w = el.clientWidth, h = el.clientHeight, v = new THREE.Vector3();
+    const out = { __helpers: {} }, w = el.clientWidth, h = el.clientHeight, v = new THREE.Vector3();
+    const hub = toPx(v.set(0, 0, 0).project(camera), w, h);
     for (const [id, r] of rooms) {
-      v.set(r.group.position.x - 1.2, WALL_H + 1.2, r.group.position.z - 1.2).project(camera);
-      out[id] = { x: ((v.x + 1) / 2) * w, y: ((1 - v.y) / 2) * h };
+      const p = r.group.position, hr = ROOM / 2;
+      let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+      for (const sx of [-hr, hr]) for (const sz of [-hr, hr]) for (const y of [-0.5, WALL_H]) {
+        const q = toPx(v.set(p.x + sx, y, p.z + sz).project(camera), w, h);
+        x0 = Math.min(x0, q.x); x1 = Math.max(x1, q.x); y0 = Math.min(y0, q.y); y1 = Math.max(y1, q.y);
+      }
+      const cx = (x0 + x1) / 2, cy = (y0 + y1) / 2, dx = cx - hub.x, dy = cy - hub.y;
+      const side = Math.abs(dx) > Math.abs(dy) * 1.6 ? (dx > 0 ? 'right' : 'left') : dy > 0 ? 'below' : 'above';
+      out[id] = side === 'above' ? { x: cx, y: y0, side } : side === 'below' ? { x: cx, y: y1, side }
+        : side === 'right' ? { x: x1, y: cy, side } : { x: x0, y: cy, side };
+      out[id].box = { x0, y0, x1, y1 };
+      r.group.updateMatrixWorld();
+      for (const s of r.group.userData.parts.spares) {
+        if (!s.helperId || s.state < 0.3) continue;
+        s.seat.getWorldPosition(v); v.y += 2.9;
+        out.__helpers[s.helperId] = toPx(v.project(camera), w, h);
+      }
     }
-    v.set(HUB_R * 0.75, 0, HUB_R * 0.75).project(camera);          // under the hub's front edge
-    out.__brain = { x: ((v.x + 1) / 2) * w, y: ((1 - v.y) / 2) * h };
+    out.__brain = toPx(v.set(HUB_R * 0.74, 0, HUB_R * 0.74).project(camera), w, h);   // under the platform's front edge
+    out.__brain.side = 'below';
+    const hb = [toPx(v.set(-HUB_R, 0, -HUB_R).project(camera), w, h), toPx(v.set(HUB_R, 0, HUB_R).project(camera), w, h),
+      toPx(v.set(HUB_R, 0, -HUB_R).project(camera), w, h), toPx(v.set(-HUB_R, 0, HUB_R).project(camera), w, h), toPx(v.set(0, CORE_Y + 2.2, 0).project(camera), w, h)];
+    out.__hubBox = { x0: Math.min(...hb.map(q => q.x)), x1: Math.max(...hb.map(q => q.x)), y0: Math.min(...hb.map(q => q.y)), y1: Math.max(...hb.map(q => q.y)) };
     return out;
   }
+
+  /** A character carries a tablet from the room to the Brain and back (memory / vault access). */
+  function walk(agentId, kind) {
+    const r = rooms.get(agentId); if (!r || !r.link) return;
+    const L = r.link.userData;
+    if (L.walkers.length >= 2) return;
+    const wk = makeWalker(agentId + kind + L.walkers.length);
+    const lane = L.walkers.length ? -0.38 : 0.38;
+    wk.position.set(r.radius - 2.2, 0, lane); L.path.add(wk);
+    L.walkers.push({ g: wk, t0: clock.getElapsedTime(), from: r.radius - 2.2, to: HUB_R + 0.9, lane });
+  }
+
+  /** Minimap data in screen-plane units: rooms, the Brain and the visible rectangle. */
+  function mapData() {
+    const sinT = DIR.y, half = fitted / zoom, aspect = (container.clientWidth || 1) / (container.clientHeight || 1);
+    return {
+      rooms: [...rooms.values()].map(r => ({ id: r.agent.id, color: COLORS[r.agent.color] ?? COLORS.blue, x: r.group.position.dot(SR), y: r.group.position.dot(SU), status: r.agent.status })),
+      view: { x: target.dot(SR), y: target.dot(SU), w: half * aspect, h: half / sinT },
+      size: ROOM, hub: HUB_R,
+    };
+  }
+  function panTo(x, y) { target.set(0, 0, 0).addScaledVector(SR, x).addScaledVector(SU, y); userMoved = true; updateCamera(); }
 
   // ---------- animation ----------
   let raf = 0, last = 0, running = true;
@@ -524,17 +686,40 @@ export function createOffice(container, opts = {}) {
     if (lite && now - last < 33) return;          // ~30 fps in lite mode
     last = now;
     const t = clock.getElapsedTime();
+    const dt = Math.min(0.1, t - (animate.lt ?? t)); animate.lt = t;
     const b = brain.userData;
     b.rings.forEach((r, i) => { r.rotation.z = t * (0.15 + i * 0.12) * (i % 2 ? -1 : 1); });
-    b.core.rotation.y = t * 0.4; b.shell.rotation.y = -t * 0.25; b.shell.rotation.x = t * 0.1;
-    b.core.position.y = b.shell.position.y = 2.2 + Math.sin(t * 1.4) * 0.12;
-    b.beamM.opacity = 0.13 + Math.sin(t * 2) * 0.04;
+    b.cage.rotation.y = t * 0.22; b.cage.rotation.z = Math.sin(t * 0.3) * 0.08;
+    const bob = Math.sin(t * 1.4) * 0.1;
+    b.core.position.y = b.halo.position.y = CORE_Y + bob; b.cage.position.y = CORE_Y + bob;
+    b.halo.scale.setScalar(1 + Math.sin(t * 2.1) * 0.06);
+    b.beamM.opacity = 0.09 + Math.sin(t * 2) * 0.03;
+    b.ringMs.forEach((m, i) => m.color.setHSL(0.53, 1, 0.68 + Math.sin(t * 1.6 + i * 1.3) * 0.08));
+    if (!lite || (Math.floor(t * 30) % 2 === 0)) {        // particles drift upward (half rate in lite)
+      const pa = b.particles.geometry.attributes.position, arr = pa.array;
+      for (let i = 0; i < b.pseed.length; i++) { arr[i * 3 + 1] += b.pseed[i] * dt * (lite ? 2 : 1); if (arr[i * 3 + 1] > 5.5) arr[i * 3 + 1] = 0; }
+      pa.needsUpdate = true;
+    }
     for (const r of rooms.values()) {
       const st = r.agent.status, p = r.group.userData.parts, ud = p.person.userData;
       const working = st === 'working', waiting = st === 'waiting', off = st === 'offline';
       const k = working ? 1 : waiting ? 0.7 : off ? 0.08 : 0.35;
       for (const d of p.desks.slice(0, 1)) for (const s of d.monitors) s.material.emissiveIntensity = 0.25 + k * (0.85 + (working ? Math.sin(t * 9 + ud.phase) * 0.08 : 0));
-      for (const d of p.desks.slice(1)) for (const s of d.monitors) s.material.emissiveIntensity = 0.12;
+      // helpers beaming in / out at the spare desks
+      for (const s of p.spares) {
+        s.state += Math.sign(s.target - s.state) * Math.min(Math.abs(s.target - s.state), dt * 1.1);
+        const on = s.state > 0.01;
+        s.person.visible = s.column.visible = s.ring.visible = on;
+        if (!on) { for (const m of s.monitors) m.material.emissiveIntensity = 0.1; continue; }
+        const e = s.state * s.state * (3 - 2 * s.state);
+        s.person.scale.set(1.25, 1.25 * Math.max(0.02, e), 1.25);
+        s.colM.opacity = 0.1 * e + 0.4 * Math.sin(Math.PI * Math.min(1, s.state)) * (s.target ? 1 : 0.8);
+        s.ringM.opacity = 0.35 * e + 0.25 * Math.sin(t * 4 + s.seat.id) * e;
+        s.ring.scale.setScalar(1 + ((t * 0.5) % 0.3) * e);
+        const ud2 = s.person.userData;
+        ud2.arms.forEach((a, i) => { a.rotation.x = Math.sin(t * 15 + i * 2 + ud2.phase) * 0.12 * e; });
+        for (const m of s.monitors) m.material.emissiveIntensity = 0.1 + 0.9 * e;
+      }
       p.chartM.emissiveIntensity = 0.35 + k * 0.6;
       p.lamp.userData.shade.emissiveIntensity = off ? 0.1 : 0.8 + k * 0.9;
       r.light.intensity = off ? 0 : 4 + k * 7;
@@ -549,11 +734,26 @@ export function createOffice(container, opts = {}) {
       p.ring.scale.setScalar(1 + (working ? (t * 0.6) % 0.25 : 0));
       // walkway dots and the pulse on the light line run while the agent works
       const L = r.link.userData;
-      L.dots.forEach((d, i) => { d.visible = working || waiting; d.position.x = L.start + ((((t * (working ? 0.35 : 0.12)) + i / L.dots.length) % 1) * L.len); });
-      L.pulse.visible = working || waiting;
-      if (L.pulse.visible) L.pulse.position.copy(L.curve.getPoint((t * (working ? 0.45 : 0.2) + r.angle) % 1));
-      L.lineM.opacity = (working ? 0.6 : waiting ? 0.45 : 0.2) * (selected && selected !== r.agent.id ? 0.5 : 1);
-      L.edgeM.opacity = working ? 0.9 : 0.4;
+      const busy = working || waiting;
+      L.orbs.forEach((o, i) => {
+        o.visible = busy || i === 0;
+        o.position.copy(L.curve.getPoint(((t * (working ? 0.22 : 0.08)) + i / L.orbs.length + r.angle) % 1));
+      });
+      L.lineM.opacity = (working ? 0.75 : waiting ? 0.55 : 0.3) * (selected && selected !== r.agent.id ? 0.5 : 1);
+      L.edgeM.opacity = working ? 0.95 : 0.55;
+      // tablet carriers: out to the Brain, a short stop, back to the room
+      for (let i = L.walkers.length - 1; i >= 0; i--) {
+        const wk = L.walkers[i], dist = wk.from - wk.to, walkT = dist / 1.5, age = t - wk.t0, total = walkT * 2 + 1.2;
+        let x, dir;
+        if (age < walkT) { x = wk.from - (age / walkT) * dist; dir = -1; }
+        else if (age < walkT + 1.2) { x = wk.to; dir = 0; }
+        else { x = wk.to + Math.min(1, (age - walkT - 1.2) / walkT) * dist; dir = 1; }
+        wk.g.position.set(x, 0, wk.lane);
+        wk.g.rotation.y = dir < 0 ? Math.PI : dir > 0 ? 0 : Math.PI;
+        wk.g.userData.legs.forEach((leg, j) => { leg.rotation.z = dir ? Math.sin(age * 9 + j * Math.PI) * 0.45 : 0; });
+        wk.g.position.y = dir ? Math.abs(Math.sin(age * 9)) * 0.05 : 0;
+        if (age > total) { L.path.remove(wk.g); L.walkers.splice(i, 1); }
+      }
       // selected room lifts slightly
       const lift = selected === r.agent.id ? 0.35 : 0;
       r.group.position.y += (lift - r.group.position.y) * 0.15;
@@ -568,7 +768,8 @@ export function createOffice(container, opts = {}) {
   raf = requestAnimationFrame(animate);
 
   return {
-    update, project, fit,
+    update, project, fit, walk, mapData, panTo,
+    isPortrait: () => portrait,
     select(id) { selected = id; },
     zoom(k) { setZoom(zoom * k); },
     setLite(b) { lite = !!b; applyShadows(); },

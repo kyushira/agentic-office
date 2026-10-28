@@ -8,11 +8,17 @@ secrets and .env are never read.
 """
 from __future__ import annotations
 
+import json
 import os
 import re
 import sqlite3
 import time
 from pathlib import Path
+
+# Events (toasts, Brain trips) are reported for this many seconds after they happen.
+EVENT_WINDOW = 600
+BRAIN_WINDOW = 300
+_STEP = re.compile(r"^\d\d:\d\d:\d\d (\w+)\s*\|\s*(?:-> ([A-Za-z0-9_\-]+)\()?")
 
 # Seconds since the last recorded activity for an agent to count as working.
 WORKING_SECS = 90
@@ -141,6 +147,108 @@ def _skills(home: Path) -> list[dict]:
     return out[:8]
 
 
+def _parse_local(ts: str | None) -> float | None:
+    try:
+        return time.mktime(time.strptime(ts, "%Y-%m-%d %H:%M:%S")) if ts else None
+    except (TypeError, ValueError):
+        return None
+
+
+def _tail(path: Path, n: int = 4096) -> list[str]:
+    try:
+        with open(path, "rb") as f:
+            f.seek(0, 2)
+            f.seek(max(0, f.tell() - n))
+            return f.read().decode("utf-8", "replace").splitlines()
+    except OSError:
+        return []
+
+
+def task_step(lines: list[str]) -> tuple[str, bool]:
+    """(current step, finished) from a helper's live log: only the line kind and tool *name* are used."""
+    for line in reversed(lines):
+        if " end status=" in line:
+            return "done", True
+        m = _STEP.match(line)
+        if not m:
+            continue
+        kind, tool = m.group(1), m.group(2)
+        if kind == "tool" and tool:
+            return VERBS.get(tool, "using " + tool.replace("_", " ")), False
+        if kind in ("think", "assistant", "result"):
+            return "thinking", False
+        if kind in ("user", "start"):
+            return "starting", False
+    return "starting", False
+
+
+def delegations(home: Path, now: float, window: int = EVENT_WINDOW) -> tuple[list[dict], list[dict]]:
+    """Live helpers and helper events from <home>/cache/delegation/live/*/manifest.json.
+
+    Exported per helper: a short goal (first words), model chip, current step (tool name only).
+    """
+    live = home / "cache" / "delegation" / "live"
+    helpers: list[dict] = []
+    events: list[dict] = []
+    try:
+        dirs = sorted((d for d in live.iterdir() if d.is_dir()), key=lambda d: d.stat().st_mtime, reverse=True)[:12]
+    except OSError:
+        return helpers, events
+    for d in dirs:
+        try:
+            if now - d.stat().st_mtime > 6 * 3600:
+                continue
+            m = json.loads((d / "manifest.json").read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        tasks = [t for t in (m.get("tasks") or []) if isinstance(t, dict)]
+        started, done = _parse_local(m.get("started")), _parse_local(m.get("completed"))
+        n = len(tasks)
+        if started and 0 <= now - started < window:
+            events.append({"id": f"{d.name}-s", "at": started, "kind": "helpers",
+                           "text": f"{n} helper{'s' if n != 1 else ''} started"})
+        if done and 0 <= now - done < window:
+            events.append({"id": f"{d.name}-e", "at": done, "kind": "helpers", "text": "helpers finished"})
+        if done or not started or now - started > 3 * 3600:
+            continue
+        for t in tasks:
+            idx = int(t.get("index", 0) or 0)
+            step, finished = task_step(_tail(d / f"task-{idx}.log"))
+            if finished or t.get("status") not in (None, "running"):
+                continue
+            helpers.append({"id": f"{d.name[-6:]}-{idx}", "task": _short(t.get("goal"), 38),
+                            "model": chip(t.get("model") or m.get("model") or ""), "activity": step, "since": started})
+    return helpers, events
+
+
+def push_events(root: Path, now: float, window: int = EVENT_WINDOW) -> list[dict]:
+    """'warehouse-run · pushed main' from each project's remote-ref reflog (no commit messages)."""
+    out = []
+    proj = root / "projects"
+    try:
+        repos = [p for p in proj.iterdir() if (p / ".git" / "logs" / "refs" / "remotes").is_dir()]
+    except OSError:
+        return out
+    for repo in repos:
+        base = repo / ".git" / "logs" / "refs" / "remotes"
+        for log in base.rglob("*"):
+            if not log.is_file():
+                continue
+            try:
+                if now - log.stat().st_mtime > window:
+                    continue
+            except OSError:
+                continue
+            branch = "/".join(log.relative_to(base).parts[1:])
+            for line in _tail(log, 2048):
+                m = re.search(r"> (\d+) [+-]\d{4}\tupdate by push", line)
+                if m and 0 <= now - int(m.group(1)) < window:
+                    ts = int(m.group(1))
+                    out.append({"id": f"push-{repo.name}-{branch}-{ts}", "at": ts, "kind": "push", "agent": None,
+                                "text": f"{repo.name} · pushed {branch}"})
+    return out
+
+
 def _connect(home: Path) -> sqlite3.Connection:
     c = sqlite3.connect(f"file:{home / 'state.db'}?mode=ro", uri=True, timeout=2)
     c.row_factory = sqlite3.Row
@@ -156,8 +264,10 @@ def agent_snapshot(pid: str, home: Path, now: float | None = None, color: str = 
         "model": chip(models["model"]), "helperModels": [chip(m) for m in models["helpers"] if chip(m)],
         "status": "idle", "activity": "idle", "lastActive": None, "helpers": [], "recent": [],
         "today": {"sessions": 0, "toolCalls": 0, "tokens": 0}, "spark": {"sessions": [], "toolCalls": [], "tokens": []},
-        "tools": [], "skills": _skills(home), "platforms": [],
+        "tools": [], "skills": _skills(home), "platforms": [], "events": [], "brainTrips": [],
     }
+    live_helpers, helper_events = delegations(home, now)
+    a["events"] = [dict(e, agent=pid) for e in helper_events]
     try:
         c = _connect(home)
     except sqlite3.Error:
@@ -180,21 +290,58 @@ def agent_snapshot(pid: str, home: Path, now: float | None = None, color: str = 
         subs = [r for r in rows if r["source"] == "subagent" or r["parent_session_id"]]
         live_leads = [r for r in leads if (r["act"] or 0) >= now - WORKING_SECS or r["id"] in leases]
         live_subs = [r for r in subs if not r["ended_at"] and (r["act"] or 0) >= now - WORKING_SECS * 2]
-        a["helpers"] = [{"id": r["id"][-6:], "task": _short(re.sub(r"^Subagent:\s*", "", r["title"] or ""), 44),
-                         "model": chip(r["model"] or ""), "activity": activity_text(r["descr"], None),
-                         "since": r["started_at"]} for r in live_subs][:6]
+        # Helpers: the delegation manifests are authoritative; child sessions are the fallback.
+        a["helpers"] = live_helpers[:6] or [
+            {"id": r["id"][-6:], "task": _short(re.sub(r"^Subagent:\s*", "", r["title"] or ""), 38),
+             "model": chip(r["model"] or ""), "activity": activity_text(r["descr"], None).split(" · ")[0],
+             "since": r["started_at"]} for r in live_subs][:6]
+        # Latest tool step (name + time only) for agents whose sessions carry no live description.
+        lt = c.execute("select tool_name, timestamp from messages where role = 'tool' and tool_name is not null "
+                       "order by timestamp desc limit 1").fetchone()
+        last_verb = VERBS.get(lt["tool_name"], "using " + lt["tool_name"].replace("_", " ")) if lt else ""
         last = (leads or rows or [None])[0]
         if last is not None:
-            a["lastActive"] = last["act"]
+            a["lastActive"] = max(last["act"] or 0, lt["timestamp"] if lt else 0) or None
+        n_help = len(a["helpers"])
         if live_leads:
             cur = live_leads[0]
             a["activity"] = activity_text(cur["descr"], cur["title"])
-            a["status"] = "waiting" if a["activity"].startswith(("delegating", "waiting")) else "working"
-        elif live_subs:
+            if a["activity"].startswith("working") and lt and lt["timestamp"] >= now - WORKING_SECS:
+                a["activity"] = a["activity"].replace("working", last_verb, 1)
+            a["status"] = "waiting" if a["activity"].startswith("waiting") else "working"
+        elif lt and lt["timestamp"] >= now - WORKING_SECS:
+            a["status"], a["activity"] = "working", last_verb
+        elif n_help:
             a["status"] = "waiting"
-            a["activity"] = f"waiting on {len(live_subs)} helper{'s' if len(live_subs) > 1 else ''}"
+        elif last_verb:
+            a["activity"] = "idle · last: " + last_verb
         elif last is not None:
             a["activity"] = "idle · last: " + (_short(last["title"], 34) or "session")
+        if n_help:
+            a["activity"] = f"delegating · {n_help} helper{'s' if n_help > 1 else ''}"
+            a["status"] = "working"
+        # Toast events: lead sessions starting / finishing (no titles, just the platform).
+        for r in leads[:40]:
+            if r["started_at"] and 0 <= now - r["started_at"] < EVENT_WINDOW:
+                a["events"].append({"id": f"{pid}-s-{r['id']}", "at": r["started_at"], "kind": "session", "agent": pid,
+                                    "text": f"session started · {r['source'] or 'chat'}"})
+            if r["ended_at"] and 0 <= now - r["ended_at"] < EVENT_WINDOW:
+                a["events"].append({"id": f"{pid}-e-{r['id']}", "at": r["ended_at"], "kind": "session", "agent": pid,
+                                    "text": f"session finished · {r['source'] or 'chat'}"})
+        # Brain trips: memory writes / history searches, and vault reads/writes. The tool_calls JSON
+        # is only pattern-matched here; nothing from it is exported except read vs write.
+        trips = []
+        for r in c.execute("select id, tool_name, timestamp from messages where timestamp >= ? and role = 'tool' "
+                           "and tool_name in ('memory', 'session_search') order by timestamp desc limit 6",
+                           (now - BRAIN_WINDOW,)):
+            trips.append({"id": f"{pid}-m{r['id']}", "at": r["timestamp"],
+                          "kind": "write" if r["tool_name"] == "memory" else "read"})
+        for r in c.execute("select id, timestamp, (tool_calls like '%write_file%' or tool_calls like '%\"patch\"%' "
+                           "or tool_calls like '%vault-sync%') as w from messages where timestamp >= ? and "
+                           "role = 'assistant' and tool_calls like '%obsidian-vault%' order by timestamp desc limit 6",
+                           (now - BRAIN_WINDOW,)):
+            trips.append({"id": f"{pid}-v{r['id']}", "at": r["timestamp"], "kind": "write" if r["w"] else "read"})
+        a["brainTrips"] = sorted(trips, key=lambda t: -t["at"])[:6]
         # Today's numbers and 12 hourly buckets for the sparklines.
         hours = [now - 3600 * (12 - i) for i in range(13)]
         bucket = lambda ts: min(11, max(0, int((ts - hours[0]) // 3600)))
@@ -251,9 +398,12 @@ def snapshot(home: str | None = None, now: float | None = None) -> dict:
         for m in [a["model"], *a["helperModels"]]:
             if m and m not in chips:
                 chips.append(m)
+    events = [e for a in agents for e in a.pop("events", [])] + push_events(root, now)
+    events.sort(key=lambda e: e["at"], reverse=True)
     return {
         "ts": now,
         "agents": agents,
+        "events": events[:12],
         "brain": {"notes": vault_notes(root)},
         "runsOn": chips,
         "counts": {"agents": len(agents), "running": sum(a["status"] in ("working", "waiting") for a in agents),
