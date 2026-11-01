@@ -1,8 +1,8 @@
 {
   "name": "agent-office",
   "private": true,
-  "version": "0.1.0",
-  "description": "Agent Office: a read-only 3D office view of the Hermes agents, as a Hermes dashboard plugin.",
+  "version": "0.3.0",
+  "description": "Agent Deck: a read-only grid of the Hermes agents' sessions, as a Hermes dashboard plugin.",
   "type": "module",
   "scripts": {
     "build": "vite build && vite build --config vite.harness.config.js",
@@ -11,7 +11,6 @@
   "devDependencies": {
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "three": "*",
     "vite": "*"
   }
 }

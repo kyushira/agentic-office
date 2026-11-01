@@ -466,6 +466,87 @@ def agent_snapshot(pid: str, home: Path, now: float | None = None, color: str = 
     return a
 
 
+DECK_DAYS = 14
+DECK_MAX = 24
+
+
+def context_window(model: str | None) -> int | None:
+    """Context window in tokens for a model id, or None when unknown."""
+    m = (model or "").lower()
+    if "[1m]" in m or "gemini" in m:
+        return 1_000_000
+    if "claude" in m or "opus" in m or "sonnet" in m or "haiku" in m:
+        return 200_000
+    if "gpt-4o" in m:
+        return 128_000
+    return None
+
+
+def deck_tiles(root: Path, agents: list[dict], now: float) -> list[dict]:
+    """One tile per recent session across all profiles, plus running helpers.
+
+    Exported per tile: title (trimmed), agent, platform, status, last activity, a context estimate
+    (sum of the live transcript's length / 3.5 + a fixed system-prompt allowance) and token totals.
+    Message text is only measured (length()), never read out.
+    """
+    by_id = {a["id"]: a for a in agents}
+    tiles: list[dict] = []
+    for p in discover(root):
+        a = by_id.get(p["id"])
+        if a is None:
+            continue
+        try:
+            c = _connect(p["home"])
+        except sqlite3.Error:
+            continue
+        try:
+            cols = {r[1] for r in c.execute("pragma table_info(sessions)")}
+            act = "coalesce(last_activity_at, started_at)" if "last_activity_at" in cols else "started_at"
+            desc = "last_activity_description" if "last_activity_at" in cols else "''"
+            hide = " and coalesce(hidden, 0) = 0 and coalesce(archived, 0) = 0" if "hidden" in cols else ""
+            leases = set()
+            try:
+                leases = {r[0] for r in c.execute("select conversation_id from session_turn_leases where expires_at > ?", (now,))}
+            except sqlite3.Error:
+                pass
+            rows = c.execute(
+                f"select id, source, title, display_name, model, ended_at, parent_session_id, {act} as act, {desc} as descr, "
+                f"coalesce(input_tokens,0) + coalesce(output_tokens,0) + coalesce(cache_read_tokens,0) + coalesce(cache_write_tokens,0) as tok "
+                f"from sessions where {act} >= ?{hide} order by act desc limit 60", (now - DECK_DAYS * 86400,)).fetchall()
+            for r in rows:
+                sub = r["source"] == "subagent" or r["parent_session_id"]
+                working = (r["act"] or 0) >= now - WORKING_SECS or r["id"] in leases
+                if sub and (r["ended_at"] or not working):
+                    continue                       # helpers only while they run
+                status = "working" if working and not r["ended_at"] else ("done" if r["ended_at"] else "idle")
+                ctx = None
+                try:
+                    chars = c.execute("select sum(length(coalesce(content, '')) + length(coalesce(tool_calls, ''))) from messages "
+                                      "where session_id = ? and coalesce(active, 1) = 1 and coalesce(compacted, 0) = 0",
+                                      (r["id"],)).fetchone()[0] or 0
+                    if not chars and not r["title"] and status != "working":
+                        continue                   # empty chats (opened, never used)
+                    ctx = int(chars / 3.5) + 12_000
+                except sqlite3.Error:
+                    pass
+                win = context_window(r["model"])
+                title = re.sub(r"^Subagent:\s*", "", r["title"] or r["display_name"] or "") or ("helper" if sub else "untitled")
+                if title.lower() in ("bot chat", "untitled", "helper", "session", "new chat"):
+                    title = f"{a['name']} {title}"          # generic titles say whose they are
+                tiles.append({
+                    "id": f"{p['id']}/{r['id'][-12:]}", "agent": p["id"], "agentName": a["name"], "title": _short(title, 40),
+                    "source": "helper" if sub else (r["source"] or "chat"), "status": status, "at": r["act"],
+                    "ctx": ctx, "ctxPct": round(100 * ctx / win) if ctx and win else None, "model": chip(r["model"] or ""),
+                    "tokens": r["tok"], "step": activity_text(r["descr"], None).split(" · ")[0] if status == "working" else "",
+                })
+        except sqlite3.Error:
+            pass
+        finally:
+            c.close()
+    tiles.sort(key=lambda t: (t["status"] != "working", -(t["at"] or 0)))
+    return tiles[:DECK_MAX]
+
+
 def all_walks(root: Path, ids: list[str], now: float) -> list[dict]:
     """Hand-offs across every profile, newest first, with the same hop seen twice (sender and receiver) merged."""
     out: list[dict] = []
@@ -520,6 +601,7 @@ def snapshot(home: str | None = None, now: float | None = None) -> dict:
         "agents": agents,
         "events": events[:12],
         "walks": walks,
+        "tiles": deck_tiles(root, agents, now),
         "brain": {"notes": vault_notes(root)},
         "runsOn": chips,
         "counts": {"agents": len(agents), "running": sum(a["status"] in ("working", "waiting") for a in agents),

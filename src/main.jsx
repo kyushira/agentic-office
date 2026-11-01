@@ -1,4 +1,4 @@
-import App from './App.jsx';
+import Deck from './Deck.jsx';
 import './style.css';
 
-window.__HERMES_PLUGINS__.register('agent-office', App);
+window.__HERMES_PLUGINS__.register('agent-office', Deck);

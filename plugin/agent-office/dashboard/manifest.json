@@ -1,10 +1,10 @@
 {
   "name": "agent-office",
-  "label": "Office",
-  "description": "Read-only 3D office showing what each agent is doing right now.",
+  "label": "Deck",
+  "description": "Read-only deck of every recent agent session: who is working, context used, last activity.",
   "icon": "Activity",
-  "version": "0.1.0",
-  "tab": { "path": "/office", "position": "end" },
+  "version": "0.3.0",
+  "tab": { "path": "/deck", "position": "end" },
   "entry": "dist/index.js",
   "css": "dist/style.css",
   "api": "plugin_api.py"
