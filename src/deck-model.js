@@ -3,6 +3,7 @@ import { ago } from './format.js';
 
 export const AGENT_COLORS = ['#7EA8FF', '#5BE38B', '#FFB347', '#C792FF', '#FF6B8A', '#4FE0D2', '#F5E663', '#FF8A5C'];
 const CHIP_SECS = 120;
+const FIXED = { default: '#6E9BFF', dev: '#4FD983', red: '#FF6A3D' };   // Ash blue, Dev green, Red red-orange
 const KIND = { brief: 'new brief', reply: 'report', message: 'message' };
 
 export function durationText(h, now) {
@@ -17,7 +18,7 @@ export function durationText(h, now) {
 export function buildItems(state, now) {
   const agents = state.agents || [];
   const names = Object.fromEntries(agents.map(a => [a.id, a.name]));
-  const colors = Object.fromEntries(agents.map((a, i) => [a.id, AGENT_COLORS[i % AGENT_COLORS.length]]));
+  const colors = Object.fromEntries(agents.map((a, i) => [a.id, FIXED[a.id] || AGENT_COLORS[i % AGENT_COLORS.length]]));
   const walks = state.walks || [];
   const items = [];
   for (const a of agents) {

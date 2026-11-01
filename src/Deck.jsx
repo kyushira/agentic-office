@@ -1,18 +1,20 @@
 import { React, useState, useEffect, useRef, fetchJSON, API } from './sdk.js';
 import { ago, compact } from './format.js';
-import { invader, tint } from './sprite.js';
+import { portrait } from './portrait.js';
 import { buildItems, headerCounts, durationText } from './deck-model.js';
 
 const POLL_MS = 5000, POLL_LITE_MS = 15000;
 
-function Sprite({ seed, color, working, small }) {
-  const s = invader(seed);
-  const rects = px => px.map(([x, y]) => <rect key={x + '-' + y} x={x} y={y} width="1.02" height="1.02" />);
+/** Pixel-art bust: base pixels + an eyes layer that blinks; a small bob while working. */
+function Sprite({ who, working, small, done }) {
+  const p = portrait(who);
+  const px = list => list.map(([x, y, c]) => <rect key={x + '-' + y} x={x} y={y} width="1" height="1" fill={c} />);
   return (
-    <svg className={'dk-sprite' + (working ? ' is-anim' : '') + (small ? ' is-small' : '')} viewBox={`0 0 ${s.w} ${s.h}`}
-      shapeRendering="crispEdges" style={{ fill: color }} aria-hidden="true">
-      <g className="dk-fa">{rects(s.a)}</g>
-      <g className="dk-fb">{rects(s.b)}</g>
+    <svg className={'dk-sprite' + (working ? ' is-work' : '') + (small ? ' is-small' : '') + (done ? ' is-done' : '')}
+      viewBox={`0 0 ${p.size} ${p.size}`} shapeRendering="crispEdges" aria-hidden="true">
+      {p.base.map(([x, y, w, c]) => <rect key={x + '-' + y} x={x} y={y} width={w} height="1" fill={c} />)}
+      <g className="dk-eyes-open">{px(p.open)}</g>
+      <g className="dk-eyes-shut">{px(p.closed)}</g>
     </svg>
   );
 }
@@ -25,7 +27,7 @@ function AgentTile({ it, pressed, onPick }) {
       {working && <i className="dk-badge" />}
       {it.helperCount > 0 && <span className="dk-count-chip">{it.helperCount} helper{it.helperCount > 1 ? 's' : ''}</span>}
       {it.ctxPct != null && !it.helperCount && <span className="dk-ctx">{it.ctxPct}% ctx</span>}
-      <span className="dk-art"><Sprite seed={'agent:' + a.id} color={it.color} working={working} />{!working && <em className="dk-zz">zz</em>}</span>
+      <span className="dk-art"><Sprite who={a.id} working={working} />{!working && <em className="dk-zz">zz</em>}</span>
       <b className="dk-name">{a.name}</b>
       <span className="dk-status">{it.status}</span>
       {it.chip && <span className="dk-handoff" style={{ '--dk-from': it.chip.color }}>← {it.chip.text}</span>}
@@ -38,7 +40,7 @@ function HelperTile({ it, pressed, onPick }) {
   return (
     <button className={'dk-tile is-helper' + (done ? ' is-done' : ' is-working') + (pressed ? ' is-pressed' : '')} onClick={onPick}
       style={{ '--dk-c': it.parentColor }} aria-label={`${it.name}, ${it.status}`}>
-      <span className="dk-art"><Sprite seed={'helper:' + h.id} color={done ? '#5f5f5f' : tint('helper:' + h.id)} working={!done} small />
+      <span className="dk-art"><Sprite who={'helper:' + (h.model || '')} working={!done} done={done} small />
         {done && <em className="dk-zz dk-check">✓</em>}</span>
       <b className="dk-name">{it.name}</b>
       <span className="dk-parent">↳ {it.parentName}</span>
@@ -72,7 +74,7 @@ function AgentSheet({ it, sessions, now }) {
   if (s) return <SessionDetail s={s} now={now} onBack={() => setOpen(null)} />;
   return (
     <>
-      <header><span className="dk-sheet-art"><Sprite seed={'agent:' + a.id} color={it.color} /></span>
+      <header><span className="dk-sheet-art"><Sprite who={a.id} /></span>
         <div className="dk-grow"><h2>{a.name}</h2><small>{a.role} · {it.status}</small></div></header>
       {it.walks.length > 0 && <section><h3>Hand-offs</h3>
         {it.walks.map(w => <div key={w.id} className="dk-row-mini"><span>{w.label}</span><small>{ago(w.at, now)}</small></div>)}</section>}
@@ -96,7 +98,7 @@ function HelperSheet({ it, now }) {
     ['Status', it.done ? '✓ done' : 'running · ' + (h.activity || 'working')], ['Duration', durationText(h, now)]];
   return (
     <>
-      <header><span className="dk-sheet-art"><Sprite seed={'helper:' + h.id} color={it.done ? '#5f5f5f' : tint('helper:' + h.id)} small /></span>
+      <header><span className="dk-sheet-art"><Sprite who={'helper:' + (h.model || '')} done={it.done} small /></span>
         <div className="dk-grow"><h2>{it.name}</h2><small>↳ {it.parentName}</small></div></header>
       <dl>{rows.map(([k, v]) => <React.Fragment key={k}><dt>{k}</dt><dd>{v}</dd></React.Fragment>)}</dl>
     </>
@@ -150,7 +152,7 @@ export default function Deck() {
   useEffect(() => { const id = setInterval(() => setTick(x => x + 1), 15000); return () => clearInterval(id); }, []);
 
   const now = Date.now() / 1000;
-  const items = state ? buildItems(state, now, tint) : [];
+  const items = state ? buildItems(state, now) : [];
   const counts = state ? headerCounts(items) : null;
   const picked = items.find(i => i.key === sel) || null;
 

@@ -39,7 +39,6 @@
 .dk-tile.is-working::before { width: 62%; }
 .dk-tile.is-working::after { height: 62%; }
 .dk-tile:active, .dk-tile.is-pressed { background: var(--dk-hot); border-color: var(--dk-hot); }
-.dk-tile.is-pressed .dk-sprite { fill: #0A0A0A !important; }
 .dk-tile.is-pressed .dk-name, .dk-tile.is-pressed .dk-status, .dk-tile.is-pressed .dk-zz { color: #0A0A0A; }
 .dk-tile.is-ghost { opacity: .4; }
 
@@ -48,9 +47,10 @@
 @keyframes dk-blink { to { opacity: .35; } }
 
 /* sprite area: same size and position on every tile (text below never moves it) */
-.dk-art { position: absolute; left: 0; right: 0; top: 14%; height: 44%; display: flex; align-items: center; justify-content: center; }
-.dk-sprite { width: 50%; height: auto; display: block; }
-.dk-sprite.is-small { width: 40%; }
+.dk-art { position: absolute; left: 0; right: 0; top: 6%; height: 50%; display: flex; align-items: center; justify-content: center; }
+.dk-sprite { height: 100%; width: auto; display: block; image-rendering: pixelated; }
+.dk-sprite.is-small { height: 82%; }
+.dk-sprite.is-done { filter: grayscale(1) brightness(.7); }
 
 /* "3 helpers" / ctx chip, top right; hand-off chip along the bottom edge */
 .dk-count-chip, .dk-ctx { position: absolute; top: 5px; right: 7px; font-size: 9px; padding: 1px 5px; border-radius: 3px; z-index: 1; }
@@ -69,11 +69,6 @@
 .dk-tile.is-helper.is-done { opacity: .45; }
 .dk-parent { width: 100%; font-size: 10px; color: var(--dk-c); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: 700; }
 .dk-check { color: #9a9a9a; }
-.dk-fb { display: none; }
-.dk-root:not(.is-lite) .dk-sprite.is-anim .dk-fa { animation: dk-fa .9s steps(1) infinite; }
-.dk-root:not(.is-lite) .dk-sprite.is-anim .dk-fb { display: inline; animation: dk-fb .9s steps(1) infinite; }
-@keyframes dk-fa { 50% { opacity: 0; } }
-@keyframes dk-fb { 0% { opacity: 0; } 50% { opacity: 1; } }
 .dk-zz { position: absolute; top: 4%; right: 14%; font-style: normal; font-size: 12px; font-weight: 700; color: #B8B8B8; letter-spacing: -.05em; }
 
 .dk-name { width: 100%; font-size: 12px; font-weight: 700; color: var(--dk-ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 4px; }
@@ -127,3 +122,13 @@
 .dk-help .dk-badge { top: 12px; left: 0; width: 5px; height: 5px; }
 .dk-help small { margin-left: auto; }
 .dk-note { color: #555; font-size: 10px; margin: 16px 0 0; }
+
+/* portraits: blink every few seconds; working = small typing bob; Lite = still */
+.dk-eyes-shut { opacity: 0; }
+.dk-root:not(.is-lite) .dk-eyes-shut { animation: dk-blink-shut 4.2s steps(1) infinite; }
+.dk-root:not(.is-lite) .dk-eyes-open { animation: dk-blink-open 4.2s steps(1) infinite; }
+@keyframes dk-blink-shut { 0%, 95% { opacity: 0; } 96%, 100% { opacity: 1; } }
+@keyframes dk-blink-open { 0%, 95% { opacity: 1; } 96%, 100% { opacity: 0; } }
+.dk-root:not(.is-lite) .dk-sprite.is-work { animation: dk-bob .5s steps(2, jump-none) infinite alternate; }
+@keyframes dk-bob { from { transform: translateY(0); } to { transform: translateY(3%); } }
+.dk-tile.is-pressed .dk-sprite { filter: none; }
