@@ -1,6 +1,6 @@
 /* Agent Deck — every rule scoped under .dk-root so the dashboard is untouched. */
 .dk-root {
-  --dk-bg: #0A0A0A; --dk-tile: #151515; --dk-line: #2A2A2A; --dk-ink: #F5F5F5; --dk-mut: #8C8C8C;
+  --dk-bg: #0A0A0A; --dk-tile: #151515; --dk-line: #2A2A2A; --dk-ink: #F5F5F5; --dk-mut: #A3A3A3;
   --dk-hot: #FF5A1F; --dk-red: #FF2D2D; --dk-dim: #5A2614;
   --dk-mono: "JetBrains Mono", "SF Mono", ui-monospace, Menlo, Consolas, monospace;
   position: relative; display: flex; flex-direction: column; overflow: hidden; border-radius: 10px;
@@ -23,6 +23,12 @@
   grid-template-columns: repeat(auto-fill, minmax(148px, 1fr)); align-content: start; scrollbar-width: none; }
 .dk-grid::-webkit-scrollbar { display: none; }
 @media (max-width: 600px) { .dk-grid { grid-template-columns: repeat(4, 1fr); gap: 5px; padding: 0 6px 8px; } }
+/* few tiles: big ones (2 columns on a phone, ~3 per row on desktop) */
+.dk-root.is-few .dk-grid { grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 8px; }
+@media (max-width: 600px) { .dk-root.is-few .dk-grid { grid-template-columns: repeat(2, 1fr); gap: 7px; } }
+.dk-root.is-few .dk-name { font-size: 15px; }
+.dk-root.is-few .dk-status, .dk-root.is-few .dk-parent { font-size: 11px; }
+.dk-root.is-few .dk-count-chip, .dk-root.is-few .dk-ctx, .dk-root.is-few .dk-handoff { font-size: 11px; }
 
 .dk-tile { position: relative; aspect-ratio: 1 / 1; min-width: 0; background: var(--dk-tile); border: 1px solid var(--dk-line); border-radius: 5px;
   display: flex; flex-direction: column; align-items: center; justify-content: flex-end; padding: 6% 6% 7%; text-align: center; overflow: hidden; }
@@ -41,14 +47,34 @@
 .dk-root:not(.is-lite) .is-working .dk-badge { animation: dk-blink 1.4s steps(2, start) infinite; }
 @keyframes dk-blink { to { opacity: .35; } }
 
-.dk-art { position: relative; flex: 1; width: 100%; display: flex; align-items: center; justify-content: center; min-height: 0; }
-.dk-sprite { width: 52%; height: auto; display: block; }
+/* sprite area: same size and position on every tile (text below never moves it) */
+.dk-art { position: absolute; left: 0; right: 0; top: 14%; height: 44%; display: flex; align-items: center; justify-content: center; }
+.dk-sprite { width: 50%; height: auto; display: block; }
+.dk-sprite.is-small { width: 40%; }
+
+/* "3 helpers" / ctx chip, top right; hand-off chip along the bottom edge */
+.dk-count-chip, .dk-ctx { position: absolute; top: 5px; right: 7px; font-size: 9px; padding: 1px 5px; border-radius: 3px; z-index: 1; }
+.dk-count-chip { background: var(--dk-hot); color: #0A0A0A; font-weight: 700; }
+.dk-ctx { color: #FF9A70; }
+.dk-tile.has-chip { padding-bottom: calc(7% + 18px); }
+.dk-root.is-few .dk-tile.has-chip { padding-bottom: calc(7% + 22px); }
+.dk-handoff { position: absolute; left: 0; right: 0; bottom: 0; padding: 3px 8px; font-size: 9px; text-align: left; color: #0A0A0A; font-weight: 700;
+  background: var(--dk-from, #999); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; animation: dk-chip 2s ease-out; z-index: 2; }
+@keyframes dk-chip { from { transform: translateY(100%); } 15% { transform: none; } }
+
+/* helper tiles: indented under their parent with a connector in the parent's colour */
+.dk-tile.is-helper { border-left: 3px solid var(--dk-c); }
+.dk-tile.is-helper::before, .dk-tile.is-helper::after { display: none; }
+.dk-tile.is-helper.is-working { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--dk-c) 35%, transparent); }
+.dk-tile.is-helper.is-done { opacity: .45; }
+.dk-parent { width: 100%; font-size: 10px; color: var(--dk-c); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: 700; }
+.dk-check { color: #9a9a9a; }
 .dk-fb { display: none; }
 .dk-root:not(.is-lite) .dk-sprite.is-anim .dk-fa { animation: dk-fa .9s steps(1) infinite; }
 .dk-root:not(.is-lite) .dk-sprite.is-anim .dk-fb { display: inline; animation: dk-fb .9s steps(1) infinite; }
 @keyframes dk-fa { 50% { opacity: 0; } }
 @keyframes dk-fb { 0% { opacity: 0; } 50% { opacity: 1; } }
-.dk-zz { position: absolute; top: 4%; right: 12%; font-style: normal; font-size: 10px; color: var(--dk-mut); letter-spacing: -.05em; }
+.dk-zz { position: absolute; top: 4%; right: 14%; font-style: normal; font-size: 12px; font-weight: 700; color: #B8B8B8; letter-spacing: -.05em; }
 
 .dk-name { width: 100%; font-size: 12px; font-weight: 700; color: var(--dk-ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 4px; }
 .dk-status { width: 100%; font-size: 10px; color: var(--dk-mut); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px; }
@@ -78,7 +104,21 @@
 .dk-sheet-art .dk-sprite { width: 70%; }
 .dk-sheet h2 { margin: 0; font-size: 15px; font-weight: 700; word-break: break-word; }
 .dk-sheet small { color: var(--dk-mut); font-size: 11px; }
-.dk-x { background: none; border: 1px solid var(--dk-line); border-radius: 6px; width: 34px; height: 34px; color: var(--dk-mut); flex: none; }
+.dk-sheet { position: relative; }
+.dk-x { position: absolute; top: 12px; right: 12px; background: #111; border: 1px solid var(--dk-line); border-radius: 6px; width: 34px; height: 34px; color: var(--dk-mut); z-index: 1; }
+.dk-sheet header, .dk-sheet > h2 { padding-right: 44px; }
+.dk-back { background: none; border: 0; color: var(--dk-hot); padding: 4px 0 10px; font-size: 13px; }
+.dk-wrap { white-space: normal; word-break: break-word; }
+.dk-srow { display: block; width: 100%; text-align: left; background: var(--dk-tile); border: 1px solid var(--dk-line); border-radius: 6px; padding: 9px 10px; margin-bottom: 6px; }
+.dk-srow.is-working { border-color: var(--dk-dim); box-shadow: inset 2px 0 0 var(--dk-hot); }
+.dk-srow.is-done { opacity: .6; }
+.dk-stitle { display: block; font-size: 12.5px; font-weight: 700; line-height: 1.3; }
+.dk-smeta { display: flex; flex-wrap: wrap; gap: 4px 10px; margin-top: 5px; font-size: 10.5px; color: var(--dk-mut); align-items: center; }
+.dk-pill { font-size: 10px; padding: 1px 6px; border-radius: 3px; background: #262626; color: #bdbdbd; }
+.dk-pill.is-working { background: var(--dk-hot); color: #0A0A0A; font-weight: 700; }
+.dk-pill.is-done { background: transparent; color: #7a7a7a; border: 1px solid #333; }
+.dk-row-mini { display: flex; justify-content: space-between; gap: 8px; font-size: 12px; padding: 5px 0; border-bottom: 1px solid #1d1d1d; }
+.dk-row-mini small { flex: none; }
 .dk-sheet dl { display: grid; grid-template-columns: auto 1fr; gap: 7px 14px; margin: 0; font-size: 12px; }
 .dk-sheet dt { color: var(--dk-mut); }
 .dk-sheet dd { margin: 0; text-align: right; word-break: break-word; }

@@ -221,6 +221,38 @@ def delegations(home: Path, now: float, window: int = EVENT_WINDOW) -> tuple[lis
     return helpers, events
 
 
+def finished_helpers(home: Path, now: float, window: int = 900) -> list[dict]:
+    """Helpers that finished in the last `window` seconds (end = their log's last write)."""
+    out: list[dict] = []
+    live = home / "cache" / "delegation" / "live"
+    try:
+        dirs = [d for d in live.iterdir() if d.is_dir() and now - d.stat().st_mtime < window + 60]
+    except OSError:
+        return out
+    for d in dirs:
+        try:
+            m = json.loads((d / "manifest.json").read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        started = _parse_local(m.get("started"))
+        for t in (m.get("tasks") or []):
+            if not isinstance(t, dict):
+                continue
+            idx = int(t.get("index", 0) or 0)
+            log = d / f"task-{idx}.log"
+            _, fin = task_step(_tail(log))
+            try:
+                end = log.stat().st_mtime
+            except OSError:
+                continue
+            if not (fin or t.get("status") not in (None, "running")) or now - end > window:
+                continue
+            out.append({"id": f"{d.name[-6:]}-{idx}", "task": _short(t.get("goal"), 38),
+                        "model": chip(t.get("model") or m.get("model") or ""), "since": started, "ended": end,
+                        "result": t.get("status") or "completed"})
+    return sorted(out, key=lambda h: -h["ended"])[:6]
+
+
 def push_events(root: Path, now: float, window: int = EVENT_WINDOW) -> list[dict]:
     """'warehouse-run · pushed main' from each project's remote-ref reflog (no commit messages)."""
     out = []
@@ -353,6 +385,8 @@ def agent_snapshot(pid: str, home: Path, now: float | None = None, color: str = 
         "tools": [], "skills": _skills(home), "platforms": [], "events": [], "brainTrips": [],
     }
     live_helpers, helper_events = delegations(home, now)
+    live_ids = {h["id"] for h in live_helpers}
+    a["recentHelpers"] = [h for h in finished_helpers(home, now) if h["id"] not in live_ids]
     a["events"] = [dict(e, agent=pid) for e in helper_events]
     try:
         c = _connect(home)
@@ -467,7 +501,7 @@ def agent_snapshot(pid: str, home: Path, now: float | None = None, color: str = 
 
 
 DECK_DAYS = 14
-DECK_MAX = 24
+DECK_PER_AGENT = 20
 
 
 def context_window(model: str | None) -> int | None:
@@ -482,7 +516,7 @@ def context_window(model: str | None) -> int | None:
     return None
 
 
-def deck_tiles(root: Path, agents: list[dict], now: float) -> list[dict]:
+def deck_tiles(root: Path, agents: list[dict], now: float) -> dict[str, list[dict]]:
     """One tile per recent session across all profiles, plus running helpers.
 
     Exported per tile: title (trimmed), agent, platform, status, last activity, a context estimate
@@ -512,12 +546,17 @@ def deck_tiles(root: Path, agents: list[dict], now: float) -> list[dict]:
             rows = c.execute(
                 f"select id, source, title, display_name, model, ended_at, parent_session_id, {act} as act, {desc} as descr, "
                 f"coalesce(input_tokens,0) + coalesce(output_tokens,0) + coalesce(cache_read_tokens,0) + coalesce(cache_write_tokens,0) as tok "
-                f"from sessions where {act} >= ?{hide} order by act desc limit 60", (now - DECK_DAYS * 86400,)).fetchall()
+                f"from sessions where {act} >= ?{hide} order by act desc limit 150", (now - DECK_DAYS * 86400,)).fetchall()
+            kids: dict[str, int] = {}
+            for r in c.execute(f"select parent_session_id, count(*) from sessions where parent_session_id is not null and {act} >= ? "
+                               f"group by 1", (now - DECK_DAYS * 86400,)):
+                kids[r[0]] = r[1]
+            n_rows = 0
             for r in rows:
                 sub = r["source"] == "subagent" or r["parent_session_id"]
+                if sub or n_rows >= DECK_PER_AGENT:
+                    continue                       # helpers get their own tiles in the main grid
                 working = (r["act"] or 0) >= now - WORKING_SECS or r["id"] in leases
-                if sub and (r["ended_at"] or not working):
-                    continue                       # helpers only while they run
                 status = "working" if working and not r["ended_at"] else ("done" if r["ended_at"] else "idle")
                 ctx = None
                 try:
@@ -533,18 +572,24 @@ def deck_tiles(root: Path, agents: list[dict], now: float) -> list[dict]:
                 title = re.sub(r"^Subagent:\s*", "", r["title"] or r["display_name"] or "") or ("helper" if sub else "untitled")
                 if title.lower() in ("bot chat", "untitled", "helper", "session", "new chat"):
                     title = f"{a['name']} {title}"          # generic titles say whose they are
+                n_rows += 1
                 tiles.append({
-                    "id": f"{p['id']}/{r['id'][-12:]}", "agent": p["id"], "agentName": a["name"], "title": _short(title, 40),
-                    "source": "helper" if sub else (r["source"] or "chat"), "status": status, "at": r["act"],
+                    "id": f"{p['id']}/{r['id'][-12:]}", "agent": p["id"], "agentName": a["name"], "title": _short(title, 120),
+                    "source": r["source"] or "chat", "status": status, "at": r["act"],
                     "ctx": ctx, "ctxPct": round(100 * ctx / win) if ctx and win else None, "model": chip(r["model"] or ""),
                     "tokens": r["tok"], "step": activity_text(r["descr"], None).split(" · ")[0] if status == "working" else "",
+                    "helpers": kids.get(r["id"], 0),
                 })
         except sqlite3.Error:
             pass
         finally:
             c.close()
-    tiles.sort(key=lambda t: (t["status"] != "working", -(t["at"] or 0)))
-    return tiles[:DECK_MAX]
+    out: dict[str, list[dict]] = {}
+    for t in tiles:
+        out.setdefault(t["agent"], []).append(t)
+    for v in out.values():
+        v.sort(key=lambda t: (t["status"] != "working", -(t["at"] or 0)))
+    return out
 
 
 def all_walks(root: Path, ids: list[str], now: float) -> list[dict]:
@@ -601,7 +646,7 @@ def snapshot(home: str | None = None, now: float | None = None) -> dict:
         "agents": agents,
         "events": events[:12],
         "walks": walks,
-        "tiles": deck_tiles(root, agents, now),
+        "sessions": deck_tiles(root, agents, now),
         "brain": {"notes": vault_notes(root)},
         "runsOn": chips,
         "counts": {"agents": len(agents), "running": sum(a["status"] in ("working", "waiting") for a in agents),

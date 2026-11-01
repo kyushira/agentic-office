@@ -1,65 +1,119 @@
 import { React, useState, useEffect, useRef, fetchJSON, API } from './sdk.js';
 import { ago, compact } from './format.js';
 import { invader, tint } from './sprite.js';
+import { buildItems, headerCounts, durationText } from './deck-model.js';
 
 const POLL_MS = 5000, POLL_LITE_MS = 15000;
 
-function Sprite({ id, working }) {
-  const s = invader(id);
+function Sprite({ seed, color, working, small }) {
+  const s = invader(seed);
   const rects = px => px.map(([x, y]) => <rect key={x + '-' + y} x={x} y={y} width="1.02" height="1.02" />);
   return (
-    <svg className={'dk-sprite' + (working ? ' is-anim' : '')} viewBox={`0 0 ${s.w} ${s.h}`} shapeRendering="crispEdges" style={{ fill: tint(id) }} aria-hidden="true">
+    <svg className={'dk-sprite' + (working ? ' is-anim' : '') + (small ? ' is-small' : '')} viewBox={`0 0 ${s.w} ${s.h}`}
+      shapeRendering="crispEdges" style={{ fill: color }} aria-hidden="true">
       <g className="dk-fa">{rects(s.a)}</g>
       <g className="dk-fb">{rects(s.b)}</g>
     </svg>
   );
 }
 
-export function statusLine(t, now) {
-  if (t.status === 'working') return `working · ${t.ctxPct != null ? t.ctxPct + '% ctx' : compact(t.ctx) + ' ctx'}`;
-  return `${t.status} · ${ago(t.at, now)}`;
-}
-
-function Tile({ t, now, pressed, onPick }) {
-  const working = t.status === 'working';
+function AgentTile({ it, pressed, onPick }) {
+  const a = it.agent, working = it.working;
   return (
-    <button className={'dk-tile' + (working ? ' is-working' : ' is-rest') + (pressed ? ' is-pressed' : '')} onClick={() => onPick(t.id)}
-      aria-label={`${t.title}, ${statusLine(t, now)}`}>
+    <button className={'dk-tile' + (working ? ' is-working' : ' is-rest') + (pressed ? ' is-pressed' : '') + (it.chip ? ' has-chip' : '')} onClick={onPick}
+      style={{ '--dk-c': it.color, gridColumnStart: it.rowStart ? 1 : undefined }} aria-label={`${a.name}, ${it.status}`}>
       {working && <i className="dk-badge" />}
-      <span className="dk-art"><Sprite id={t.id} working={working} />{!working && <em className="dk-zz">zz</em>}</span>
-      <b className="dk-name">{t.title}</b>
-      <span className="dk-status">{statusLine(t, now)}</span>
+      {it.helperCount > 0 && <span className="dk-count-chip">{it.helperCount} helper{it.helperCount > 1 ? 's' : ''}</span>}
+      {it.ctxPct != null && !it.helperCount && <span className="dk-ctx">{it.ctxPct}% ctx</span>}
+      <span className="dk-art"><Sprite seed={'agent:' + a.id} color={it.color} working={working} />{!working && <em className="dk-zz">zz</em>}</span>
+      <b className="dk-name">{a.name}</b>
+      <span className="dk-status">{it.status}</span>
+      {it.chip && <span className="dk-handoff" style={{ '--dk-from': it.chip.color }}>← {it.chip.text}</span>}
     </button>
   );
 }
 
-function Sheet({ t, agent, now, onClose }) {
+function HelperTile({ it, pressed, onPick }) {
+  const h = it.helper, done = it.done;
+  return (
+    <button className={'dk-tile is-helper' + (done ? ' is-done' : ' is-working') + (pressed ? ' is-pressed' : '')} onClick={onPick}
+      style={{ '--dk-c': it.parentColor }} aria-label={`${it.name}, ${it.status}`}>
+      <span className="dk-art"><Sprite seed={'helper:' + h.id} color={done ? '#5f5f5f' : tint('helper:' + h.id)} working={!done} small />
+        {done && <em className="dk-zz dk-check">✓</em>}</span>
+      <b className="dk-name">{it.name}</b>
+      <span className="dk-parent">↳ {it.parentName}</span>
+      <span className="dk-status">{it.status}</span>
+    </button>
+  );
+}
+
+const Pill = ({ status }) => <span className={'dk-pill is-' + status}>{status === 'done' ? '✓ done' : status}</span>;
+
+function SessionDetail({ s, now, onBack }) {
+  const rows = [
+    ['Status', <Pill status={s.status} />], ['Where', s.source], ['Model', s.model || '—'],
+    ['Now', s.status === 'working' ? s.step || 'working' : '—'],
+    ['Context', s.ctx ? `~${compact(s.ctx)} tokens${s.ctxPct != null ? ` (${s.ctxPct}%)` : ''}` : '—'],
+    ['Tokens (session)', compact(s.tokens)], ['Helpers spawned', String(s.helpers || 0)], ['Last active', ago(s.at, now)],
+  ];
+  return (
+    <>
+      <button className="dk-back" onClick={onBack}>‹ Sessions</button>
+      <h2 className="dk-wrap">{s.title}</h2>
+      <dl>{rows.map(([k, v]) => <React.Fragment key={k}><dt>{k}</dt><dd>{v}</dd></React.Fragment>)}</dl>
+    </>
+  );
+}
+
+function AgentSheet({ it, sessions, now }) {
+  const [open, setOpen] = useState(null);
+  const a = it.agent;
+  const s = open && sessions.find(x => x.id === open);
+  if (s) return <SessionDetail s={s} now={now} onBack={() => setOpen(null)} />;
+  return (
+    <>
+      <header><span className="dk-sheet-art"><Sprite seed={'agent:' + a.id} color={it.color} /></span>
+        <div className="dk-grow"><h2>{a.name}</h2><small>{a.role} · {it.status}</small></div></header>
+      {it.walks.length > 0 && <section><h3>Hand-offs</h3>
+        {it.walks.map(w => <div key={w.id} className="dk-row-mini"><span>{w.label}</span><small>{ago(w.at, now)}</small></div>)}</section>}
+      <section><h3>Sessions · {sessions.length}</h3>
+        {sessions.map(x => (
+          <button key={x.id} className={'dk-srow is-' + x.status} onClick={() => setOpen(x.id)}>
+            <span className="dk-wrap dk-stitle">{x.title}</span>
+            <span className="dk-smeta"><Pill status={x.status} />{x.ctxPct != null && <span>{x.ctxPct}% ctx</span>}
+              <span>{ago(x.at, now)}</span>{x.model && <span>{x.model}</span>}<span>{compact(x.tokens)} tok</span></span>
+          </button>
+        ))}
+        {!sessions.length && <p className="dk-note">No sessions in the last 14 days.</p>}
+      </section>
+    </>
+  );
+}
+
+function HelperSheet({ it, now }) {
+  const h = it.helper;
+  const rows = [['Goal', h.task], ['Model', h.model || '—'], ['Parent', it.parentName],
+    ['Status', it.done ? '✓ done' : 'running · ' + (h.activity || 'working')], ['Duration', durationText(h, now)]];
+  return (
+    <>
+      <header><span className="dk-sheet-art"><Sprite seed={'helper:' + h.id} color={it.done ? '#5f5f5f' : tint('helper:' + h.id)} small /></span>
+        <div className="dk-grow"><h2>{it.name}</h2><small>↳ {it.parentName}</small></div></header>
+      <dl>{rows.map(([k, v]) => <React.Fragment key={k}><dt>{k}</dt><dd>{v}</dd></React.Fragment>)}</dl>
+    </>
+  );
+}
+
+function Sheet({ children, onClose }) {
   useEffect(() => {
     const k = e => { if (e.key === 'Escape') onClose(); };
     window.addEventListener('keydown', k);
     return () => window.removeEventListener('keydown', k);
   }, [onClose]);
-  if (!t) return null;
-  const rows = [
-    ['Agent', `${t.agentName}${agent && agent.role ? ' · ' + agent.role : ''}`],
-    ['Where', t.source],
-    ['Model', t.model || (agent && agent.model) || '—'],
-    ['Status', statusLine(t, now)],
-    ['Now', t.status === 'working' ? (t.step || (agent && agent.activity) || 'working') : '—'],
-    ['Context', t.ctx ? `~${compact(t.ctx)} tokens${t.ctxPct != null ? ` (${t.ctxPct}%)` : ''}` : '—'],
-    ['Session tokens', compact(t.tokens)],
-    ['Agent tokens today', agent ? compact(agent.today.tokens) : '—'],
-  ];
-  const helpers = (agent && agent.helpers) || [];
   return (
     <div className="dk-scrim" onClick={onClose}>
-      <aside className="dk-sheet" onClick={e => e.stopPropagation()} role="dialog" aria-label={t.title}>
-        <header><span className="dk-sheet-art"><Sprite id={t.id} working={t.status === 'working'} /></span>
-          <div className="dk-grow"><h2>{t.title}</h2><small>{statusLine(t, now)}</small></div>
-          <button className="dk-x" onClick={onClose} aria-label="Close">✕</button></header>
-        <dl>{rows.map(([k, v]) => <React.Fragment key={k}><dt>{k}</dt><dd>{v}</dd></React.Fragment>)}</dl>
-        {helpers.length > 0 && <section><h3>Helpers · {helpers.length}</h3>
-          {helpers.map((h, i) => <div key={h.id} className="dk-help"><i className="dk-badge" />Sub {i + 1} · {h.task}<small>{h.model}</small></div>)}</section>}
+      <aside className="dk-sheet" onClick={e => e.stopPropagation()} role="dialog">
+        <button className="dk-x" onClick={onClose} aria-label="Close">✕</button>
+        {children}
         <p className="dk-note">Titles and step names only — message text is never shown.</p>
       </aside>
     </div>
@@ -75,7 +129,7 @@ export default function Deck() {
   const [sel, setSel] = useState(null);
   const [lite, setLite] = useState(readLite);
   const [height, setHeight] = useState(600);
-  const [tick, setTick] = useState(0);
+  const [, setTick] = useState(0);
   const timer = useRef(0), alive = useRef(true), liteRef = useRef(lite);
   liteRef.current = lite;
 
@@ -88,34 +142,39 @@ export default function Deck() {
   };
   useEffect(() => { alive.current = true; load(); return () => { alive.current = false; clearTimeout(timer.current); }; }, []);
   useEffect(() => { try { localStorage.setItem('agent-deck.lite', lite ? '1' : '0'); } catch (e) { /* private mode */ } }, [lite]);
-  useEffect(() => {        // fill the space under the dashboard header
+  useEffect(() => {
     const size = () => { const r = rootRef.current; if (r) setHeight(Math.max(360, window.innerHeight - Math.max(0, r.getBoundingClientRect().top) - 6)); };
     size(); window.addEventListener('resize', size);
     return () => window.removeEventListener('resize', size);
   }, []);
-  useEffect(() => { const id = setInterval(() => setTick(x => x + 1), 30000); return () => clearInterval(id); }, []);   // keep "12m ago" fresh
+  useEffect(() => { const id = setInterval(() => setTick(x => x + 1), 15000); return () => clearInterval(id); }, []);
 
-  const now = Date.now() / 1000 + tick * 0;
-  const tiles = (state && state.tiles) || [];
-  const working = tiles.filter(t => t.status === 'working').length;
-  const tile = tiles.find(t => t.id === sel) || null;
-  const agent = tile && state ? state.agents.find(a => a.id === tile.agent) : null;
+  const now = Date.now() / 1000;
+  const items = state ? buildItems(state, now, tint) : [];
+  const counts = state ? headerCounts(items) : null;
+  const picked = items.find(i => i.key === sel) || null;
 
   return (
-    <div ref={rootRef} className={'dk-root' + (lite ? ' is-lite' : '')} style={{ height }}>
+    <div ref={rootRef} className={'dk-root' + (lite ? ' is-lite' : '') + (items.length && items.length <= 6 ? ' is-few' : '')} style={{ height }}>
       <header className="dk-top">
-        <span className="dk-count"><i className={'dk-dot' + (working ? ' on' : '')} />{working} working · {tiles.length - working} idle</span>
+        <span className="dk-count"><i className={'dk-dot' + (counts && counts.working ? ' on' : '')} />
+          {counts ? `${counts.working} working · ${counts.idle} idle · ${counts.helpers} helper${counts.helpers === 1 ? '' : 's'}` : 'loading…'}</span>
         <span className="dk-grow" />
         <button className={'dk-btn' + (lite ? ' on' : '')} onClick={() => setLite(!lite)} title="Low-power: no animation, refresh every 15s">Lite</button>
         <button className="dk-btn" onClick={load} aria-label="Refresh">↻</button>
       </header>
       {error && <div className="dk-err">Can't reach the deck data ({error}). Retrying…</div>}
       <main className="dk-grid">
-        {tiles.map(t => <Tile key={t.id} t={t} now={now} pressed={t.id === sel} onPick={setSel} />)}
-        {state && !tiles.length && <p className="dk-empty">No sessions in the last 14 days.</p>}
-        {!state && !error && Array.from({ length: 8 }, (_, i) => <div key={i} className="dk-tile is-ghost" />)}
+        {items.map(it => it.type === 'agent'
+          ? <AgentTile key={it.key} it={it} pressed={it.key === sel} onPick={() => setSel(it.key)} />
+          : <HelperTile key={it.key} it={it} pressed={it.key === sel} onPick={() => setSel(it.key)} />)}
+        {!state && !error && Array.from({ length: 4 }, (_, i) => <div key={i} className="dk-tile is-ghost" />)}
       </main>
-      <Sheet t={tile} agent={agent} now={now} onClose={() => setSel(null)} />
+      {picked && <Sheet onClose={() => setSel(null)}>
+        {picked.type === 'agent'
+          ? <AgentSheet key={picked.key} it={picked} sessions={(state.sessions || {})[picked.agent.id] || []} now={now} />
+          : <HelperSheet it={picked} now={now} />}
+      </Sheet>}
     </div>
   );
 }
