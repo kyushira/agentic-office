@@ -34,6 +34,16 @@ test('unknown ids get a stable hashed variant, not one shared fallback', () => {
   assert.ok(many.size >= 4, 'unknown ids vary: ' + many.size + ' distinct of 8');
 });
 
+test('prism has its own gold-goggled bust, distinct from every other person and the fallback', () => {
+  const sig = k => JSON.stringify(portrait(k).base);
+  const others = ['default', 'dev', 'red', 'nova', 'pixel', 'sentinel', 'someone-new', 'helper:Haiku'];
+  for (const k of others) assert.notEqual(sig('prism'), sig(k), 'prism is not ' + k);
+  const palette = new Set(portrait('prism').base.map(r => r[3]));
+  assert.ok(palette.has('#facc15'), 'gold goggles');
+  assert.ok(palette.has('#f472b6') && palette.has('#4fd1c5'), 'rainbow badge');
+  assert.equal(portrait('prism').open.length, portrait('prism').closed.length);
+});
+
 test('deepseek helpers get their own tint, distinct from haiku and gemini', () => {
   const sig = k => JSON.stringify(portrait(k).base);
   assert.notEqual(sig('helper:DeepSeek V4 Flash'), sig('helper:Haiku'));
@@ -45,7 +55,7 @@ test('characters differ, palettes stay small, and people blink', () => {
   assert.notEqual(sig('default'), sig('dev'));
   assert.notEqual(sig('dev'), sig('red'));
   assert.notEqual(sig('helper:Haiku'), sig('helper:Gemini'), 'helpers tinted by model');
-  for (const k of ['default', 'dev', 'red', 'nova', 'pixel', 'sentinel', 'someone-new']) {
+  for (const k of ['default', 'dev', 'red', 'nova', 'pixel', 'sentinel', 'prism', 'someone-new']) {
     assert.ok(new Set(portrait(k).base.map(r => r[3])).size <= 24, k + ' limited palette');
     assert.equal(portrait(k).open.length, portrait(k).closed.length);
     assert.ok(portrait(k).open.length > 0);

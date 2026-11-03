@@ -1,7 +1,7 @@
 import { React, useState, useEffect, useRef, fetchJSON, API } from './sdk.js';
 import { ago, compact } from './format.js';
 import { portrait } from './portrait.js';
-import { buildItems, headerCounts, durationText, modelText } from './deck-model.js';
+import { buildItems, headerCounts, durationText, modelText, modelParts } from './deck-model.js';
 
 const POLL_MS = 5000, POLL_LITE_MS = 15000;
 
@@ -19,6 +19,16 @@ function Sprite({ who, working, small, done }) {
   );
 }
 
+// Desktop reads "Opus 5.5 · helpers Haiku". On phone (style.css) the main model gets line 1 and the
+// helpers line 2 as "+ Haiku"; the full text stays in the title attribute.
+function ModelLines({ a }) {
+  const { main, helpers } = modelParts(a);
+  return (<>
+    <span className="dk-m1">{main}</span>
+    {helpers && <><span className="dk-sep"> · helpers </span><span className="dk-m2">{helpers}</span></>}
+  </>);
+}
+
 function AgentTile({ it, pressed, onPick }) {
   const a = it.agent, working = it.working;
   return (
@@ -32,7 +42,7 @@ function AgentTile({ it, pressed, onPick }) {
       <span className="dk-role">{a.role}</span>
       {a.remit && <span className="dk-remit" title={a.remit}>{a.remit}</span>}
       <span className="dk-status">{it.status}</span>
-      <span className="dk-models" title={modelText(a)}>{modelText(a)}</span>
+      <span className="dk-models" title={modelText(a)}><ModelLines a={a} /></span>
       {it.chip && <span className="dk-handoff" style={{ '--dk-from': it.chip.color }}>← {it.chip.text}</span>}
     </button>
   );

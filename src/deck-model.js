@@ -5,11 +5,15 @@ const CHIP_SECS = 120;
 const NO_COLOR = '#8a8a8a';   // the backend always sends a.color; this only guards a missing field
 const KIND = { brief: 'new brief', reply: 'report', message: 'message' };
 
+/** Main model and the distinct helper models, as {main, helpers} (helpers is '' when there are none). */
+export function modelParts(a) {
+  return { main: a.model || '—', helpers: [...new Set(a.helperModels || [])].join(', ') };
+}
+
 /** "Sonnet 5.5 · helpers DeepSeek V4 Flash" (main model, then the distinct helper models). */
 export function modelText(a) {
-  const main = a.model || '—';
-  const helpers = [...new Set(a.helperModels || [])];
-  return helpers.length ? `${main} · helpers ${helpers.join(', ')}` : main;
+  const { main, helpers } = modelParts(a);
+  return helpers ? `${main} · helpers ${helpers}` : main;
 }
 
 export function durationText(h, now) {

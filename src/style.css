@@ -78,10 +78,11 @@
 /* agent card identity: accent (--dk-c) on the edge and role; role, remit and models each one line (or two for models), ellipsis */
 .dk-tile.is-agent { border-left: 3px solid var(--dk-c); }
 .dk-tile.is-agent.is-rest::before, .dk-tile.is-agent.is-rest::after { background: var(--dk-c); }
-.dk-role { width: 100%; font-size: 10px; font-weight: 700; color: var(--dk-c); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 1px; }
-.dk-remit { width: 100%; font-size: 9px; color: var(--dk-mut); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 1px; }
-.dk-models { width: 100%; font-size: 9px; color: #c4c4c4; margin-top: 3px; overflow: hidden; word-break: break-word;
-  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.dk-role { width: 100%; min-width: 0; max-width: 100%; font-size: 10px; font-weight: 700; color: var(--dk-c); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 1px; }
+.dk-remit { width: 100%; min-width: 0; max-width: 100%; font-size: 9px; color: var(--dk-mut); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 1px; }
+/* block, not -webkit-box: the model spans must stay inline (box children become rows). Two lines max. */
+.dk-models { width: 100%; min-width: 0; max-width: 100%; font-size: 9px; color: #c4c4c4; margin-top: 3px; overflow: hidden; word-break: break-word;
+  display: block; max-height: 2.5em; }
 .dk-root.is-few .dk-role, .dk-root.is-few .dk-remit, .dk-root.is-few .dk-models { font-size: 11px; }
 .dk-tile.is-pressed .dk-role, .dk-tile.is-pressed .dk-remit, .dk-tile.is-pressed .dk-models { color: #0A0A0A; }
 .dk-remit-full { font-size: 12px; line-height: 1.35; color: var(--dk-ink); margin: 0 0 10px; word-break: break-word; }
@@ -90,9 +91,14 @@
   .dk-tile { padding: 6% 3% 7%; }
   .dk-name { font-size: 10px; margin-top: 2px; letter-spacing: -.02em; }
   .dk-status { font-size: 8px; letter-spacing: -.05em; }
-  .dk-role { font-size: 8px; letter-spacing: -.04em; margin-top: 0; }
-  .dk-remit { font-size: 7px; letter-spacing: -.04em; }
-  .dk-models { font-size: 7px; letter-spacing: -.04em; margin-top: 2px; -webkit-line-clamp: 2; }
+  /* role and models wrap to at most two lines; the remit is only in the detail sheet */
+  .dk-role { font-size: 8px; letter-spacing: -.04em; margin-top: 0; white-space: normal; word-break: normal; line-height: 1.2;
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+  .dk-remit { display: none; }
+  .dk-models { font-size: 7px; letter-spacing: -.04em; margin-top: 2px; word-break: normal; line-height: 1.2; max-height: 2.4em; }
+  .dk-m1 { display: block; }                                  /* line 1: "Opus 5.5" */
+  .dk-sep { font-size: 0; }                                   /* hides " · helpers " ... */
+  .dk-sep::before { content: '+ '; font-size: 7px; }          /* ... line 2: "+ Haiku" */
   .dk-zz { font-size: 8px; }
   .dk-badge { top: 4px; left: 4px; width: 5px; height: 5px; }
 }

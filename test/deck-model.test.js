@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { buildItems, headerCounts, durationText, modelText } from '../src/deck-model.js';
+import { buildItems, headerCounts, durationText, modelText, modelParts } from '../src/deck-model.js';
 
 const now = 1_800_000_000;
 const state = {
@@ -53,6 +53,12 @@ test('agent accent comes from the backend colour; a missing one falls back to on
   const [nova, x] = buildItems(st, now);
   assert.equal(nova.color, '#8b5cf6');
   assert.equal(x.color, '#8a8a8a');
+});
+
+test('modelParts: main model and helpers, split for the two-line phone layout', () => {
+  assert.deepEqual(modelParts({ model: 'Opus 5.5', helperModels: ['Haiku', 'Haiku'] }), { main: 'Opus 5.5', helpers: 'Haiku' });
+  assert.deepEqual(modelParts({ model: 'Opus 5.5' }), { main: 'Opus 5.5', helpers: '' });
+  assert.deepEqual(modelParts({}), { main: '—', helpers: '' });
 });
 
 test('modelText: main model, then distinct helper models', () => {

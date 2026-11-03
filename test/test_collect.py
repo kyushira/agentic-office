@@ -166,6 +166,9 @@ class IdentityTests(unittest.TestCase):
         self.assertEqual(collect.accent("nova"), "#8b5cf6")
         self.assertEqual(collect.accent("pixel"), "#ec4899")
         self.assertEqual(collect.accent("sentinel"), "#14b8a6")
+        self.assertEqual(collect.accent("prism"), "#facc15")
+        for other in ("#6E9BFF", "#4FD983", "#FF6A3D", "#8b5cf6", "#ec4899", "#14b8a6"):
+            self.assertNotEqual(collect.accent("prism"), other, "prism gold is distinct from every fixed accent")
         future = collect.accent("future-agent")
         self.assertIn(future, collect.PALETTE)
         self.assertEqual(future, collect.accent("future-agent"), "stable across calls")
@@ -173,7 +176,7 @@ class IdentityTests(unittest.TestCase):
 
     def test_accent_does_not_depend_on_list_position(self):
         self._profile("default")
-        for pid in ("nova", "pixel", "sentinel"):
+        for pid in ("nova", "pixel", "sentinel", "prism"):
             self._profile(pid)
         now = 1_800_000_000.0
         forward = {a["id"]: a["color"] for a in

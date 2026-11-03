@@ -5,7 +5,8 @@ export const SIZE = 32;
 const OUTLINE = '#14122a';
 
 // kind picks the hair shape and the accessory: ash headset, dev headphones + </>, red round glasses,
-// nova star badge, pixel beret, sentinel shield badge. Colours follow each agent's accent.
+// nova star badge, pixel beret, sentinel shield badge, prism gold goggles + rainbow bars.
+// Colours follow each agent's accent.
 const PEOPLE = {
   ash: { skin: '#f1c3a1', hair: '#2b1f33', top: '#1f2f63', inner: '#4f86e8', eye: '#9fd4ff', kind: 'ash' },
   dev: { skin: '#e9b48e', hair: '#231a1c', top: '#2f9e5c', inner: '#2f9e5c', eye: '#b6ffcf', kind: 'dev' },
@@ -13,6 +14,7 @@ const PEOPLE = {
   nova: { skin: '#f1c3a1', hair: '#2e1a4f', top: '#6d3fd6', inner: '#8b5cf6', eye: '#d6c2ff', kind: 'nova' },
   pixel: { skin: '#f6d0b5', hair: '#5b2a48', top: '#be2f73', inner: '#ec4899', eye: '#ffc2e0', kind: 'pixel' },
   sentinel: { skin: '#e7b58f', hair: '#1e2b2e', top: '#0f766e', inner: '#14b8a6', eye: '#9ff5ea', kind: 'sentinel' },
+  prism: { skin: '#dfae86', hair: '#3a2a1e', top: '#7c5c12', inner: '#facc15', eye: '#fff3b0', kind: 'prism' },
 };
 // Unknown ids get a variant picked by hash of the id: one of these kinds and palettes.
 const KINDS = ['ash', 'dev', 'red', 'nova', 'pixel', 'sentinel'];
@@ -130,6 +132,10 @@ function bust(p) {
   } else if (p.kind === 'sentinel') {                                       // shield badge on the left chest
     rect(10, 24, 12, 25, p.inner); rect(10, 26, 12, 26, p.inner); rect(11, 27, 11, 27, p.inner);
     set(11, 24, '#e6fffb');
+  } else if (p.kind === 'prism') {                                          // gold goggles pushed up on the forehead, rainbow bars on the right chest
+    rect(9, 8, 12, 9, p.inner); rect(19, 8, 22, 9, p.inner);
+    rect(13, 8, 18, 8, '#2a2a2a');
+    rect(16, 24, 20, 24, '#f472b6'); rect(16, 25, 20, 25, '#facc15'); rect(16, 26, 20, 26, '#4fd1c5');
   } else {                                                                  // round glasses
     for (const ox of [11, 17]) {
       rect(ox, 12, ox + 3, 12, '#c98a5a'); rect(ox, 15, ox + 3, 15, '#c98a5a');

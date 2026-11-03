@@ -28,7 +28,7 @@ NAMES = {"default": "Ash"}
 ROLES = {"default": "Chief of Staff"}   # Ash's SOUL.md is not a team SOUL, so his title is set here
 # Accent colour per profile id (hex, used as the card's accent). Unknown ids hash into PALETTE.
 ACCENT = {"default": "#6E9BFF", "dev": "#4FD983", "red": "#FF6A3D",
-          "nova": "#8b5cf6", "pixel": "#ec4899", "sentinel": "#14b8a6"}
+          "nova": "#8b5cf6", "pixel": "#ec4899", "sentinel": "#14b8a6", "prism": "#facc15"}
 PALETTE = ["#7EA8FF", "#5BE38B", "#FFB347", "#C792FF", "#FF6B8A", "#4FE0D2", "#F5E663", "#FF8A5C"]
 # Used only when a profile's SOUL.md has no "What you own:" line.
 REMIT = {"default": "Coordinates the team and sets priorities with Sir"}
