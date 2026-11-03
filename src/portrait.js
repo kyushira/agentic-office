@@ -5,8 +5,8 @@ export const SIZE = 32;
 const OUTLINE = '#14122a';
 
 // kind picks the hair shape and the accessory: ash headset, dev headphones + </>, red round glasses,
-// nova star badge, pixel beret, sentinel shield badge, prism gold goggles + rainbow bars.
-// Colours follow each agent's accent.
+// nova neat crop + star badge, pixel bob + beret + pencil, sentinel visor + shield badge,
+// prism swept spikes + gold goggles + rainbow bars. Colours follow each agent's accent.
 const PEOPLE = {
   ash: { skin: '#f1c3a1', hair: '#2b1f33', top: '#1f2f63', inner: '#4f86e8', eye: '#9fd4ff', kind: 'ash' },
   dev: { skin: '#e9b48e', hair: '#231a1c', top: '#2f9e5c', inner: '#2f9e5c', eye: '#b6ffcf', kind: 'dev' },
@@ -17,11 +17,13 @@ const PEOPLE = {
   prism: { skin: '#dfae86', hair: '#3a2a1e', top: '#7c5c12', inner: '#facc15', eye: '#fff3b0', kind: 'prism' },
 };
 // Unknown ids get a variant picked by hash of the id: one of these kinds and palettes.
-const KINDS = ['ash', 'dev', 'red', 'nova', 'pixel', 'sentinel'];
+const KINDS = ['ash', 'dev', 'red', 'nova', 'pixel', 'sentinel', 'prism'];   // every kind bust() draws
 const SKINS = ['#f1c3a1', '#e9b48e', '#f3cfb0', '#c98f6b', '#ffd8bd', '#8d5e42'];
 const HAIRS = ['#2b1f33', '#6b3d1e', '#c9a13b', '#3a3f4b', '#7a2e6b', '#1d1d1d'];
 const TOPS = ['#2f6f9e', '#8a4b2a', '#4c7a2f', '#7b5ea7', '#b5472f', '#3c5a66'];
 const HELPER_TINT = { haiku: '#ff9a3c', gemini: '#4f8bff', deepseek: '#4fd1c5' };
+const VISOR = '#0d2a2d';                 // Sentinel's visor glass; eyes glow on it, blink = a dim line
+const PENCIL = '#fbbf24';                // Pixel's pencil; left flat (unshaded) so it reads as a stick
 
 /** FNV-1a 32-bit: a stable hash of a string (same result in every browser and every load). */
 function hash(s) {
@@ -86,6 +88,7 @@ function bust(p) {
   const shadowSkin = mix(p.skin, -0.18);
   // back hair (Red's shoulder-length sides sit behind the face)
   if (p.kind === 'red') { rect(8, 9, 10, 21, p.hair); rect(21, 9, 23, 21, p.hair); rect(9, 21, 11, 22, p.hair); rect(20, 21, 22, 22, p.hair); }
+  if (p.kind === 'pixel') { rect(8, 9, 10, 18, p.hair); rect(21, 9, 23, 18, p.hair); }      // bob, shoulder-length
   // torso + hood collar
   C.trap(23, 31, 9, 22, 4, 27, p.top);
   rect(11, 20, 20, 23, mix(p.top, -0.15));
@@ -107,6 +110,18 @@ function bust(p) {
   } else if (p.kind === 'sentinel') {                                       // short crop
     ellipse(15.5, 9.4, 7, 4.4, p.hair, (x, y) => y <= 10);
     rect(9, 9, 9, 11, p.hair); rect(22, 9, 22, 11, p.hair);
+  } else if (p.kind === 'nova') {                                           // neat short crop, flat top, sheen
+    ellipse(15.5, 9.2, 7.2, 4.6, p.hair, (x, y) => y <= 10);
+    rect(9, 9, 9, 11, p.hair); rect(22, 9, 22, 11, p.hair);
+    rect(12, 5, 18, 5, mix(p.hair, 0.25)); set(13, 6, mix(p.hair, 0.25));
+  } else if (p.kind === 'pixel') {                                          // bob with bangs (beret goes on top)
+    ellipse(15.5, 9.4, 7.4, 5, p.hair, (x, y) => y <= 10);
+    rect(9, 9, 10, 11, p.hair); rect(21, 9, 22, 11, p.hair);
+  } else if (p.kind === 'prism') {                                          // swept-up spiky tufts
+    ellipse(15.5, 9.4, 7.2, 4.8, p.hair, (x, y) => y <= 10);
+    rect(9, 9, 10, 11, p.hair); rect(21, 9, 22, 11, p.hair);
+    rect(10, 4, 11, 6, p.hair); rect(13, 2, 14, 5, p.hair); rect(16, 1, 17, 4, p.hair);   // solid tufts off the crown
+    rect(19, 2, 20, 5, p.hair); rect(21, 4, 22, 6, p.hair);
   } else {
     ellipse(15.5, 9.4, 7.4, 5, p.hair, (x, y) => y <= 10);
     rect(9, 9, 11, 11, p.hair); rect(20, 9, 22, 11, p.hair);
@@ -126,10 +141,14 @@ function bust(p) {
                           [18, 27], [19, 28], [20, 29], [19, 30], [18, 31]]) set(x, y, '#ffffff');   // "</>" on the chest
   } else if (p.kind === 'nova') {                                           // star badge on the chest
     for (const [x, y] of [[15, 26], [14, 27], [15, 27], [16, 27], [15, 28]]) set(x, y, '#ffd84d');
-  } else if (p.kind === 'pixel') {                                          // beret with a stem
+  } else if (p.kind === 'pixel') {                                          // beret with a stem, pencil behind the ear
     ellipse(15.5, 4.6, 7.2, 2.8, p.inner);
     rect(9, 6, 22, 6, mix(p.inner, -0.25)); set(15, 1, p.inner); set(16, 1, p.inner);
-  } else if (p.kind === 'sentinel') {                                       // shield badge on the left chest
+    for (const [x, y] of [[23, 11], [24, 10], [25, 9], [26, 8]]) set(x, y, PENCIL);
+    set(27, 7, p.inner);                                                    // eraser
+  } else if (p.kind === 'sentinel') {                                       // visor across the eyes, shield badge, high collar
+    rect(10, 12, 21, 14, VISOR); rect(10, 12, 21, 12, p.inner);
+    rect(12, 19, 13, 21, mix(p.top, -0.15)); rect(18, 19, 19, 21, mix(p.top, -0.15));
     rect(10, 24, 12, 25, p.inner); rect(10, 26, 12, 26, p.inner); rect(11, 27, 11, 27, p.inner);
     set(11, 24, '#e6fffb');
   } else if (p.kind === 'prism') {                                          // gold goggles pushed up on the forehead, rainbow bars on the right chest
@@ -165,6 +184,13 @@ function eyes(kind, p) {
   if (kind === 'robot') return { open: [], closed: [] };
   const lid = '#2a1a22', iris = p.eye;
   const open = [], closed = [];
+  if (kind === 'sentinel') {                       // glowing eyes behind the visor; closed = the visor's dim line
+    for (const ex of [13, 17]) {
+      open.push([ex, 13, iris], [ex + 1, 13, iris], [ex, 14, iris], [ex + 1, 14, '#ffffff']);
+      closed.push([ex, 14, p.inner], [ex + 1, 14, p.inner], [ex, 13, VISOR], [ex + 1, 13, VISOR]);
+    }
+    return { open, closed };
+  }
   for (const ex of [13, 17]) {
     open.push([ex, 13, lid], [ex + 1, 13, lid], [ex, 14, iris], [ex + 1, 14, '#ffffff']);
     closed.push([ex, 14, lid], [ex + 1, 14, lid], [ex, 13, p.skin], [ex + 1, 13, p.skin]);
@@ -186,7 +212,7 @@ export function portrait(key) {
   } else {
     const id = String(key || ''), alias = id === 'default' || id === 'hermes' ? 'ash' : id;
     const p = Object.prototype.hasOwnProperty.call(PEOPLE, alias) ? PEOPLE[alias] : variant(id);
-    grid = finish(bust(p));
+    grid = finish(bust(p), new Set([PENCIL]));
     ey = eyes(p.kind, p);
   }
   const base = [];

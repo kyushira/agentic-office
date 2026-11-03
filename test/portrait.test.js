@@ -13,6 +13,22 @@ test('each character is a filled 32×32 bust that stays in bounds', () => {
   }
 });
 
+test('all seven Deck people are in-bounds busts, pairwise distinct, small-palette, and blink', () => {
+  const people = ['default', 'dev', 'red', 'nova', 'pixel', 'sentinel', 'prism'];
+  const sigs = new Map();
+  for (const k of people) {
+    const p = portrait(k);
+    assert.equal(p.size, SIZE, k + ' is 32px');
+    assert.ok(area(p) > 300, k + ' has a body');
+    for (const [x, y, w] of p.base) assert.ok(x >= 0 && y >= 0 && x + w <= SIZE && y < SIZE, k + ' in bounds');
+    const sig = JSON.stringify(p.base);
+    for (const [other, s] of sigs) assert.notEqual(sig, s, k + ' differs from ' + other);
+    sigs.set(k, sig);
+    assert.ok(new Set(p.base.map(r => r[3])).size <= 24, k + ' palette <= 24 colours');
+    assert.ok(p.open.length > 0 && p.open.length === p.closed.length, k + ' has open and closed blink frames');
+  }
+});
+
 test('nova, pixel and sentinel have their own busts, distinct from each other and from an unknown id', () => {
   const sig = k => JSON.stringify(portrait(k).base);
   const named = ['nova', 'pixel', 'sentinel'];
