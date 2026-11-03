@@ -139,8 +139,9 @@ function bust(p) {
     rect(9, 22, 10, 24, '#ff7a59'); rect(21, 22, 22, 24, '#ff7a59');      // ear cups with a coral pad
     for (const [x, y] of [[13, 27], [12, 28], [11, 29], [12, 30], [13, 31], [17, 27], [16, 28], [16, 29], [15, 30], [15, 31],
                           [18, 27], [19, 28], [20, 29], [19, 30], [18, 31]]) set(x, y, '#ffffff');   // "</>" on the chest
-  } else if (p.kind === 'nova') {                                           // star badge on the chest
-    for (const [x, y] of [[15, 26], [14, 27], [15, 27], [16, 27], [15, 28]]) set(x, y, '#ffd84d');
+  } else if (p.kind === 'nova') {                                           // 5×5 gold star on the chest, dark rim
+    badge(C, [[15, 25], [14, 26], [15, 26], [16, 26], [13, 27], [14, 27], [15, 27], [16, 27], [17, 27],
+              [14, 28], [15, 28], [16, 28], [13, 29], [17, 29]], '#ffe066', OUTLINE);
   } else if (p.kind === 'pixel') {                                          // beret with a stem, pencil behind the ear
     ellipse(15.5, 4.6, 7.2, 2.8, p.inner);
     rect(9, 6, 22, 6, mix(p.inner, -0.25)); set(15, 1, p.inner); set(16, 1, p.inner);
@@ -149,8 +150,11 @@ function bust(p) {
   } else if (p.kind === 'sentinel') {                                       // visor across the eyes, shield badge, high collar
     rect(10, 12, 21, 14, VISOR); rect(10, 12, 21, 12, p.inner);
     rect(12, 19, 13, 21, mix(p.top, -0.15)); rect(18, 19, 19, 21, mix(p.top, -0.15));
-    rect(10, 24, 12, 25, p.inner); rect(10, 26, 12, 26, p.inner); rect(11, 27, 11, 27, p.inner);
-    set(11, 24, '#e6fffb');
+    // 5-wide light shield on the chest, dark centre stripe, dark rim
+    const shield = [];
+    for (const [y, x0, x1] of [[24, 11, 15], [25, 11, 15], [26, 11, 15], [27, 12, 14], [28, 13, 13]])
+      for (let x = x0; x <= x1; x++) shield.push([x, y, (x === 13 && y <= 27) ? mix(p.top, -0.15) : '#e6fffb']);
+    badge(C, shield, '#e6fffb', OUTLINE);
   } else if (p.kind === 'prism') {                                          // gold goggles pushed up on the forehead, rainbow bars on the right chest
     rect(9, 8, 12, 9, p.inner); rect(19, 8, 22, 9, p.inner);
     rect(13, 8, 18, 8, '#2a2a2a');
@@ -177,6 +181,14 @@ function robot(tint) {
   rect(15, 3, 16, 6, dark); ellipse(15.5, 2.5, 1.4, 1.4, tint);              // antenna
   rect(7, 12, 8, 15, dark); rect(23, 12, 24, 15, dark);                     // ear bolts
   return C.g;
+}
+
+/** A chest badge: its cells in colour c, with a one-pixel dark rim (ring) around the shape. */
+function badge(C, cells, c, ring) {
+  const on = new Set(cells.map(([x, y]) => x + ',' + y));
+  for (const [x, y] of cells) for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++)
+    if (!on.has((x + dx) + ',' + (y + dy))) C.set(x + dx, y + dy, ring);
+  for (const [x, y, col] of cells) C.set(x, y, col ?? c);
 }
 
 /** Eye pixels for open / closed frames (drawn over the finished base). */
@@ -212,7 +224,7 @@ export function portrait(key) {
   } else {
     const id = String(key || ''), alias = id === 'default' || id === 'hermes' ? 'ash' : id;
     const p = Object.prototype.hasOwnProperty.call(PEOPLE, alias) ? PEOPLE[alias] : variant(id);
-    grid = finish(bust(p), new Set([PENCIL]));
+    grid = finish(bust(p), new Set([PENCIL, '#ffe066', '#e6fffb', OUTLINE]));   // badges keep their exact colours
     ey = eyes(p.kind, p);
   }
   const base = [];

@@ -30,8 +30,10 @@
 .dk-root.is-few .dk-status, .dk-root.is-few .dk-parent { font-size: 11px; }
 .dk-root.is-few .dk-count-chip, .dk-root.is-few .dk-ctx, .dk-root.is-few .dk-handoff { font-size: 11px; }
 
-.dk-tile { position: relative; aspect-ratio: 1 / 1; min-width: 0; background: var(--dk-tile); border: 1px solid var(--dk-line); border-radius: 5px;
-  display: flex; flex-direction: column; align-items: center; justify-content: flex-end; padding: 6% 6% 7%; text-align: center; overflow: hidden; }
+/* tile height follows its content: portrait (flow child, square, 64% of tile width) sits above the text block */
+.dk-tile { position: relative; min-width: 0; background: var(--dk-tile); border: 1px solid var(--dk-line); border-radius: 5px;
+  display: flex; flex-direction: column; align-items: center; justify-content: flex-start; padding: 6% 6% 7%; text-align: center; overflow: hidden; overflow: clip; }   /* clip: keeps grid rows at content height on 2-col phone */
+.dk-tile.is-ghost { min-height: 120px; }
 .dk-tile::before, .dk-tile::after { content: ''; position: absolute; background: var(--dk-dim); }
 .dk-tile::before { top: -1px; right: -1px; height: 2px; width: 46%; }      /* L-bracket: top edge ... */
 .dk-tile::after { top: -1px; right: -1px; width: 2px; height: 46%; }       /* ... and right edge */
@@ -47,9 +49,10 @@
 @keyframes dk-blink { to { opacity: .35; } }
 
 /* sprite area: same size and position on every tile (text below never moves it) */
-.dk-art { position: absolute; left: 0; right: 0; top: 4%; height: 40%; display: flex; align-items: center; justify-content: center; }
+.dk-art { position: relative; flex: none; width: 64%; aspect-ratio: 1 / 1; align-self: center; display: flex; align-items: center; justify-content: center; }
 .dk-sprite { height: 100%; width: auto; display: block; image-rendering: pixelated; }
-.dk-sprite.is-small { height: 82%; }
+.dk-art > .dk-sprite { width: 100%; height: 100%; }
+.dk-art > .dk-sprite.is-small { width: 82%; height: 82%; }
 .dk-sprite.is-done { filter: grayscale(1) brightness(.7); }
 
 /* "3 helpers" / ctx chip, top right; hand-off chip along the bottom edge */
@@ -58,6 +61,8 @@
 .dk-ctx { color: #FF9A70; }
 .dk-tile.has-chip { padding-bottom: calc(7% + 18px); }
 .dk-root.is-few .dk-tile.has-chip { padding-bottom: calc(7% + 22px); }
+.dk-tile.has-top { padding-top: 22px; }                     /* reserved strip for the ctx / helpers chip */
+.dk-root.is-few .dk-tile.has-top { padding-top: 26px; }
 .dk-handoff { position: absolute; left: 0; right: 0; bottom: 0; padding: 3px 8px; font-size: 9px; text-align: left; color: #0A0A0A; font-weight: 700;
   background: var(--dk-from, #999); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; animation: dk-chip 2s ease-out; z-index: 2; }
 @keyframes dk-chip { from { transform: translateY(100%); } 15% { transform: none; } }
@@ -72,7 +77,8 @@
 .dk-zz { position: absolute; top: 4%; right: 14%; font-style: normal; font-size: 12px; font-weight: 700; color: #B8B8B8; letter-spacing: -.05em; }
 
 .dk-name { width: 100%; font-size: 12px; font-weight: 700; color: var(--dk-ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 4px; }
-.dk-status { width: 100%; font-size: 10px; color: var(--dk-mut); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px; }
+.dk-status { width: 100%; font-size: 10px; color: var(--dk-mut); overflow: hidden; margin-top: 2px; line-height: 1.25; word-break: break-word;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }   /* status may wrap to two lines */
 .is-working .dk-status { color: #FF9A70; }
 
 /* agent card identity: accent (--dk-c) on the edge and role; role, remit and models each one line (or two for models), ellipsis */
@@ -89,8 +95,8 @@
 
 @media (max-width: 600px) {
   .dk-tile { padding: 6% 3% 7%; }
-  .dk-name { font-size: 10px; margin-top: 2px; letter-spacing: -.02em; }
-  .dk-status { font-size: 8px; letter-spacing: -.05em; }
+  .dk-name { font-size: 10px; margin-top: 4px; letter-spacing: -.02em; }   /* clears the 3% working bob */
+  .dk-status { font-size: 8px; letter-spacing: -.05em; line-height: 1.2; }
   /* role and models wrap to at most two lines; the remit is only in the detail sheet */
   .dk-role { font-size: 8px; letter-spacing: -.04em; margin-top: 0; white-space: normal; word-break: normal; line-height: 1.2;
     display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
