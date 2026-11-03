@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { buildItems, headerCounts, durationText } from '../src/deck-model.js';
+import { buildItems, headerCounts, durationText, modelText } from '../src/deck-model.js';
 
 const now = 1_800_000_000;
 const state = {
@@ -45,4 +45,20 @@ test('header counts agents and running helpers', () => {
 test('durationText', () => {
   assert.equal(durationText({ since: now - 90 }, now), '2m');
   assert.equal(durationText({ since: now - 30, ended: now - 10 }, now), '20s');
+});
+
+test('agent accent comes from the backend colour; a missing one falls back to one neutral colour', () => {
+  const st = { agents: [{ id: 'nova', name: 'Nova', color: '#8b5cf6', status: 'idle', helpers: [], recentHelpers: [] },
+                        { id: 'x', name: 'X', status: 'idle', helpers: [], recentHelpers: [] }] };
+  const [nova, x] = buildItems(st, now);
+  assert.equal(nova.color, '#8b5cf6');
+  assert.equal(x.color, '#8a8a8a');
+});
+
+test('modelText: main model, then distinct helper models', () => {
+  assert.equal(modelText({ model: 'Opus 5.5', helperModels: ['Haiku'] }), 'Opus 5.5 · helpers Haiku');
+  assert.equal(modelText({ model: 'Sonnet 5.5', helperModels: ['DeepSeek V4 Flash', 'DeepSeek V4 Flash'] }),
+    'Sonnet 5.5 · helpers DeepSeek V4 Flash');
+  assert.equal(modelText({ model: 'Gemini 3.6 Flash', helperModels: [] }), 'Gemini 3.6 Flash');
+  assert.equal(modelText({}), '—');
 });

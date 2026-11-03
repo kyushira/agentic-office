@@ -1,7 +1,7 @@
 import { React, useState, useEffect, useRef, fetchJSON, API } from './sdk.js';
 import { ago, compact } from './format.js';
 import { portrait } from './portrait.js';
-import { buildItems, headerCounts, durationText } from './deck-model.js';
+import { buildItems, headerCounts, durationText, modelText } from './deck-model.js';
 
 const POLL_MS = 5000, POLL_LITE_MS = 15000;
 
@@ -22,14 +22,17 @@ function Sprite({ who, working, small, done }) {
 function AgentTile({ it, pressed, onPick }) {
   const a = it.agent, working = it.working;
   return (
-    <button className={'dk-tile' + (working ? ' is-working' : ' is-rest') + (pressed ? ' is-pressed' : '') + (it.chip ? ' has-chip' : '')} onClick={onPick}
-      style={{ '--dk-c': it.color, gridColumnStart: it.rowStart ? 1 : undefined }} aria-label={`${a.name}, ${it.status}`}>
+    <button className={'dk-tile is-agent' + (working ? ' is-working' : ' is-rest') + (pressed ? ' is-pressed' : '') + (it.chip ? ' has-chip' : '')} onClick={onPick}
+      style={{ '--dk-c': it.color, gridColumnStart: it.rowStart ? 1 : undefined }} aria-label={`${a.name}, ${a.role}, ${it.status}`}>
       {working && <i className="dk-badge" />}
       {it.helperCount > 0 && <span className="dk-count-chip">{it.helperCount} helper{it.helperCount > 1 ? 's' : ''}</span>}
       {it.ctxPct != null && !it.helperCount && <span className="dk-ctx">{it.ctxPct}% ctx</span>}
       <span className="dk-art"><Sprite who={a.id} working={working} />{!working && <em className="dk-zz">zz</em>}</span>
       <b className="dk-name">{a.name}</b>
+      <span className="dk-role">{a.role}</span>
+      {a.remit && <span className="dk-remit" title={a.remit}>{a.remit}</span>}
       <span className="dk-status">{it.status}</span>
+      <span className="dk-models" title={modelText(a)}>{modelText(a)}</span>
       {it.chip && <span className="dk-handoff" style={{ '--dk-from': it.chip.color }}>← {it.chip.text}</span>}
     </button>
   );
@@ -76,6 +79,12 @@ function AgentSheet({ it, sessions, now }) {
     <>
       <header><span className="dk-sheet-art"><Sprite who={a.id} /></span>
         <div className="dk-grow"><h2>{a.name}</h2><small>{a.role} · {it.status}</small></div></header>
+      {a.remit && <p className="dk-remit-full">{a.remit}</p>}
+      <dl>
+        <dt>Model</dt><dd>{a.model || '—'}</dd>
+        <dt>Model id</dt><dd>{a.modelId || '—'}</dd>
+        <dt>Helpers</dt><dd>{(a.helperModels || []).join(', ') || '—'}</dd>
+      </dl>
       {it.walks.length > 0 && <section><h3>Hand-offs</h3>
         {it.walks.map(w => <div key={w.id} className="dk-row-mini"><span>{w.label}</span><small>{ago(w.at, now)}</small></div>)}</section>}
       <section><h3>Sessions · {sessions.length}</h3>

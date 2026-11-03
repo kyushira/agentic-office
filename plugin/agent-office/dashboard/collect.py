@@ -13,6 +13,7 @@ import os
 import re
 import sqlite3
 import time
+import zlib
 from pathlib import Path
 
 # Events (toasts, Brain trips) are reported for this many seconds after they happen.
@@ -24,8 +25,13 @@ _STEP = re.compile(r"^\d\d:\d\d:\d\d (\w+)\s*\|\s*(?:-> ([A-Za-z0-9_\-]+)\()?")
 WORKING_SECS = 90
 # Agents the team calls by name; everything else uses the profile name.
 NAMES = {"default": "Ash"}
-ROLES = {"default": "Chief of Staff"}
-PALETTE = ["blue", "green", "orange", "purple", "red", "teal", "pink", "yellow"]
+ROLES = {"default": "Chief of Staff"}   # Ash's SOUL.md is not a team SOUL, so his title is set here
+# Accent colour per profile id (hex, used as the card's accent). Unknown ids hash into PALETTE.
+ACCENT = {"default": "#6E9BFF", "dev": "#4FD983", "red": "#FF6A3D",
+          "nova": "#8b5cf6", "pixel": "#ec4899", "sentinel": "#14b8a6"}
+PALETTE = ["#7EA8FF", "#5BE38B", "#FFB347", "#C792FF", "#FF6B8A", "#4FE0D2", "#F5E663", "#FF8A5C"]
+# Used only when a profile's SOUL.md has no "What you own:" line.
+REMIT = {"default": "Coordinates the team and sets priorities with Sir"}
 
 # Tool name -> what it looks like from outside (no arguments are ever read).
 VERBS = {
@@ -64,9 +70,26 @@ def discover(root: Path) -> list[dict]:
     return out
 
 
+def _soul(home: Path) -> str:
+    """The start of the profile's SOUL.md (identity and remit lines live near the top)."""
+    try:
+        with open(home / "SOUL.md", encoding="utf-8", errors="replace") as f:
+            return f.read(8000)
+    except OSError:
+        return ""
+
+
+_IDENTITY = re.compile(r"^You are ([A-Za-z][\w-]*), (.+?) on the CEO[’']s team")
+_OWN = re.compile(r"^What you own:\s*(.+)$", re.M)
+
+
 def _role(pid: str, home: Path) -> str:
+    """Role title: ROLES override, else 'You are <Name>, <Role> on the CEO's team' in SOUL.md, else profile.yaml."""
     if pid in ROLES:
         return ROLES[pid]
+    m = _IDENTITY.match(_soul(home).split("\n", 1)[0])
+    if m:
+        return _short(m.group(2), 40)
     try:
         txt = (home / "profile.yaml").read_text(encoding="utf-8")
         m = re.search(r"description:\s*'?([^:'\n]+)", txt)
@@ -77,14 +100,32 @@ def _role(pid: str, home: Path) -> str:
     return "Agent"
 
 
+def _remit(pid: str, home: Path) -> str:
+    """One line of what the agent owns: the first sentence of SOUL.md's 'What you own:' (two if the first is tiny)."""
+    m = _OWN.search(_soul(home))
+    if m:
+        parts = re.split(r"(?<=\.)\s+", m.group(1).strip())
+        line = parts[0] if len(parts[0]) >= 30 or len(parts) < 2 else parts[0] + " " + parts[1]
+        return _short(line[:1].upper() + line[1:], 70)
+    return REMIT.get(pid, "")
+
+
+def accent(pid: str) -> str:
+    """Stable accent colour: the fixed map, else a hash of the id (crc32; Python's hash() is salted per process)."""
+    return ACCENT.get(pid) or PALETTE[zlib.crc32(pid.encode("utf-8")) % len(PALETTE)]
+
+
 def _config_models(home: Path) -> dict:
-    """model.default and the delegation model(s), from config.yaml (only those keys)."""
-    out = {"model": "", "helpers": []}
+    """model.default and delegation.model from config.yaml. Only those two keys are read.
+
+    helper is None when the config has no delegation model (the caller may inherit one).
+    """
+    out = {"model": "", "helper": None}
     try:
         txt = (home / "config.yaml").read_text(encoding="utf-8")
     except OSError:
         return out
-    sect, sub = None, None
+    sect = None
     for line in txt.splitlines():
         if not line.strip() or line.lstrip().startswith("#"):
             continue
@@ -92,18 +133,33 @@ def _config_models(home: Path) -> dict:
         if indent == 0:
             sect = line.split(":")[0].strip()
             continue
-        m = re.match(r"\s*-?\s*model:\s*['\"]?([^'\"\s#]+)", line)
-        if m and sect == "delegation":
-            out["helpers"].append(m.group(1))
-    m = re.search(r"^model:\s*\n(?:[ \t]+.*\n)*?[ \t]+default:\s*['\"]?([^'\"\s#]+)", txt, re.M)
-    if m:
-        out["model"] = m.group(1)
+        if indent != 2:                      # direct children only (not fallback_providers entries)
+            continue
+        m = re.match(r"\s*([A-Za-z_]+):\s*['\"]?([^'\"\s#]*)", line)
+        if not m or not m.group(2):
+            continue
+        if sect == "model" and m.group(1) == "default":
+            out["model"] = m.group(2)
+        elif sect == "delegation" and m.group(1) == "model":
+            out["helper"] = m.group(2)
     return out
 
 
+_VERSIONED = (
+    (re.compile(r"opus-(\d+)-(\d+)"), "Opus {0}.{1}"),
+    (re.compile(r"sonnet-(\d+)-(\d+)"), "Sonnet {0}.{1}"),
+    (re.compile(r"gemini-(\d+(?:\.\d+)?)-flash"), "Gemini {0} Flash"),
+    (re.compile(r"deepseek-v(\d+)-flash"), "DeepSeek V{0} Flash"),
+)
+
+
 def chip(model: str) -> str:
-    """Friendly chip name for a model id."""
+    """Friendly chip name for a model id (with the version when the id carries one)."""
     m = (model or "").lower()
+    for rx, fmt in _VERSIONED:
+        g = rx.search(m)
+        if g:
+            return fmt.format(*g.groups())
     for key, name in (("opus", "Opus"), ("sonnet", "Sonnet"), ("haiku", "Haiku"), ("gemini", "Gemini"),
                       ("gpt", "GPT"), ("llama", "Llama"), ("qwen", "Qwen"), ("deepseek", "DeepSeek")):
         if key in m:
@@ -373,13 +429,16 @@ def _connect(home: Path) -> sqlite3.Connection:
     return c
 
 
-def agent_snapshot(pid: str, home: Path, now: float | None = None, color: str = "blue") -> dict:
+def agent_snapshot(pid: str, home: Path, now: float | None = None, inherit: str | None = None) -> dict:
+    """One agent's card data. `inherit` is the helper model used when the profile names none (root's delegation model)."""
     now = now or time.time()
     day0 = time.mktime(time.localtime(now)[:3] + (0, 0, 0, 0, 0, -1))
     models = _config_models(home)
+    helper = models["helper"] or inherit or ""
     a = {
-        "id": pid, "name": NAMES.get(pid, pid.capitalize()), "role": _role(pid, home), "color": color,
-        "model": chip(models["model"]), "helperModels": [chip(m) for m in models["helpers"] if chip(m)],
+        "id": pid, "name": NAMES.get(pid, pid.capitalize()), "role": _role(pid, home), "remit": _remit(pid, home),
+        "color": accent(pid), "model": chip(models["model"]), "modelId": models["model"],
+        "helperModels": [chip(helper)] if chip(helper) else [],
         "status": "idle", "activity": "idle", "lastActive": None, "helpers": [], "recent": [],
         "today": {"sessions": 0, "toolCalls": 0, "tokens": 0}, "spark": {"sessions": [], "toolCalls": [], "tokens": []},
         "tools": [], "skills": _skills(home), "platforms": [], "events": [], "brainTrips": [],
@@ -628,7 +687,9 @@ def vault_notes(root: Path) -> int:
 def snapshot(home: str | None = None, now: float | None = None) -> dict:
     now = now or time.time()
     root = root_home(home)
-    agents = [agent_snapshot(p["id"], p["home"], now, PALETTE[i % len(PALETTE)]) for i, p in enumerate(discover(root))]
+    # Profiles without their own delegation model show the root profile's helper model.
+    inherit = _config_models(root)["helper"]
+    agents = [agent_snapshot(p["id"], p["home"], now, inherit) for p in discover(root)]
     chips = []
     for a in agents:
         for m in [a["model"], *a["helperModels"]]:

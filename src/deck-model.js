@@ -1,10 +1,16 @@
 // Pure view-model for the Deck (unit-tested in test/deck-model.test.js).
 import { ago } from './format.js';
 
-export const AGENT_COLORS = ['#7EA8FF', '#5BE38B', '#FFB347', '#C792FF', '#FF6B8A', '#4FE0D2', '#F5E663', '#FF8A5C'];
 const CHIP_SECS = 120;
-const FIXED = { default: '#6E9BFF', dev: '#4FD983', red: '#FF6A3D' };   // Ash blue, Dev green, Red red-orange
+const NO_COLOR = '#8a8a8a';   // the backend always sends a.color; this only guards a missing field
 const KIND = { brief: 'new brief', reply: 'report', message: 'message' };
+
+/** "Sonnet 5.5 · helpers DeepSeek V4 Flash" (main model, then the distinct helper models). */
+export function modelText(a) {
+  const main = a.model || '—';
+  const helpers = [...new Set(a.helperModels || [])];
+  return helpers.length ? `${main} · helpers ${helpers.join(', ')}` : main;
+}
 
 export function durationText(h, now) {
   const end = h.ended || now, s = Math.max(0, Math.round(end - (h.since || end)));
@@ -18,7 +24,7 @@ export function durationText(h, now) {
 export function buildItems(state, now) {
   const agents = state.agents || [];
   const names = Object.fromEntries(agents.map(a => [a.id, a.name]));
-  const colors = Object.fromEntries(agents.map((a, i) => [a.id, FIXED[a.id] || AGENT_COLORS[i % AGENT_COLORS.length]]));
+  const colors = Object.fromEntries(agents.map(a => [a.id, a.color || NO_COLOR]));
   const walks = state.walks || [];
   const items = [];
   for (const a of agents) {

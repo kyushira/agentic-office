@@ -51,7 +51,7 @@ class ChipTests(unittest.TestCase):
             "claude-opus-4": "Opus",
             "anthropic/claude-sonnet-4.5": "Sonnet",
             "claude-haiku-5-5": "Haiku",
-            "gemini-2.5-flash": "Gemini Flash",
+            "gemini-2.5-flash": "Gemini 2.5 Flash",
             "gemini-2.5-pro": "Gemini",
             "gpt-4o": "GPT",
             "llama-3-70b": "Llama",
@@ -76,6 +76,153 @@ class ChipTests(unittest.TestCase):
     def test_empty_and_none(self):
         self.assertEqual(collect.chip(""), "")
         self.assertEqual(collect.chip(None), "")
+
+
+class ChipVersionTests(unittest.TestCase):
+    def test_card_model_names(self):
+        cases = {
+            "claude-opus-5-5[1m]": "Opus 5.5",
+            "claude-sonnet-5-5[1m]": "Sonnet 5.5",
+            "haiku": "Haiku",
+            "gemini-3.6-flash": "Gemini 3.6 Flash",
+            "deepseek-v4-flash": "DeepSeek V4 Flash",
+        }
+        for model, expected in cases.items():
+            with self.subTest(model=model):
+                self.assertEqual(collect.chip(model), expected)
+
+
+class IdentityTests(unittest.TestCase):
+    """Role, remit, accent and model fields come from each profile's own files, never from list position."""
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.root = Path(self._tmp.name)
+
+    def tearDown(self):
+        self._tmp.cleanup()
+
+    def _profile(self, pid, soul=None, config=None, profile_yaml=None):
+        home = self.root / "profiles" / pid if pid != "default" else self.root
+        home.mkdir(parents=True, exist_ok=True)
+        (home / "state.db").write_bytes(b"")     # discover() needs one; empty -> the session queries just come back "offline"
+        if soul is not None:
+            (home / "SOUL.md").write_text(soul, encoding="utf-8")
+        if config is not None:
+            (home / "config.yaml").write_text(config, encoding="utf-8")
+        if profile_yaml is not None:
+            (home / "profile.yaml").write_text(profile_yaml, encoding="utf-8")
+        return home
+
+    def test_role_from_soul_first_line(self):
+        cases = {
+            "dev": ("You are Dev, Lead Developer on the CEO's team, built on Hermes Agent by Nous Research.\n", "Lead Developer"),
+            "red": ("You are Red, Research Assistant on the CEO’s team, built on Hermes Agent.\n", "Research Assistant"),
+            "nova": ("You are Nova, Head of Product and Game Design on the CEO's team, built on Hermes Agent.\n",
+                     "Head of Product and Game Design"),
+            "pixel": ("You are Pixel, Head of Creative and Content on the CEO's team, built.\n", "Head of Creative and Content"),
+            "sentinel": ("You are Sentinel, Head of Quality and Security on the CEO's team, built.\n",
+                         "Head of Quality and Security"),
+        }
+        for pid, (soul, role) in cases.items():
+            with self.subTest(pid=pid):
+                home = self._profile(pid, soul=soul, profile_yaml="description: 'Something else entirely.'\n")
+                self.assertEqual(collect._role(pid, home), role)
+
+    def test_role_falls_back_to_profile_yaml_then_agent(self):
+        home = self._profile("ghost", soul="No identity line here.\n", profile_yaml="description: 'Quality checks: all day.'\n")
+        self.assertEqual(collect._role("ghost", home), "Quality checks")
+        bare = self._profile("bare")
+        self.assertEqual(collect._role("bare", bare), "Agent")
+
+    def test_default_profile_keeps_chief_of_staff(self):
+        home = self._profile("default", soul="You are Hermes Agent, built by Nous Research.\n")
+        self.assertEqual(collect._role("default", home), "Chief of Staff")
+
+    def test_remit_is_first_sentence_of_what_you_own(self):
+        soul = ("You are Nova, Head of Product and Game Design on the CEO's team.\n\n"
+                "What you own: deciding WHAT to build and how it should work. Product specs and PRDs, user stories.\n")
+        home = self._profile("nova", soul=soul)
+        self.assertEqual(collect._remit("nova", home), "Deciding WHAT to build and how it should work")
+
+    def test_remit_joins_a_tiny_first_sentence_and_caps_length(self):
+        soul = "You are Pixel, Head of Creative and Content on the CEO's team.\n\nWhat you own: written content. Copy, scripts, social posts and threads, game narrative and dialogue.\n"
+        home = self._profile("pixel", soul=soul)
+        out = collect._remit("pixel", home)
+        self.assertTrue(out.startswith("Written content. Copy"), out)
+        self.assertLessEqual(len(out), 70)
+        self.assertTrue(out.endswith("…"))
+
+    def test_remit_static_for_ash_only_when_no_line(self):
+        plain = self._profile("default", soul="You are Hermes Agent.\n")
+        self.assertEqual(collect._remit("default", plain), "Coordinates the team and sets priorities with Sir")
+        other = self._profile("dev", soul="You are Dev, Lead Developer on the CEO's team.\n")
+        self.assertEqual(collect._remit("dev", other), "")
+
+    def test_accent_is_fixed_by_id_and_hashed_otherwise(self):
+        self.assertEqual(collect.accent("default"), "#6E9BFF")
+        self.assertEqual(collect.accent("dev"), "#4FD983")
+        self.assertEqual(collect.accent("red"), "#FF6A3D")
+        self.assertEqual(collect.accent("nova"), "#8b5cf6")
+        self.assertEqual(collect.accent("pixel"), "#ec4899")
+        self.assertEqual(collect.accent("sentinel"), "#14b8a6")
+        future = collect.accent("future-agent")
+        self.assertIn(future, collect.PALETTE)
+        self.assertEqual(future, collect.accent("future-agent"), "stable across calls")
+        self.assertEqual(future, collect.PALETTE[collect.zlib.crc32(b"future-agent") % len(collect.PALETTE)])
+
+    def test_accent_does_not_depend_on_list_position(self):
+        self._profile("default")
+        for pid in ("nova", "pixel", "sentinel"):
+            self._profile(pid)
+        now = 1_800_000_000.0
+        forward = {a["id"]: a["color"] for a in
+                   (collect.agent_snapshot(p["id"], p["home"], now) for p in collect.discover(self.root))}
+        backward = {a["id"]: a["color"] for a in
+                    (collect.agent_snapshot(p["id"], p["home"], now) for p in reversed(collect.discover(self.root)))}
+        self.assertEqual(forward, backward)
+        self.assertEqual(len(set(forward.values())), len(forward), "every card has its own colour")
+
+    def test_models_read_only_the_two_keys(self):
+        cfg = ("model:\n  default: claude-opus-5-5[1m]\n  provider: x\n"
+               "delegation:\n  provider: deepseek\n  model: deepseek-v4-flash\n  base_url: ''\n"
+               "  fallback_providers:\n    - provider: claude\n      model: haiku\n")
+        home = self._profile("nova", config=cfg)
+        m = collect._config_models(home)
+        self.assertEqual(m["model"], "claude-opus-5-5[1m]")
+        self.assertEqual(m["helper"], "deepseek-v4-flash", "fallback_providers' haiku is not a helper")
+
+    def test_missing_delegation_is_none_and_inherits_root(self):
+        home = self._profile("red", config="model:\n  default: gemini-3.6-flash\n  provider: gemini\n")
+        self.assertIsNone(collect._config_models(home)["helper"])
+        a = collect.agent_snapshot("red", home, 1_800_000_000.0, inherit="haiku")
+        self.assertEqual(a["helperModels"], ["Haiku"])
+        self.assertEqual(a["model"], "Gemini 3.6 Flash")
+        self.assertEqual(a["modelId"], "gemini-3.6-flash")
+        none = collect.agent_snapshot("red", home, 1_800_000_000.0)
+        self.assertEqual(none["helperModels"], [])
+
+    def test_every_agent_has_identity_and_model_fields(self):
+        self._profile("default", soul="You are Hermes Agent.\n", config="model:\n  default: claude-sonnet-5-5[1m]\n"
+                      "delegation:\n  model: haiku\n")
+        self._profile("dev", soul="You are Dev, Lead Developer on the CEO's team.\n\nWhat you own: code.\n",
+                      config="model:\n  default: claude-opus-5-5[1m]\ndelegation:\n  model: haiku\n")
+        self._profile("nova", soul="You are Nova, Head of Product and Game Design on the CEO's team.\n",
+                      config="model:\n  default: claude-sonnet-5-5[1m]\ndelegation:\n  model: deepseek-v4-flash\n")
+        snap = collect.snapshot(home=str(self.root), now=1_800_000_000.0)
+        self.assertEqual({a["id"] for a in snap["agents"]}, {"default", "dev", "nova"})
+        by = {a["id"]: a for a in snap["agents"]}
+        self.assertEqual(by["default"]["name"], "Ash")
+        self.assertEqual(by["default"]["role"], "Chief of Staff")
+        self.assertEqual(by["dev"]["role"], "Lead Developer")
+        self.assertEqual(by["nova"]["color"], "#8b5cf6")
+        self.assertEqual((by["dev"]["model"], by["dev"]["helperModels"], by["dev"]["modelId"]),
+                         ("Opus 5.5", ["Haiku"], "claude-opus-5-5[1m]"))
+        self.assertEqual(by["nova"]["helperModels"], ["DeepSeek V4 Flash"])
+        for a in snap["agents"]:
+            for key in ("role", "remit", "color", "model", "modelId", "helperModels"):
+                with self.subTest(agent=a["id"], key=key):
+                    self.assertIn(key, a)
 
 
 class ActivityTextTests(unittest.TestCase):
