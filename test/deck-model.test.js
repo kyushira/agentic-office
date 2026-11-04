@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { buildItems, headerCounts, durationText, modelText, modelParts, usageText, activeTokens } from '../src/deck-model.js';
+import { buildItems, headerCounts, durationText, modelText, modelParts, usageText, activeTokens, currentSessionId, eventLabel, detailRows } from '../src/deck-model.js';
 
 const now = 1_800_000_000;
 const state = {
@@ -116,4 +116,24 @@ test('buildItems: working agent carries tokens from its working sessions', () =>
   const st = { agents: [{ id: 'dev', name: 'Dev', status: 'working', helpers: [], recentHelpers: [] }],
     sessions: { dev: [{ id: 'a', status: 'working', tokens: 1000 }, { id: 'b', status: 'working', tokens: 500 }, { id: 'c', status: 'idle', tokens: 9999 }] } };
   assert.equal(activeTokens(buildItems(st, now)), 1500);
+});
+
+test('eventLabel: tool name, message in, reply, fallbacks', () => {
+  assert.equal(eventLabel({ kind: 'tool', name: 'terminal' }), 'terminal');
+  assert.equal(eventLabel({ kind: 'tool', name: null }), 'tool');
+  assert.equal(eventLabel({ kind: 'user' }), 'message in');
+  assert.equal(eventLabel({ kind: 'assistant' }), 'reply');
+  assert.equal(eventLabel({ kind: 'system' }), 'system');
+  assert.equal(eventLabel({}), '');
+});
+
+test('detailRows: activity, last tool and working helper count', () => {
+  const d = { status: 'working', activity: 'using terminal', last_tool: { name: 'terminal', at: 1 },
+    helpers: [{ status: 'working' }, { status: 'running' }, { status: 'done' }] };
+  assert.deepEqual(detailRows(d), { activity: 'using terminal', tool: 'terminal', helpers: '2 working / 3' });
+});
+
+test('detailRows: bare payload falls back to status and no tool', () => {
+  assert.deepEqual(detailRows({ status: 'idle', helpers: [] }), { activity: 'idle', tool: null, helpers: '0 working / 0' });
+  assert.deepEqual(detailRows({}), { activity: 'idle', tool: null, helpers: '0 working / 0' });
 });

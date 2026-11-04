@@ -144,6 +144,13 @@
 .dk-row-mini small { flex: none; }
 .dk-sheet dl { display: grid; grid-template-columns: auto 1fr; gap: 7px 14px; margin: 0; font-size: 12px; }
 .dk-sheet dt { color: var(--dk-mut); }
+.dk-now { border: 1px solid var(--dk-line); border-radius: 6px; background: var(--dk-tile); padding: 9px 10px; margin-bottom: 14px; font-size: 12px; }
+.dk-now-act { font-size: 14px; color: var(--dk-ink); font-weight: 600; word-break: break-word; }
+.dk-now-meta { color: var(--dk-ink); margin-top: 4px; word-break: break-word; }
+.dk-now .dk-mut { color: var(--dk-mut); }
+.dk-events { list-style: none; margin: 8px 0 0; padding: 0; border-top: 1px solid #1d1d1d; }
+.dk-events li { display: flex; gap: 10px; padding: 4px 0; color: var(--dk-ink); border-bottom: 1px solid #1d1d1d; }
+.dk-events li span { color: var(--dk-mut); min-width: 52px; }
 .dk-sheet dd { margin: 0; text-align: right; word-break: break-word; }
 .dk-sheet h3 { font-size: 11px; color: var(--dk-mut); letter-spacing: .1em; text-transform: uppercase; margin: 16px 0 6px; font-weight: 600; }
 .dk-help { position: relative; padding: 7px 0 7px 14px; font-size: 12px; border-top: 1px solid #1d1d1d; display: flex; gap: 8px; }

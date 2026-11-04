@@ -103,3 +103,29 @@ export function headerCounts(items) {
   const working = agents.filter(i => i.working).length;
   return { working, idle: agents.length - working, helpers: items.filter(i => i.type === 'helper' && !i.done).length };
 }
+
+/** Session to show live detail for: the first working session, else the most recent one (by `at`). */
+export function currentSessionId(sessions) {
+  const list = sessions || [];
+  const pick = list.find(s => s.status === 'working') || [...list].sort((x, y) => (y.at || 0) - (x.at || 0))[0];
+  return pick ? pick.id : null;
+}
+
+/** One-line label for a session event: a tool name, 'message in' or 'reply'. */
+export function eventLabel(e) {
+  if (e.kind === 'tool') return e.name || 'tool';
+  if (e.kind === 'user') return 'message in';
+  if (e.kind === 'assistant') return 'reply';
+  return e.kind || '';
+}
+
+/** Rows for the sheet's "Now" block from a session detail payload. */
+export function detailRows(d) {
+  const helpers = d.helpers || [];
+  const working = helpers.filter(h => h.status === 'working' || h.status === 'running').length;
+  return {
+    activity: d.activity || d.status || 'idle',
+    tool: d.last_tool ? `${d.last_tool.name}` : null,
+    helpers: `${working} working / ${helpers.length}`,
+  };
+}

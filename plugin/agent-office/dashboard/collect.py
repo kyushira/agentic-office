@@ -684,6 +684,93 @@ def vault_notes(root: Path) -> int:
     return n
 
 
+_SESSION_ID = re.compile(r"^[A-Za-z0-9_.:-]{1,128}$")
+EVENT_LIMIT = 8
+
+
+def session_detail(session_id: str, homes: list[dict] | None = None, now: float | None = None) -> dict | None:
+    """What one session is doing now, or None when the id is malformed or unknown.
+
+    Searches each profile's state.db (read-only, parametrised SQL). Only the live activity line (the same
+    text the cards use), tool names, roles, timestamps, helper ids/status/model and the session title leave
+    here. Message content, tool arguments and results are never selected.
+    """
+    if not isinstance(session_id, str) or not _SESSION_ID.match(session_id):
+        return None
+    now = now or time.time()
+    for p in (discover(root_home()) if homes is None else homes):
+        try:
+            c = _connect(p["home"])
+        except sqlite3.Error:
+            continue
+        try:
+            found = _session_in(p["id"], c, session_id, now)
+            if found is not None:
+                return found
+        except sqlite3.Error:
+            pass
+        finally:
+            c.close()
+    return None
+
+
+def _session_in(pid: str, c: sqlite3.Connection, sid: str, now: float) -> dict | None:
+    cols = {r[1] for r in c.execute("pragma table_info(sessions)")}
+    if not cols:
+        return None
+    has_live = "last_activity_at" in cols
+    act = "coalesce(last_activity_at, started_at)" if has_live else "started_at"
+    desc = "last_activity_description" if has_live else "''"
+    row = c.execute(f"select id, title, ended_at, {act} as act, {desc} as descr from sessions where id = ?",
+                    (sid,)).fetchone()
+    if row is None:
+        return None
+    last = c.execute("select tool_name, timestamp from messages where session_id = ? and tool_name is not null "
+                     "order by timestamp desc, id desc limit 1", (sid,)).fetchone()
+    last_verb = ""
+    if last:
+        last_verb = VERBS.get(last["tool_name"], "using " + last["tool_name"].replace("_", " "))
+    try:
+        leased = c.execute("select 1 from session_turn_leases where conversation_id = ? and expires_at > ?",
+                           (sid, now)).fetchone() is not None
+    except sqlite3.Error:
+        leased = False
+    # Same rules as agent_snapshot / deck_tiles, applied to this one session.
+    if row["ended_at"]:
+        status = "done"
+        activity = ("finished · last: " + last_verb) if last_verb else "finished"
+    elif (row["act"] or 0) >= now - WORKING_SECS or leased:
+        activity = activity_text(row["descr"], row["title"])
+        if activity.startswith("working") and last and last["timestamp"] >= now - WORKING_SECS:
+            activity = activity.replace("working", last_verb, 1)
+        status = "waiting" if activity.startswith("waiting") else "working"
+    else:
+        status = "idle"
+        activity = "idle · last: " + (last_verb or _short(row["title"], 34) or "session")
+    helpers = []
+    if "parent_session_id" in cols:
+        for r in c.execute(f"select id, model, ended_at, {act} as act from sessions where parent_session_id = ? "
+                           f"order by act desc limit 20", (sid,)):
+            if r["ended_at"]:
+                hs = "done"
+            elif (r["act"] or 0) >= now - WORKING_SECS * 2:
+                hs = "working"
+            else:
+                hs = "idle"
+            helpers.append({"id": r["id"], "status": hs, "model": chip(r["model"] or "")})
+    events = []
+    for r in c.execute("select role, tool_name, timestamp from messages where session_id = ? "
+                       "and role in ('user', 'assistant', 'tool') order by timestamp desc, id desc limit ?",
+                       (sid, EVENT_LIMIT)):
+        kind = "tool" if (r["role"] == "tool" or r["tool_name"]) else r["role"]
+        events.append({"at": r["timestamp"], "kind": kind, "name": r["tool_name"] or None})
+    return {
+        "id": sid, "profile": pid, "status": status, "activity": activity,
+        "last_tool": {"name": last["tool_name"], "at": last["timestamp"]} if last else None,
+        "helpers": helpers, "events": events,
+    }
+
+
 def snapshot(home: str | None = None, now: float | None = None) -> dict:
     now = now or time.time()
     root = root_home(home)

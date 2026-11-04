@@ -1,10 +1,10 @@
-import { React, useState, useEffect, useRef, fetchJSON, API, USAGE_API } from './sdk.js';
+import { React, useState, useEffect, useRef, fetchJSON, API, USAGE_API, SESSION_API } from './sdk.js';
 import { ago, compact } from './format.js';
 import { portrait } from './portrait.js';
-import { buildItems, headerCounts, durationText, modelText, modelParts, usageText, activeTokens } from './deck-model.js';
+import { buildItems, headerCounts, durationText, modelText, modelParts, usageText, activeTokens, currentSessionId, eventLabel, detailRows } from './deck-model.js';
 import { isStandalone, wantsFull, withFullParam, requestNativeFullscreen, exitNativeFullscreen, markFullPath } from './fullscreen.js';
 
-const POLL_MS = 5000, POLL_LITE_MS = 15000;
+const POLL_MS = 5000, POLL_LITE_MS = 15000, DETAIL_MS = 5000;
 
 /** Pixel-art bust: base pixels + an eyes layer that blinks; a small bob while working. */
 function Sprite({ who, working, small, done }) {
@@ -81,13 +81,31 @@ function SessionDetail({ s, now, onBack }) {
   );
 }
 
-function AgentSheet({ it, sessions, now }) {
+/** Live 'Now' block: what the agent is doing, last tool, helpers and recent events. */
+function NowBlock({ det, err, now }) {
+  if (!det) return err ? <div className="dk-now"><p className="dk-note">detail unavailable</p></div> : null;
+  const r = detailRows(det);
+  const events = [...(det.events || [])].sort((x, y) => (y.at || 0) - (x.at || 0)).slice(0, 8);
+  return (
+    <div className="dk-now">
+      <div className="dk-now-act">{r.activity}</div>
+      {r.tool && <div className="dk-now-meta">Last tool: {r.tool}{det.last_tool.at ? <> · <span className="dk-mut">{ago(det.last_tool.at, now)}</span></> : null}</div>}
+      <div className="dk-now-meta">Helpers: {r.helpers}</div>
+      {events.length > 0 && <ul className="dk-events">
+        {events.map((e, i) => <li key={i}><span>{ago(e.at, now)}</span> {eventLabel(e)}</li>)}
+      </ul>}
+    </div>
+  );
+}
+
+function AgentSheet({ it, sessions, now, det, detErr }) {
   const [open, setOpen] = useState(null);
   const a = it.agent;
   const s = open && sessions.find(x => x.id === open);
   if (s) return <SessionDetail s={s} now={now} onBack={() => setOpen(null)} />;
   return (
     <>
+      <NowBlock det={det} err={detErr} now={now} />
       <header><span className="dk-sheet-art"><Sprite who={a.id} /></span>
         <div className="dk-grow"><h2>{a.name}</h2><small>{a.role} · {it.status}</small></div></header>
       {a.remit && <p className="dk-remit-full">{a.remit}</p>}
@@ -213,6 +231,20 @@ export default function Deck() {
   const counts = state ? headerCounts(items) : null;
   const picked = items.find(i => i.key === sel) || null;
   const ut = usageText(usage);
+  const detailId = picked && picked.type === 'agent' ? currentSessionId((state.sessions || {})[picked.agent.id]) : null;
+  const [detail, setDetail] = useState(null);   // {sid, data, err}
+  useEffect(() => {
+    setDetail(null);
+    if (!detailId) return;
+    let live = true;
+    const pull = () => fetchJSON(`${SESSION_API}?id=${encodeURIComponent(detailId)}`)
+      .then(d => { if (live) setDetail({ sid: detailId, data: d, err: false }); })
+      .catch(() => { if (live) setDetail({ sid: detailId, data: null, err: true }); });
+    pull();
+    const id = setInterval(pull, DETAIL_MS);
+    return () => { live = false; clearInterval(id); };
+  }, [detailId]);
+  const detOk = detail && detail.sid === detailId ? detail : null;
 
   const root = (
     <div ref={rootRef} className={'dk-root' + (lite ? ' is-lite' : '') + (items.length && items.length <= 6 ? ' is-few' : '')} style={{ height: full ? '100%' : height }}>
@@ -236,7 +268,8 @@ export default function Deck() {
       </main>
       {picked && <Sheet onClose={() => setSel(null)}>
         {picked.type === 'agent'
-          ? <AgentSheet key={picked.key} it={picked} sessions={(state.sessions || {})[picked.agent.id] || []} now={now} />
+          ? <AgentSheet key={picked.key} it={picked} sessions={(state.sessions || {})[picked.agent.id] || []} now={now}
+                      det={detOk && detOk.data} detErr={!!(detOk && detOk.err)} />
           : <HelperSheet it={picked} now={now} />}
       </Sheet>}
     </div>

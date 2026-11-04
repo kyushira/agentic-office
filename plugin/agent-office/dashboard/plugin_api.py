@@ -11,6 +11,7 @@ import time
 from pathlib import Path
 
 from fastapi import APIRouter
+from fastapi.responses import JSONResponse
 
 _spec = importlib.util.spec_from_file_location("agent_office_collect", Path(__file__).with_name("collect.py"))
 collect = importlib.util.module_from_spec(_spec)
@@ -42,3 +43,11 @@ async def state():
 @router.get("/usage")
 async def usage_endpoint():
     return await asyncio.to_thread(usage.plan_usage)
+
+
+@router.get("/session")
+async def session(id: str):
+    detail = await asyncio.to_thread(collect.session_detail, id)
+    if detail is None:
+        return JSONResponse({"error": "not found"}, status_code=404)
+    return detail
