@@ -16,6 +16,10 @@ _spec = importlib.util.spec_from_file_location("agent_office_collect", Path(__fi
 collect = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(collect)
 
+_uspec = importlib.util.spec_from_file_location("agent_office_usage", Path(__file__).with_name("usage.py"))
+usage = importlib.util.module_from_spec(_uspec)
+_uspec.loader.exec_module(usage)
+
 router = APIRouter()
 CACHE_SECS = 4.0
 _cache = {"at": 0.0, "data": None}
@@ -33,3 +37,8 @@ def _snapshot():
 @router.get("/state")
 async def state():
     return await asyncio.to_thread(_snapshot)
+
+
+@router.get("/usage")
+async def usage_endpoint():
+    return await asyncio.to_thread(usage.plan_usage)

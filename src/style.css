@@ -179,3 +179,9 @@ html.ao-full-active [data-ao-full-path] { transform: none !important; filter: no
 html.ao-full-active { background-color: #0A0A0A !important; }
 .dk-top .dk-dot.on { box-shadow: none; }
 .dk-top, .dk-top * { text-shadow: none !important; filter: none !important; backdrop-filter: none !important; }
+
+.dk-usage { font-size: 12px; font-weight: 600; color: var(--dk-ink); white-space: nowrap; margin-left: 10px; }
+.dk-usage.is-warn { color: #FFB020; }
+.dk-usage.is-hot { color: var(--dk-red); }
+.dk-usage.is-na { color: var(--dk-mut); }
+@media (max-width: 420px) { .dk-usage { font-size: 11px; margin-left: 6px; } }

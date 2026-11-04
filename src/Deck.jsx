@@ -1,7 +1,7 @@
-import { React, useState, useEffect, useRef, fetchJSON, API } from './sdk.js';
+import { React, useState, useEffect, useRef, fetchJSON, API, USAGE_API } from './sdk.js';
 import { ago, compact } from './format.js';
 import { portrait } from './portrait.js';
-import { buildItems, headerCounts, durationText, modelText, modelParts } from './deck-model.js';
+import { buildItems, headerCounts, durationText, modelText, modelParts, usageText, activeTokens } from './deck-model.js';
 import { isStandalone, wantsFull, withFullParam, requestNativeFullscreen, exitNativeFullscreen, markFullPath } from './fullscreen.js';
 
 const POLL_MS = 5000, POLL_LITE_MS = 15000;
@@ -153,6 +153,7 @@ export default function Deck() {
   const [lite, setLite] = useState(readLite);
   const [height, setHeight] = useState(600);
   const [, setTick] = useState(0);
+  const [usage, setUsage] = useState(null);
   const [standalone] = useState(() => isStandalone(window));
   const [full, setFull] = useState(() => wantsFull(location.search, standalone));
   const timer = useRef(0), alive = useRef(true), liteRef = useRef(lite);
@@ -173,6 +174,13 @@ export default function Deck() {
     return () => window.removeEventListener('resize', size);
   }, []);
   useEffect(() => { const id = setInterval(() => setTick(x => x + 1), 15000); return () => clearInterval(id); }, []);
+  useEffect(() => {
+    let live = true;
+    const pull = () => fetchJSON(USAGE_API).catch(() => ({ available: false })).then(u => { if (live) setUsage(u); });
+    pull();
+    const id = setInterval(pull, 60000);
+    return () => { live = false; clearInterval(id); };
+  }, []);
 
   const enterFull = () => {
     setFull(true);
@@ -204,12 +212,15 @@ export default function Deck() {
   const items = state ? buildItems(state, now) : [];
   const counts = state ? headerCounts(items) : null;
   const picked = items.find(i => i.key === sel) || null;
+  const ut = usageText(usage);
 
   const root = (
     <div ref={rootRef} className={'dk-root' + (lite ? ' is-lite' : '') + (items.length && items.length <= 6 ? ' is-few' : '')} style={{ height: full ? '100%' : height }}>
       <header className="dk-top">
         <span className="dk-count"><i className={'dk-dot' + (counts && counts.working ? ' on' : '')} />
           {counts ? `${counts.working} working · ${counts.idle} idle · ${counts.helpers} helper${counts.helpers === 1 ? '' : 's'}` : 'loading…'}</span>
+        <span className={'dk-usage is-' + ut.level} title={ut.title}>{ut.short}</span>
+        <span className="dk-usage" title="Tokens used in active sessions">{compact(activeTokens(items))} tok</span>
         <span className="dk-grow" />
         {!full && <button className="dk-btn" onClick={enterFull} aria-label="Open fullscreen deck">Fullscreen</button>}
         {full && !standalone && <button className="dk-btn ao-fs-exit" onClick={exitFull} aria-label="Exit fullscreen deck">Exit</button>}

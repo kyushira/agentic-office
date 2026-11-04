@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { buildItems, headerCounts, durationText, modelText, modelParts } from '../src/deck-model.js';
+import { buildItems, headerCounts, durationText, modelText, modelParts, usageText, activeTokens } from '../src/deck-model.js';
 
 const now = 1_800_000_000;
 const state = {
@@ -67,4 +67,53 @@ test('modelText: main model, then distinct helper models', () => {
     'Sonnet 5.5 · helpers DeepSeek V4 Flash');
   assert.equal(modelText({ model: 'Gemini 3.6 Flash', helperModels: [] }), 'Gemini 3.6 Flash');
   assert.equal(modelText({}), '—');
+});
+
+test('usageText: unavailable payload shows n/a and level na', () => {
+  for (const u of [{ available: false }, null, undefined]) {
+    const r = usageText(u);
+    assert.equal(r.short, '5h n/a · wk n/a');
+    assert.equal(r.level, 'na');
+    assert.equal(r.title, 'Claude plan: 5-hour resets n/a; weekly resets n/a');
+  }
+});
+
+test('usageText: normal windows round and stay ok below 70%', () => {
+  const r = usageText({ available: true, five_hour: { pct: 42.4, resets_at: 1_800_000_000 }, seven_day: { pct: 13.6, resets_at: 1_800_500_000 } });
+  assert.equal(r.short, '5h 42% · wk 14%');
+  assert.equal(r.level, 'ok');
+  assert.match(r.title, /^Claude plan: 5-hour resets (?!n\/a).+; weekly resets (?!n\/a).+$/);
+});
+
+test('usageText: a null window shows n/a for that window only', () => {
+  const r = usageText({ available: true, five_hour: { pct: null, resets_at: null }, seven_day: { pct: 55, resets_at: 1_800_500_000 } });
+  assert.equal(r.short, '5h n/a · wk 55%');
+  assert.equal(r.level, 'ok');
+  assert.match(r.title, /^Claude plan: 5-hour resets n\/a; weekly resets (?!n\/a).+$/);
+});
+
+test('usageText: warn at 70 and hot at 90, from the larger window', () => {
+  const warn = usageText({ available: true, five_hour: { pct: 75 }, seven_day: { pct: 20 } });
+  assert.equal(warn.level, 'warn');
+  assert.equal(warn.short, '5h 75% · wk 20%');
+  const hot = usageText({ available: true, five_hour: { pct: 30 }, seven_day: { pct: 91.2 } });
+  assert.equal(hot.level, 'hot');
+  assert.equal(hot.short, '5h 30% · wk 91%');
+});
+
+test('activeTokens: sums tokens of working agents only', () => {
+  const items = [
+    { type: 'agent', working: true, tokens: 1200 },
+    { type: 'agent', working: false, tokens: 9000 },
+    { type: 'helper', done: false, tokens: undefined },
+    { type: 'agent', working: true, tokens: 300 },
+  ];
+  assert.equal(activeTokens(items), 1500);
+  assert.equal(activeTokens([]), 0);
+});
+
+test('buildItems: working agent carries tokens from its working sessions', () => {
+  const st = { agents: [{ id: 'dev', name: 'Dev', status: 'working', helpers: [], recentHelpers: [] }],
+    sessions: { dev: [{ id: 'a', status: 'working', tokens: 1000 }, { id: 'b', status: 'working', tokens: 500 }, { id: 'c', status: 'idle', tokens: 9999 }] } };
+  assert.equal(activeTokens(buildItems(st, now)), 1500);
 });

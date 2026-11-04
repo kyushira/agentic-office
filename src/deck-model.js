@@ -34,6 +34,7 @@ export function buildItems(state, now) {
   for (const a of agents) {
     const working = a.status === 'working' || a.status === 'waiting';
     const sess = ((state.sessions || {})[a.id] || []).find(s => s.status === 'working');
+    const activeTok = ((state.sessions || {})[a.id] || []).filter(s => s.status === 'working').reduce((n, s) => n + (+s.tokens || 0), 0);
     const step = (a.activity || '').replace(/^delegating · .*/, 'delegating').split(' · ')[0];
     const helpers = a.helpers || [];
     const recent = (a.recentHelpers || []).filter(h => now - h.ended < 900);
@@ -43,6 +44,7 @@ export function buildItems(state, now) {
       type: 'agent', key: 'a:' + a.id, agent: a, color: colors[a.id], working,
       status: working ? `working · ${step || 'working'}` : `idle · ${ago(a.lastActive, now)}`,
       ctxPct: working && sess ? sess.ctxPct : null,
+      tokens: working ? activeTok : 0,
       helperCount: helpers.length,
       chip: inbound ? { text: `${names[inbound.from] || inbound.from} · ${KIND[inbound.kind] || inbound.kind}`, color: colors[inbound.from] || '#999' } : null,
       walks: walks.filter(w => w.from === a.id || w.to === a.id).map(w => ({ ...w, label: label(w) })),
@@ -66,6 +68,34 @@ function helperItem(h, a, color, done, now) {
     name: `${h.model || 'Helper'} helper`,
     status: done ? `done · ${ago(h.ended, now)}` : h.activity || 'running',
   };
+}
+
+const pctText = p => (p == null || isNaN(+p) ? 'n/a' : Math.round(+p) + '%');
+function resetText(ts) {
+  if (ts == null || ts === '') return 'n/a';
+  const d = new Date(typeof ts === 'number' && ts < 1e12 ? ts * 1000 : ts);
+  return isNaN(d) ? 'n/a' : d.toLocaleString('en-GB', { weekday: 'short', hour: '2-digit', minute: '2-digit' });
+}
+
+/** Claude plan usage for the header: {short, title, level} from the /usage payload; level is ok|warn|hot|na. */
+export function usageText(u) {
+  const five = (u && u.five_hour) || {}, week = (u && u.seven_day) || {};
+  if (!u || !u.available) {
+    return { short: '5h n/a · wk n/a', title: 'Claude plan: 5-hour resets n/a; weekly resets n/a', level: 'na' };
+  }
+  const pcts = [five.pct, week.pct].filter(p => p != null && !isNaN(+p)).map(Number);
+  const max = pcts.length ? Math.max(...pcts) : null;
+  const level = max == null ? 'na' : max >= 90 ? 'hot' : max >= 70 ? 'warn' : 'ok';
+  return {
+    short: `5h ${pctText(five.pct)} · wk ${pctText(week.pct)}`,
+    title: `Claude plan: 5-hour resets ${resetText(five.resets_at)}; weekly resets ${resetText(week.resets_at)}`,
+    level,
+  };
+}
+
+/** Tokens used by the sessions of working agents (sums the per-agent tokens from buildItems). */
+export function activeTokens(items) {
+  return items.filter(i => i.working).reduce((n, i) => n + (+i.tokens || 0), 0);
 }
 
 export function headerCounts(items) {
