@@ -6,6 +6,7 @@
   "type": "module",
   "scripts": {
     "build": "vite build && vite build --config vite.harness.config.js",
+    "icons": "node dev/make-icons.mjs",
     "test": "node --test test/*.test.js && /opt/hermes/.venv/bin/python -I -m unittest discover -s test -p 'test_*.py'"
   },
   "devDependencies": {
