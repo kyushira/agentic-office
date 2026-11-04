@@ -172,6 +172,7 @@ export default function Deck() {
   const [height, setHeight] = useState(600);
   const [, setTick] = useState(0);
   const [usage, setUsage] = useState(null);
+  const [showReason, setShowReason] = useState(false);
   const [standalone] = useState(() => isStandalone(window));
   const [full, setFull] = useState(() => wantsFull(location.search, standalone));
   const timer = useRef(0), alive = useRef(true), liteRef = useRef(lite);
@@ -251,7 +252,8 @@ export default function Deck() {
       <header className="dk-top">
         <span className="dk-count"><i className={'dk-dot' + (counts && counts.working ? ' on' : '')} />
           {counts ? `${counts.working} working · ${counts.idle} idle · ${counts.helpers} helper${counts.helpers === 1 ? '' : 's'}` : 'loading…'}</span>
-        <span className={'dk-usage is-' + ut.level} title={ut.title}>{ut.short}</span>
+        <button className={'dk-usage dk-usage-btn is-' + ut.level} title={ut.title} aria-expanded={showReason}
+          onClick={() => setShowReason(!showReason)}>{ut.short}</button>
         <span className="dk-usage" title="Tokens used in active sessions">{compact(activeTokens(items))} tok</span>
         <span className="dk-grow" />
         {!full && <button className="dk-btn" onClick={enterFull} aria-label="Open fullscreen deck">Fullscreen</button>}
@@ -259,6 +261,7 @@ export default function Deck() {
         <button className={'dk-btn' + (lite ? ' on' : '')} onClick={() => setLite(!lite)} title="Low-power: no animation, refresh every 15s">Lite</button>
         <button className="dk-btn" onClick={load} aria-label="Refresh">↻</button>
       </header>
+      {showReason && ut.reason && <div className="dk-reason">{ut.reason}</div>}
       {error && <div className="dk-err">Can't reach the deck data ({error}). Retrying…</div>}
       <main className="dk-grid">
         {items.map(it => it.type === 'agent'

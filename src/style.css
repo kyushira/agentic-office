@@ -191,4 +191,6 @@ html.ao-full-active { background-color: #0A0A0A !important; }
 .dk-usage.is-warn { color: #FFB020; }
 .dk-usage.is-hot { color: var(--dk-red); }
 .dk-usage.is-na { color: var(--dk-mut); }
+.dk-usage-btn { background: none; border: 0; padding: 0; cursor: pointer; font-family: inherit; }
+.dk-reason { font-size: 11px; color: var(--dk-mut); padding: 0 10px 6px; word-break: break-word; }
 @media (max-width: 420px) { .dk-usage { font-size: 11px; margin-left: 6px; } }

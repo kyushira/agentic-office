@@ -4,9 +4,14 @@ Wraps ``agent.account_usage.fetch_account_usage('anthropic', read_only=True)`` b
 60-second cache (failures are cached too, so a broken credential cannot be hammered).
 Only whitelisted fields leave this module: no tokens, keys, emails or account identity.
 """
+import glob
+import importlib.util
+import os
+import sys
 import threading
 import time
 from datetime import datetime
+from types import SimpleNamespace
 from typing import Callable, Optional
 
 CACHE_SECS = 60.0
@@ -16,20 +21,97 @@ _cache = {"at": None, "result": None}
 # AccountUsageWindow.label values emitted by agent.account_usage for Anthropic.
 _LABELS = {"five_hour": "Current session", "seven_day": "Current week"}
 
+# The plugin that owns the Claude login; its fetch_usage() asks the user's own Claude Code CLI for plan limits.
+PLUGIN_ID = "claude-subscription-directsdk-experimental"
+_PLUGIN_PATTERNS = ("/opt/data/plugins/" + PLUGIN_ID, "/opt/data/profiles/*/plugins/" + PLUGIN_ID)
+_LIMIT_KINDS = {"session": "Current session", "weekly_all": "Current week"}
+_LEGACY_KEYS = (("five_hour", "Current session"), ("seven_day", "Current week"))
+REASON_MAX = 200
 
-def _empty(fetched_at: float) -> dict:
+
+def _clip(reason) -> Optional[str]:
+    if not isinstance(reason, str) or not reason:
+        return None
+    return reason[:REASON_MAX]
+
+
+def _empty(fetched_at: float, reason=None) -> dict:
     return {
         "available": False,
         "five_hour": {"pct": None, "resets_at": None},
         "seven_day": {"pct": None, "resets_at": None},
         "fetched_at": fetched_at,
+        "reason": _clip(reason),
     }
 
 
-def _default_fetch():
-    from agent.account_usage import fetch_account_usage  # lazy: hermes lives outside this plugin
+def _plugin_dir() -> Optional[str]:
+    for pattern in _PLUGIN_PATTERNS:
+        for path in sorted(glob.glob(pattern)):
+            if os.path.isfile(os.path.join(path, "directsdk_setup.py")):
+                return path
+    return None
 
-    return fetch_account_usage("anthropic", read_only=True)
+
+def _load_setup(path: str):
+    spec = importlib.util.spec_from_file_location("agent_office_directsdk_setup",
+                                                  os.path.join(path, "directsdk_setup.py"))
+    module = importlib.util.module_from_spec(spec)
+    # The module's flat fallback imports (`from admission import ...`) resolve only from its own dir,
+    # and they run at load time, so the entry is dropped again straight after.
+    sys.path.insert(0, path)
+    try:
+        spec.loader.exec_module(module)
+    finally:
+        sys.path.remove(path)
+    return module
+
+
+def _pct(value, fraction: bool = False) -> Optional[float]:
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    if value != value or value in (float("inf"), float("-inf")):
+        return None
+    return float(value) * 100.0 if fraction and value <= 1 else float(value)
+
+
+def _when(value) -> Optional[datetime]:
+    if not isinstance(value, str) or not value.strip():
+        return None
+    try:
+        return datetime.fromisoformat(value.strip().replace("Z", "+00:00"))
+    except ValueError:
+        return None
+
+
+def _windows(limits: dict) -> list:
+    """Plan-limits body (`rate_limits`) -> window objects with label/used_percent/reset_at."""
+    out = []
+    entries = limits.get("limits")
+    if isinstance(entries, list):
+        for entry in entries:
+            label = _LIMIT_KINDS.get(entry.get("kind")) if isinstance(entry, dict) else None
+            if label:
+                out.append(SimpleNamespace(label=label, used_percent=_pct(entry.get("percent")),
+                                           reset_at=_when(entry.get("resets_at"))))
+        return out
+    # Older top-level windows: utilization is a 0-1 fraction (same scale rule as the plugin's usage_windows).
+    for key, label in _LEGACY_KEYS:
+        window = limits.get(key)
+        if isinstance(window, dict):
+            out.append(SimpleNamespace(label=label, used_percent=_pct(window.get("utilization"), fraction=True),
+                                       reset_at=_when(window.get("resets_at"))))
+    return out
+
+
+def _default_fetch():
+    path = _plugin_dir()
+    if path is None:
+        return SimpleNamespace(windows=(), unavailable_reason="Claude Subscription DirectSDK plugin not found")
+    limits, reason = _load_setup(path).fetch_usage(timeout=8)
+    if not isinstance(limits, dict):
+        return SimpleNamespace(windows=(), unavailable_reason=reason or "Claude Code returned no plan limits")
+    return SimpleNamespace(windows=_windows(limits), unavailable_reason=None)
 
 
 def _iso(value) -> Optional[str]:
@@ -39,7 +121,7 @@ def _iso(value) -> Optional[str]:
 
 
 def _map(snapshot, fetched_at: float) -> dict:
-    result = _empty(fetched_at)
+    result = _empty(fetched_at, getattr(snapshot, "unavailable_reason", None))
     found = False
     windows = list(getattr(snapshot, "windows", None) or ())
     for key, label in _LABELS.items():
@@ -62,14 +144,12 @@ def _map(snapshot, fetched_at: float) -> dict:
 def _compute(now: float, fetch: Callable) -> dict:
     try:
         snapshot = fetch()
-    except Exception:
-        return _empty(now)
-    if snapshot is None:
-        return _empty(now)
-    try:
+        if snapshot is None:
+            return _empty(now, "usage lookup returned nothing")
         return _map(snapshot, now)
-    except Exception:
-        return _empty(now)
+    except Exception as exc:
+        # Class name only: exception messages can carry paths or account details.
+        return _empty(now, f"usage lookup failed: {type(exc).__name__}")
 
 
 def plan_usage(now: Optional[float] = None, fetch: Optional[Callable] = None) -> dict:

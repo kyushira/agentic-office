@@ -74,8 +74,20 @@ test('usageText: unavailable payload shows n/a and level na', () => {
     const r = usageText(u);
     assert.equal(r.short, '5h n/a · wk n/a');
     assert.equal(r.level, 'na');
-    assert.equal(r.title, 'Claude plan: 5-hour resets n/a; weekly resets n/a');
+    assert.equal(r.title, 'Plan usage n/a: unknown');
+    assert.equal(r.reason, 'unknown');
   }
+});
+
+test('usageText: unavailable payload surfaces its reason in title and reason', () => {
+  const r = usageText({ available: false, reason: 'no Claude subscription login found' });
+  assert.equal(r.title, 'Plan usage n/a: no Claude subscription login found');
+  assert.equal(r.reason, 'no Claude subscription login found');
+  assert.equal(r.level, 'na');
+});
+
+test('usageText: available payload has no reason', () => {
+  assert.equal(usageText({ available: true, five_hour: { pct: 10 }, seven_day: { pct: 20 } }).reason, null);
 });
 
 test('usageText: normal windows round and stay ok below 70%', () => {

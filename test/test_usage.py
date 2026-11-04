@@ -5,6 +5,7 @@ import unittest
 from datetime import datetime, timezone
 from pathlib import Path
 from types import SimpleNamespace
+from unittest.mock import patch
 
 _SRC = Path(__file__).resolve().parent.parent / "plugin" / "agent-office" / "dashboard" / "usage.py"
 _spec = importlib.util.spec_from_file_location("usage", _SRC)
@@ -37,6 +38,7 @@ class PlanUsageTests(unittest.TestCase):
             "five_hour": {"pct": 42.5, "resets_at": RESET_5H.isoformat()},
             "seven_day": {"pct": 77.0, "resets_at": RESET_7D.isoformat()},
             "fetched_at": 1000.0,
+            "reason": None,
         })
 
     def test_raising_fetch_is_unavailable(self):
@@ -49,6 +51,62 @@ class PlanUsageTests(unittest.TestCase):
 
     def test_none_snapshot_is_unavailable(self):
         self.assertFalse(usage.plan_usage(now=1000.0, fetch=lambda: None)["available"])
+
+    def test_unavailable_reason_is_surfaced(self):
+        snap = SimpleNamespace(windows=(), unavailable_reason="no Claude subscription login found (run `claude` and log in)")
+        result = usage.plan_usage(now=1000.0, fetch=lambda: snap)
+        self.assertFalse(result["available"])
+        self.assertEqual(result["reason"], "no Claude subscription login found (run `claude` and log in)")
+
+    def test_long_reason_is_truncated(self):
+        snap = SimpleNamespace(windows=(), unavailable_reason="x" * 500)
+        self.assertEqual(len(usage.plan_usage(now=1000.0, fetch=lambda: snap)["reason"]), 200)
+
+    def test_raising_fetch_reason_is_class_name_only(self):
+        def boom():
+            raise RuntimeError("token=abc123 at /home/user/.claude")
+        result = usage.plan_usage(now=1000.0, fetch=boom)
+        self.assertEqual(result["reason"], "usage lookup failed: RuntimeError")
+        self.assertNotIn("abc123", json.dumps(result))
+
+    def test_default_fetch_maps_plugin_limits(self):
+        limits = {"limits": [
+            {"kind": "session", "percent": 12.5, "resets_at": "2026-11-04T15:00:00Z"},
+            {"kind": "weekly_all", "percent": 80, "resets_at": None},
+            {"kind": "model_x", "percent": 5},
+        ]}
+        fake = SimpleNamespace(fetch_usage=lambda timeout=None: (limits, None))
+        with patch.object(usage, "_plugin_dir", return_value="/nowhere"), \
+                patch.object(usage, "_load_setup", return_value=fake):
+            result = usage.plan_usage(now=1000.0)
+        self.assertTrue(result["available"])
+        self.assertEqual(result["five_hour"]["pct"], 12.5)
+        self.assertEqual(result["five_hour"]["resets_at"], "2026-11-04T15:00:00+00:00")
+        self.assertEqual(result["seven_day"]["pct"], 80.0)
+        self.assertIsNone(result["reason"])
+
+    def test_default_fetch_legacy_fraction_scale(self):
+        limits = {"five_hour": {"utilization": 0.42}, "seven_day": {"utilization": 0.9, "resets_at": "2026-11-09T00:00:00Z"}}
+        fake = SimpleNamespace(fetch_usage=lambda timeout=None: (limits, None))
+        with patch.object(usage, "_plugin_dir", return_value="/nowhere"), \
+                patch.object(usage, "_load_setup", return_value=fake):
+            result = usage.plan_usage(now=1000.0)
+        self.assertAlmostEqual(result["five_hour"]["pct"], 42.0)
+        self.assertAlmostEqual(result["seven_day"]["pct"], 90.0)
+
+    def test_default_fetch_surfaces_plugin_reason(self):
+        fake = SimpleNamespace(fetch_usage=lambda timeout=None: (None, "no Claude subscription login found (run `claude` and log in)"))
+        with patch.object(usage, "_plugin_dir", return_value="/nowhere"), \
+                patch.object(usage, "_load_setup", return_value=fake):
+            result = usage.plan_usage(now=1000.0)
+        self.assertFalse(result["available"])
+        self.assertIn("login", result["reason"])
+
+    def test_default_fetch_without_plugin_says_so(self):
+        with patch.object(usage, "_plugin_dir", return_value=None):
+            result = usage.plan_usage(now=1000.0)
+        self.assertFalse(result["available"])
+        self.assertEqual(result["reason"], "Claude Subscription DirectSDK plugin not found")
 
     def test_pct_is_clamped_to_0_100(self):
         snap = SimpleNamespace(windows=(
@@ -90,6 +148,7 @@ class PlanUsageTests(unittest.TestCase):
         self.assertNotIn("key", dumped.lower())
         self.assertNotIn("secret-principal", dumped)
         self.assertNotIn("identity", dumped)
+        self.assertIn("reason", json.loads(dumped))
 
 
 if __name__ == "__main__":

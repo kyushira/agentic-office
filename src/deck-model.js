@@ -77,11 +77,12 @@ function resetText(ts) {
   return isNaN(d) ? 'n/a' : d.toLocaleString('en-GB', { weekday: 'short', hour: '2-digit', minute: '2-digit' });
 }
 
-/** Claude plan usage for the header: {short, title, level} from the /usage payload; level is ok|warn|hot|na. */
+/** Claude plan usage for the header: {short, title, level, reason} from the /usage payload; level is ok|warn|hot|na; reason is set only when unavailable. */
 export function usageText(u) {
   const five = (u && u.five_hour) || {}, week = (u && u.seven_day) || {};
   if (!u || !u.available) {
-    return { short: '5h n/a · wk n/a', title: 'Claude plan: 5-hour resets n/a; weekly resets n/a', level: 'na' };
+    const reason = (u && u.reason) || 'unknown';
+    return { short: '5h n/a · wk n/a', title: 'Plan usage n/a: ' + reason, level: 'na', reason };
   }
   const pcts = [five.pct, week.pct].filter(p => p != null && !isNaN(+p)).map(Number);
   const max = pcts.length ? Math.max(...pcts) : null;
@@ -90,6 +91,7 @@ export function usageText(u) {
     short: `5h ${pctText(five.pct)} · wk ${pctText(week.pct)}`,
     title: `Claude plan: 5-hour resets ${resetText(five.resets_at)}; weekly resets ${resetText(week.resets_at)}`,
     level,
+    reason: null,
   };
 }
 
