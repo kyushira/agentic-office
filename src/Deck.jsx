@@ -231,6 +231,6 @@ export default function Deck() {
     </div>
   );
   return full
-    ? <div ref={fullRef} className="ao-full" role="region" aria-label="Agent Deck fullscreen">{root}</div>
+    ? <div ref={fullRef} className="ao-full" role="region" aria-label="Agent Deck fullscreen"><i className="ao-edge ao-edge-top" aria-hidden="true" />{root}<i className="ao-edge ao-edge-bot" aria-hidden="true" /></div>
     : root;
 }

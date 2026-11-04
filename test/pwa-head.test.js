@@ -49,7 +49,7 @@ test('headTags returns the 8 expected entries', () => {
   assert.deepEqual(tags[0], { tag: 'link', attrs: { rel: 'manifest', href: `${PWA_BASE}/manifest.json` } });
   assert.deepEqual(tags[1], { tag: 'link', attrs: { rel: 'apple-touch-icon', sizes: '180x180', href: `${PWA_BASE}/icon-180.png` } });
   assert.deepEqual(tags[2], { tag: 'link', attrs: { rel: 'icon', type: 'image/png', sizes: '192x192', href: `${PWA_BASE}/icon-192.png` } });
-  assert.deepEqual(tags[7], { tag: 'meta', attrs: { name: 'theme-color', content: '#0f1115' } });
+  assert.deepEqual(tags[7], { tag: 'meta', attrs: { name: 'theme-color', content: '#0A0A0A' } });
 });
 
 test('installPwaHead on empty head adds 8 tags and a viewport meta', () => {

@@ -12,7 +12,7 @@ export function headTags() {
     { tag: 'meta', attrs: { name: 'mobile-web-app-capable', content: 'yes' } },
     { tag: 'meta', attrs: { name: 'apple-mobile-web-app-status-bar-style', content: 'black-translucent' } },
     { tag: 'meta', attrs: { name: 'apple-mobile-web-app-title', content: 'Deck' } },
-    { tag: 'meta', attrs: { name: 'theme-color', content: '#0f1115' } },
+    { tag: 'meta', attrs: { name: 'theme-color', content: '#0A0A0A' } },
   ];
 }
 

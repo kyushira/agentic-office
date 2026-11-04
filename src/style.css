@@ -162,10 +162,17 @@
 
 /* fullscreen deck mode */
 html.ao-full-active, html.ao-full-active body { overflow: hidden; }
-.ao-full { position: fixed; inset: 0; z-index: 2147483000; overflow: auto; -webkit-overflow-scrolling: touch; background: #0A0A0A;
+.ao-full { position: fixed; inset: 0; z-index: 2147483000; overflow: hidden; -webkit-overflow-scrolling: touch; background: #0A0A0A;
   height: 100vh; height: 100dvh; box-sizing: border-box;
   padding: max(12px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right)) max(12px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left)); }
 html.ao-full-active, html.ao-full-active body { background: #0A0A0A !important; }
 html.ao-full-active [data-ao-full-path] > :not([data-ao-full-path]):not(.ao-full) { display: none !important; }
 html.ao-full-active [data-ao-full-path] { transform: none !important; filter: none !important; backdrop-filter: none !important; perspective: none !important; contain: none !important; will-change: auto !important; }
 
+
+/* solid edge bands: iOS Safari 26 blurs page content behind status bar unless a solid fixed element sits at top edge */
+.ao-edge { position: fixed; left: 0; right: 0; background: #0A0A0A; pointer-events: none; z-index: 2147483001; display: block; }
+.ao-edge-top { top: 0; height: max(12px, env(safe-area-inset-top)); }
+.ao-edge-bot { bottom: 0; height: max(12px, env(safe-area-inset-bottom)); }
+.ao-full > .dk-root { border-radius: 0; }
+html.ao-full-active { background-color: #0A0A0A !important; }

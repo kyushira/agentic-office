@@ -7,8 +7,8 @@
   "display": "fullscreen",
   "display_override": ["fullscreen", "standalone"],
   "orientation": "any",
-  "background_color": "#0f1115",
-  "theme_color": "#0f1115",
+  "background_color": "#0A0A0A",
+  "theme_color": "#0A0A0A",
   "icons": [
     {
       "src": "/dashboard-plugins/agent-office/pwa/icon-192.png",
