@@ -104,11 +104,41 @@ def _windows(limits: dict) -> list:
     return out
 
 
+_BUNDLED_CLAUDE = "/opt/hermes/tools/node-26.12.1-linux-x64/bin/claude"
+_TOOLS_ROOT = "/opt/hermes/tools"
+_TOOLS_GLOB = "node-*/bin/claude"
+
+
+def _candidates(exe: Optional[str] = None) -> list:
+    """Ordered Claude Code paths: pinned bundle, newest bundled node tool, then the sibling tools dir of `exe`."""
+    out = [_BUNDLED_CLAUDE]
+    out += sorted(glob.glob(os.path.join(_TOOLS_ROOT, _TOOLS_GLOB)), reverse=True)
+    # Walk up from the running interpreter (e.g. <root>/.venv/bin/python -> <root>/tools/), max 4 levels.
+    parent = os.path.dirname(os.path.realpath(exe if exe is not None else sys.executable))
+    for _ in range(4):
+        out += sorted(glob.glob(os.path.join(parent, "tools", _TOOLS_GLOB)), reverse=True)
+        up = os.path.dirname(parent)
+        if up == parent:
+            break
+        parent = up
+    return out
+
+
+def _claude_command(candidates: Optional[list] = None, exe: Optional[str] = None) -> Optional[list]:
+    """argv for the bundled Claude Code binary, or None to let fetch_usage() do its own PATH lookup."""
+    if candidates is None:
+        candidates = _candidates(exe)
+    for path in candidates:
+        if os.path.isfile(path) and os.access(path, os.X_OK):
+            return [path]
+    return None
+
+
 def _default_fetch():
     path = _plugin_dir()
     if path is None:
         return SimpleNamespace(windows=(), unavailable_reason="Claude Subscription DirectSDK plugin not found")
-    limits, reason = _load_setup(path).fetch_usage(timeout=8)
+    limits, reason = _load_setup(path).fetch_usage(command=_claude_command(), timeout=8)
     if not isinstance(limits, dict):
         return SimpleNamespace(windows=(), unavailable_reason=reason or "Claude Code returned no plan limits")
     return SimpleNamespace(windows=_windows(limits), unavailable_reason=None)

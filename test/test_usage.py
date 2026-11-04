@@ -75,7 +75,7 @@ class PlanUsageTests(unittest.TestCase):
             {"kind": "weekly_all", "percent": 80, "resets_at": None},
             {"kind": "model_x", "percent": 5},
         ]}
-        fake = SimpleNamespace(fetch_usage=lambda timeout=None: (limits, None))
+        fake = SimpleNamespace(fetch_usage=lambda command=None, timeout=None: (limits, None))
         with patch.object(usage, "_plugin_dir", return_value="/nowhere"), \
                 patch.object(usage, "_load_setup", return_value=fake):
             result = usage.plan_usage(now=1000.0)
@@ -87,7 +87,7 @@ class PlanUsageTests(unittest.TestCase):
 
     def test_default_fetch_legacy_fraction_scale(self):
         limits = {"five_hour": {"utilization": 0.42}, "seven_day": {"utilization": 0.9, "resets_at": "2026-11-09T00:00:00Z"}}
-        fake = SimpleNamespace(fetch_usage=lambda timeout=None: (limits, None))
+        fake = SimpleNamespace(fetch_usage=lambda command=None, timeout=None: (limits, None))
         with patch.object(usage, "_plugin_dir", return_value="/nowhere"), \
                 patch.object(usage, "_load_setup", return_value=fake):
             result = usage.plan_usage(now=1000.0)
@@ -95,7 +95,7 @@ class PlanUsageTests(unittest.TestCase):
         self.assertAlmostEqual(result["seven_day"]["pct"], 90.0)
 
     def test_default_fetch_surfaces_plugin_reason(self):
-        fake = SimpleNamespace(fetch_usage=lambda timeout=None: (None, "no Claude subscription login found (run `claude` and log in)"))
+        fake = SimpleNamespace(fetch_usage=lambda command=None, timeout=None: (None, "no Claude subscription login found (run `claude` and log in)"))
         with patch.object(usage, "_plugin_dir", return_value="/nowhere"), \
                 patch.object(usage, "_load_setup", return_value=fake):
             result = usage.plan_usage(now=1000.0)
@@ -149,6 +149,65 @@ class PlanUsageTests(unittest.TestCase):
         self.assertNotIn("secret-principal", dumped)
         self.assertNotIn("identity", dumped)
         self.assertIn("reason", json.loads(dumped))
+
+
+class ClaudeCommandTests(unittest.TestCase):
+    def setUp(self):
+        import tempfile
+        self._tmp = tempfile.TemporaryDirectory()
+        self.root = Path(self._tmp.name)
+
+    def tearDown(self):
+        self._tmp.cleanup()
+
+    def _exe(self, rel, mode=0o755):
+        p = self.root / rel
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text("#!/bin/sh\n")
+        p.chmod(mode)
+        return str(p)
+
+    def test_first_executable_candidate_wins(self):
+        a = self._exe("a/claude")
+        b = self._exe("b/claude")
+        self.assertEqual(usage._claude_command(candidates=[a, b]), [a])
+
+    def test_non_executable_is_skipped(self):
+        bad = self._exe("bad/claude", mode=0o644)
+        good = self._exe("good/claude")
+        self.assertEqual(usage._claude_command(candidates=[bad, good]), [good])
+
+    def test_none_found_returns_none(self):
+        missing = str(self.root / "nope" / "claude")
+        self.assertIsNone(usage._claude_command(candidates=[missing]))
+        self.assertIsNone(usage._claude_command(candidates=[]))
+
+    def test_sibling_tools_dir_walk_finds_binary(self):
+        target = self._exe("tools/node-1/bin/claude")
+        exe = str(self.root / ".venv" / "bin" / "python")
+        with patch.object(usage, "_BUNDLED_CLAUDE", str(self.root / "missing" / "claude")), \
+                patch.object(usage, "_TOOLS_ROOT", str(self.root / "no-tools")):
+            self.assertEqual(usage._claude_command(exe=exe), [target])
+
+    def test_default_candidates_start_with_pinned_bundle(self):
+        with patch.object(usage, "_TOOLS_ROOT", str(self.root / "no-tools")):
+            cands = usage._candidates(exe=str(self.root / ".venv" / "bin" / "python"))
+        self.assertEqual(cands[0], usage._BUNDLED_CLAUDE)
+
+    def test_default_fetch_passes_command_through(self):
+        seen = {}
+
+        def fake_fetch(command=None, timeout=None):
+            seen["command"] = command
+            seen["timeout"] = timeout
+            return (None, "no Claude subscription login found")
+
+        fake = SimpleNamespace(fetch_usage=fake_fetch)
+        with patch.object(usage, "_plugin_dir", return_value="/nowhere"), \
+                patch.object(usage, "_load_setup", return_value=fake), \
+                patch.object(usage, "_claude_command", return_value=["/x/claude"]):
+            usage.plan_usage(now=1000.0)
+        self.assertEqual(seen, {"command": ["/x/claude"], "timeout": 8})
 
 
 if __name__ == "__main__":
