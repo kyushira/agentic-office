@@ -7,6 +7,8 @@ import {
   withFullParam,
   requestNativeFullscreen,
   exitNativeFullscreen,
+  markFullPath,
+  FULL_PATH_ATTR,
 } from '../src/fullscreen.js';
 
 const mm = (matches) => () => ({ matches });
@@ -147,5 +149,49 @@ describe('exitNativeFullscreen', () => {
   test('throwing exit is swallowed', async () => {
     const doc = { webkitFullscreenElement: {}, webkitExitFullscreen: () => { throw new Error('x'); } };
     await assert.doesNotReject(exitNativeFullscreen(doc));
+  });
+});
+
+describe('markFullPath', () => {
+  const node = (tagName, parentElement = null) => {
+    const attrs = new Map();
+    return {
+      tagName,
+      parentElement,
+      attrs,
+      setAttribute(k, v) { attrs.set(k, v); },
+      removeAttribute(k) { attrs.delete(k); },
+    };
+  };
+  const chain = () => {
+    const html = node('HTML');
+    const body = node('BODY', html);
+    const root = node('DIV', body);
+    const main = node('MAIN', root);
+    const el = node('DIV', main);
+    return { html, body, root, main, el };
+  };
+
+  test('marks ancestors up to body, not el and not html', () => {
+    const { html, body, root, main, el } = chain();
+    markFullPath(el);
+    assert.equal(main.attrs.get(FULL_PATH_ATTR), '');
+    assert.equal(root.attrs.get(FULL_PATH_ATTR), '');
+    assert.equal(body.attrs.get(FULL_PATH_ATTR), '');
+    assert.equal(el.attrs.has(FULL_PATH_ATTR), false);
+    assert.equal(html.attrs.has(FULL_PATH_ATTR), false);
+  });
+
+  test('cleanup removes all marks it added', () => {
+    const { html, body, root, main, el } = chain();
+    const cleanup = markFullPath(el);
+    cleanup();
+    for (const n of [body, root, main, el, html]) assert.equal(n.attrs.has(FULL_PATH_ATTR), false);
+  });
+
+  test('null el returns a no-op cleanup', () => {
+    const cleanup = markFullPath(null);
+    assert.equal(typeof cleanup, 'function');
+    assert.doesNotThrow(() => cleanup());
   });
 });

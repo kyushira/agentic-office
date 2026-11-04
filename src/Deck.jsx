@@ -2,7 +2,7 @@ import { React, useState, useEffect, useRef, fetchJSON, API } from './sdk.js';
 import { ago, compact } from './format.js';
 import { portrait } from './portrait.js';
 import { buildItems, headerCounts, durationText, modelText, modelParts } from './deck-model.js';
-import { isStandalone, wantsFull, withFullParam, requestNativeFullscreen, exitNativeFullscreen } from './fullscreen.js';
+import { isStandalone, wantsFull, withFullParam, requestNativeFullscreen, exitNativeFullscreen, markFullPath } from './fullscreen.js';
 
 const POLL_MS = 5000, POLL_LITE_MS = 15000;
 
@@ -146,6 +146,7 @@ const readLite = () => { try { return localStorage.getItem('agent-deck.lite') ==
 
 export default function Deck() {
   const rootRef = useRef(null);
+  const fullRef = useRef(null);
   const [state, setState] = useState(null);
   const [error, setError] = useState('');
   const [sel, setSel] = useState(null);
@@ -183,6 +184,10 @@ export default function Deck() {
     setFull(false);
     history.replaceState(history.state, '', withFullParam(location.href, false));
   };
+  useEffect(() => {
+    if (!full) return;
+    return markFullPath(fullRef.current);
+  }, [full]);
   useEffect(() => {
     if (!full) return;
     document.documentElement.classList.add('ao-full-active');
@@ -226,6 +231,6 @@ export default function Deck() {
     </div>
   );
   return full
-    ? <div className="ao-full" role="region" aria-label="Agent Deck fullscreen">{root}</div>
+    ? <div ref={fullRef} className="ao-full" role="region" aria-label="Agent Deck fullscreen">{root}</div>
     : root;
 }

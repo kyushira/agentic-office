@@ -53,3 +53,22 @@ export async function exitNativeFullscreen(doc) {
     // ignore
   }
 }
+
+// Attribute marking every ancestor of a fullscreen overlay (up to <html>), so CSS can hide
+// their non-ancestor siblings and drop transforms/filters that would trap position:fixed.
+export const FULL_PATH_ATTR = 'data-ao-full-path';
+
+// Marks el's ancestors (not el itself, not <html>). Returns a cleanup that removes exactly those marks.
+export function markFullPath(el) {
+  if (!el) return () => {};
+  const marked = [];
+  let node = el.parentElement;
+  while (node && node.tagName !== 'HTML') {
+    node.setAttribute(FULL_PATH_ATTR, '');
+    marked.push(node);
+    node = node.parentElement;
+  }
+  return () => {
+    for (const n of marked) n.removeAttribute(FULL_PATH_ATTR);
+  };
+}
