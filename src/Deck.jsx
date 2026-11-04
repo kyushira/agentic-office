@@ -250,16 +250,20 @@ export default function Deck() {
   const root = (
     <div ref={rootRef} className={'dk-root' + (lite ? ' is-lite' : '') + (items.length && items.length <= 6 ? ' is-few' : '')} style={{ height: full ? '100%' : height }}>
       <header className="dk-top">
-        <span className="dk-count"><i className={'dk-dot' + (counts && counts.working ? ' on' : '')} />
-          {counts ? `${counts.working} working · ${counts.idle} idle · ${counts.helpers} helper${counts.helpers === 1 ? '' : 's'}` : 'loading…'}</span>
-        <button className={'dk-usage dk-usage-btn is-' + ut.level} title={ut.title} aria-expanded={showReason}
-          onClick={() => setShowReason(!showReason)}>{ut.short}</button>
-        <span className="dk-usage" title="Tokens used in active sessions">{compact(activeTokens(items))} tok</span>
+        <div className="dk-sum">
+          <span className="dk-count"><i className={'dk-dot' + (counts && counts.working ? ' on' : '')} />
+            <span className="dk-count-txt">{counts ? `${counts.working} working · ${counts.idle} idle · ${counts.helpers} helper${counts.helpers === 1 ? '' : 's'}` : 'loading…'}</span></span>
+          <button className={'dk-usage dk-usage-btn is-' + ut.level} title={ut.title} aria-expanded={showReason}
+            onClick={() => setShowReason(!showReason)}>{ut.short}</button>
+          <span className="dk-usage" title="Tokens used in active sessions">{compact(activeTokens(items))} tok</span>
+        </div>
         <span className="dk-grow" />
-        {!full && <button className="dk-btn" onClick={enterFull} aria-label="Open fullscreen deck">Fullscreen</button>}
-        {full && !standalone && <button className="dk-btn ao-fs-exit" onClick={exitFull} aria-label="Exit fullscreen deck">Exit</button>}
-        <button className={'dk-btn' + (lite ? ' on' : '')} onClick={() => setLite(!lite)} title="Low-power: no animation, refresh every 15s">Lite</button>
-        <button className="dk-btn" onClick={load} aria-label="Refresh">↻</button>
+        <div className="dk-acts">
+          {!full && <button className="dk-btn" onClick={enterFull} aria-label="Open fullscreen deck">Fullscreen</button>}
+          {full && !standalone && <button className="dk-btn ao-fs-exit" onClick={exitFull} aria-label="Exit fullscreen deck">Exit</button>}
+          <button className={'dk-btn' + (lite ? ' on' : '')} onClick={() => setLite(!lite)} title="Low-power: no animation, refresh every 15s">Lite</button>
+          <button className="dk-btn" onClick={load} aria-label="Refresh">↻</button>
+        </div>
       </header>
       {showReason && ut.reason && <div className="dk-reason">{ut.reason}</div>}
       {error && <div className="dk-err">Can't reach the deck data ({error}). Retrying…</div>}

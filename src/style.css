@@ -12,11 +12,15 @@
 .dk-root button { font: inherit; color: inherit; cursor: pointer; }
 .dk-grow { flex: 1; min-width: 0; }
 
-.dk-top { display: flex; align-items: center; gap: 6px; padding: 8px 10px; flex: none; }
-.dk-count { font-size: 12px; color: var(--dk-ink); font-weight: 600; display: flex; align-items: center; gap: 7px; letter-spacing: 0; }
+.dk-top { display: flex; align-items: center; gap: 6px; padding: 8px 10px; flex: none; background: #0A0A0A; opacity: 1; flex-wrap: nowrap; }
+.dk-sum { display: flex; align-items: center; gap: 8px; min-width: 0; flex: 0 1 auto; white-space: nowrap; overflow: hidden; }
+.dk-count { font-size: 12px; color: var(--dk-ink); font-weight: 600; display: flex; align-items: center; gap: 7px; letter-spacing: 0; white-space: nowrap; min-width: 0; flex: 0 1 auto; overflow: hidden; }
+.dk-count-txt { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.dk-count .dk-dot { flex: none; }
+.dk-acts { display: flex; gap: 6px; flex: none; align-items: center; }
 .dk-dot { width: 7px; height: 7px; background: #444; display: inline-block; }
 .dk-dot.on { background: var(--dk-hot); box-shadow: 0 0 8px var(--dk-hot); }
-.dk-btn { background: var(--dk-tile); border: 1px solid #3A3A3A; border-radius: 6px; min-width: 34px; height: 30px; padding: 0 9px; font-size: 12px; color: #E5E5E5; box-shadow: none; text-shadow: none; }
+.dk-btn { background: var(--dk-tile); border: 1px solid #3A3A3A; border-radius: 6px; min-width: 44px; height: 32px; padding: 0 12px; font-size: 12px; line-height: 1; box-sizing: border-box; display: inline-flex; align-items: center; justify-content: center; white-space: nowrap; opacity: 1; color: #E5E5E5; box-shadow: none; text-shadow: none; }
 .dk-btn.on { color: var(--dk-hot); border-color: var(--dk-dim); }
 .dk-err { margin: 0 10px 8px; padding: 8px 10px; border: 1px solid var(--dk-dim); border-radius: 6px; color: #ffb59a; font-size: 12px; }
 
@@ -187,10 +191,16 @@ html.ao-full-active { background-color: #0A0A0A !important; }
 .dk-top .dk-dot.on { box-shadow: none; }
 .dk-top, .dk-top * { text-shadow: none !important; filter: none !important; backdrop-filter: none !important; }
 
-.dk-usage { font-size: 12px; font-weight: 600; color: var(--dk-ink); white-space: nowrap; margin-left: 10px; }
+.dk-usage { font-size: 12px; font-weight: 600; color: var(--dk-ink); white-space: nowrap; }
 .dk-usage.is-warn { color: #FFB020; }
 .dk-usage.is-hot { color: var(--dk-red); }
 .dk-usage.is-na { color: var(--dk-mut); }
 .dk-usage-btn { background: none; border: 0; padding: 0; cursor: pointer; font-family: inherit; }
 .dk-reason { font-size: 11px; color: var(--dk-mut); padding: 0 10px 6px; word-break: break-word; }
-@media (max-width: 420px) { .dk-usage { font-size: 11px; margin-left: 6px; } }
+@media (max-width: 520px) {
+  .dk-top { flex-wrap: wrap; row-gap: 6px; }
+  .dk-sum { flex: 1 1 100%; }
+  .dk-top > .dk-grow { display: none; }
+  .dk-acts { flex: 1 1 100%; justify-content: flex-end; }
+  .dk-count, .dk-usage { font-size: 11px; }
+}
