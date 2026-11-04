@@ -1,5 +1,6 @@
 /* Agent Deck — every rule scoped under .dk-root so the dashboard is untouched. */
 .dk-root {
+  -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; text-rendering: optimizeLegibility; -webkit-text-size-adjust: 100%; text-size-adjust: 100%;
   --dk-bg: #0A0A0A; --dk-tile: #151515; --dk-line: #2A2A2A; --dk-ink: #F5F5F5; --dk-mut: #A3A3A3;
   --dk-hot: #FF5A1F; --dk-red: #FF2D2D; --dk-dim: #5A2614;
   --dk-mono: "JetBrains Mono", "SF Mono", ui-monospace, Menlo, Consolas, monospace;
@@ -12,10 +13,10 @@
 .dk-grow { flex: 1; min-width: 0; }
 
 .dk-top { display: flex; align-items: center; gap: 6px; padding: 8px 10px; flex: none; }
-.dk-count { font-size: 12px; color: var(--dk-mut); display: flex; align-items: center; gap: 7px; letter-spacing: .02em; }
+.dk-count { font-size: 12px; color: var(--dk-ink); font-weight: 600; display: flex; align-items: center; gap: 7px; letter-spacing: 0; }
 .dk-dot { width: 7px; height: 7px; background: #444; display: inline-block; }
 .dk-dot.on { background: var(--dk-hot); box-shadow: 0 0 8px var(--dk-hot); }
-.dk-btn { background: var(--dk-tile); border: 1px solid var(--dk-line); border-radius: 6px; min-width: 34px; height: 30px; padding: 0 9px; font-size: 12px; color: var(--dk-mut); }
+.dk-btn { background: var(--dk-tile); border: 1px solid #3A3A3A; border-radius: 6px; min-width: 34px; height: 30px; padding: 0 9px; font-size: 12px; color: #E5E5E5; box-shadow: none; text-shadow: none; }
 .dk-btn.on { color: var(--dk-hot); border-color: var(--dk-dim); }
 .dk-err { margin: 0 10px 8px; padding: 8px 10px; border: 1px solid var(--dk-dim); border-radius: 6px; color: #ffb59a; font-size: 12px; }
 
@@ -162,7 +163,7 @@
 
 /* fullscreen deck mode */
 html.ao-full-active, html.ao-full-active body { overflow: hidden; }
-.ao-full { position: fixed; inset: 0; z-index: 2147483000; overflow: hidden; -webkit-overflow-scrolling: touch; background: #0A0A0A;
+.ao-full { position: fixed; inset: 0; z-index: 2147483000; overflow: hidden; background: #0A0A0A;
   height: 100vh; height: 100dvh; box-sizing: border-box;
   padding: max(12px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right)) max(12px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left)); }
 html.ao-full-active, html.ao-full-active body { background: #0A0A0A !important; }
@@ -176,3 +177,5 @@ html.ao-full-active [data-ao-full-path] { transform: none !important; filter: no
 .ao-edge-bot { bottom: 0; height: max(12px, env(safe-area-inset-bottom)); }
 .ao-full > .dk-root { border-radius: 0; }
 html.ao-full-active { background-color: #0A0A0A !important; }
+.dk-top .dk-dot.on { box-shadow: none; }
+.dk-top, .dk-top * { text-shadow: none !important; filter: none !important; backdrop-filter: none !important; }

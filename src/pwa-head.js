@@ -10,7 +10,7 @@ export function headTags() {
     { tag: 'link', attrs: { rel: 'icon', type: 'image/png', sizes: '192x192', href: `${PWA_BASE}/icon-192.png` } },
     { tag: 'meta', attrs: { name: 'apple-mobile-web-app-capable', content: 'yes' } },
     { tag: 'meta', attrs: { name: 'mobile-web-app-capable', content: 'yes' } },
-    { tag: 'meta', attrs: { name: 'apple-mobile-web-app-status-bar-style', content: 'black-translucent' } },
+    { tag: 'meta', attrs: { name: 'apple-mobile-web-app-status-bar-style', content: 'black' } },
     { tag: 'meta', attrs: { name: 'apple-mobile-web-app-title', content: 'Deck' } },
     { tag: 'meta', attrs: { name: 'theme-color', content: '#0A0A0A' } },
   ];
