@@ -159,3 +159,10 @@
 .dk-root:not(.is-lite) .dk-sprite.is-work { animation: dk-bob .5s steps(2, jump-none) infinite alternate; }
 @keyframes dk-bob { from { transform: translateY(0); } to { transform: translateY(3%); } }
 .dk-tile.is-pressed .dk-sprite { filter: none; }
+
+/* fullscreen deck mode */
+html.ao-full-active, html.ao-full-active body { overflow: hidden; }
+.ao-full { position: fixed; inset: 0; z-index: 2147483000; overflow: auto; -webkit-overflow-scrolling: touch; background: #0A0A0A;
+  height: 100vh; height: 100dvh; box-sizing: border-box;
+  padding: max(12px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right)) max(12px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left)); }
+
