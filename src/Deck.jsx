@@ -1,7 +1,7 @@
 import { React, useState, useEffect, useRef, fetchJSON, API, USAGE_API, SESSION_API } from './sdk.js';
 import { ago, compact } from './format.js';
 import { portrait } from './portrait.js';
-import { buildItems, headerCounts, durationText, modelText, modelParts, usageText, meterLevel, activeTokens, currentSessionId, eventLabel, detailRows, traceModel, newToolCalls, countStep, todayParts, COUNT_MS, newWalks, walkLabel, toolRing, newBrainTrips, brainCounts, brainText, brainNotes } from './deck-model.js';
+import { buildItems, headerCounts, durationText, modelText, modelParts, usageText, meterLevel, activeTokens, currentSessionId, eventLabel, detailRows, traceModel, newToolCalls, countStep, todayParts, COUNT_MS, newWalks, walkLabel, toolRing, newBrainTrips, brainCounts, brainText, brainNotes, timelineLanes } from './deck-model.js';
 import { isStandalone, wantsFull, withFullParam, requestNativeFullscreen, exitNativeFullscreen, markFullPath } from './fullscreen.js';
 
 const POLL_MS = 5000, POLL_LITE_MS = 15000, DETAIL_MS = 5000;
@@ -343,6 +343,66 @@ function Sheet({ children, onClose }) {
 }
 
 const readLite = () => { try { return localStorage.getItem('agent-deck.lite') === '1'; } catch (e) { return false; } };
+const readView = () => { try { return localStorage.getItem('agent-deck.view') === 'today' ? 'today' : 'deck'; } catch (e) { return 'deck'; } };
+
+const TL_PX = 72, TL_LABEL = 84;   // px per hour; width of the sticky lane-label column (px)
+
+/**
+ * "Today" view: one swim-lane per agent from local midnight to now, scrolled so the now-line is in view.
+ * Bars come from timelineLanes(); a bar opens that agent's sheet. The now-line and live bars move by
+ * transform on each render (the 15s tick in Deck). `ready` is set after the first frame so the initial
+ * placement does not animate in from midnight.
+ */
+function Timeline({ tl, onPick }) {
+  const scroll = useRef(null), placed = useRef(false);
+  const [ready, setReady] = useState(false);
+  useEffect(() => { const r = requestAnimationFrame(() => requestAnimationFrame(() => setReady(true))); return () => cancelAnimationFrame(r); }, []);
+  const has = !!tl;
+  useEffect(() => {
+    const el = scroll.current;
+    if (!el || placed.current) return;
+    placed.current = true;
+    el.scrollLeft = Math.max(0, TL_LABEL + tl.nowH * TL_PX - el.clientWidth * 0.75);
+  }, [has]);
+  if (!tl) return <div className="dk-tl-none" role="status">loading…</div>;
+  if (!tl.data) return <div className="dk-tl-none" role="status">no data</div>;
+  const W = Math.round(tl.endH * TL_PX);
+  const hours = Array.from({ length: Math.floor(tl.nowH) + 1 }, (_, h) => h);
+  return (
+    <div className={'dk-tl' + (ready ? ' is-ready' : '')} style={{ '--dk-tl-label': TL_LABEL + 'px' }} role="region" aria-label="Sessions today">
+      <div className="dk-tl-scroll" ref={scroll}>
+        <div className="dk-tl-content" style={{ width: TL_LABEL + W }}>
+          <div className="dk-tl-axis">
+            <span className="dk-tl-corner" />
+            <div className="dk-tl-track" style={{ width: W }}>
+              {hours.map(h => <span key={h} className="dk-tl-tick" style={{ left: h * TL_PX }}>{String(h).padStart(2, '0')}</span>)}
+            </div>
+          </div>
+          {tl.lanes.map(l => (
+            <div key={l.id} className="dk-tl-lane" style={{ '--dk-c': l.color }} role="group" aria-label={`${l.name}, sessions today`}>
+              <span className="dk-tl-name" title={l.name}>{l.name}</span>
+              <div className="dk-tl-track" style={{ width: W }}>
+                {l.empty && <span className="dk-tl-empty">no sessions today</span>}
+                {l.bars.map(b => {
+                  // A live bar is drawn at full day width and scaled to its share, so the 15s tick only moves transform.
+                  const span = Math.max(b.x1 - b.x0, 0), full = Math.max(tl.dayH - b.x0, 0.01);
+                  const style = b.live
+                    ? { left: b.x0 * TL_PX, width: full * TL_PX, transform: `scaleX(${span / full})` }
+                    : { left: b.x0 * TL_PX, width: Math.max(span * TL_PX, 3) };
+                  return (
+                    <button key={b.id} type="button" className={'dk-tl-bar' + (b.live ? ' is-live' : '')} style={style}
+                      onClick={() => onPick(l.id)} aria-label={b.aria} title={b.aria} />
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+          <i className="dk-tl-now" aria-hidden="true" style={{ transform: `translateX(${tl.nowH * TL_PX}px)` }} />
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export default function Deck() {
   const rootRef = useRef(null);
@@ -351,6 +411,7 @@ export default function Deck() {
   const [error, setError] = useState('');
   const [sel, setSel] = useState(null);
   const [lite, setLite] = useState(readLite);
+  const [view, setView] = useState(readView);                           // 'deck' grid or 'today' timeline
   const [height, setHeight] = useState(600);
   const [, setTick] = useState(0);
   const [usage, setUsage] = useState(null);
@@ -381,6 +442,7 @@ export default function Deck() {
   };
   useEffect(() => { alive.current = true; load(); return () => { alive.current = false; clearTimeout(timer.current); }; }, []);
   useEffect(() => { try { localStorage.setItem('agent-deck.lite', lite ? '1' : '0'); } catch (e) { /* private mode */ } }, [lite]);
+  useEffect(() => { try { localStorage.setItem('agent-deck.view', view); } catch (e) { /* private mode */ } }, [view]);
   useEffect(() => {
     const size = () => { const r = rootRef.current; if (r) setHeight(Math.max(360, window.innerHeight - Math.max(0, r.getBoundingClientRect().top) - 6)); };
     size(); window.addEventListener('resize', size);
@@ -472,6 +534,7 @@ export default function Deck() {
   }, [full, standalone, sel]);
 
   const now = Date.now() / 1000;
+  const tl = view === 'today' && state ? timelineLanes(state, now) : null;
   const items = state ? buildItems(state, now) : [];
   const counts = state ? headerCounts(items) : null;
   const picked = items.find(i => i.key === sel) || null;
@@ -508,6 +571,20 @@ export default function Deck() {
         </div>
         <span className="dk-grow" />
         <div className="dk-acts">
+          <div className="dk-views" role="tablist" aria-label="View"
+            onKeyDown={e => {
+              if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+              e.preventDefault();
+              const next = view === 'deck' ? 'today' : 'deck';
+              setView(next);
+              const tabs = e.currentTarget.querySelectorAll('[role="tab"]');
+              (next === 'deck' ? tabs[0] : tabs[1]).focus();
+            }}>
+            <button role="tab" id="dk-tab-deck" aria-selected={view === 'deck'} aria-controls="dk-view" tabIndex={view === 'deck' ? 0 : -1}
+              className={'dk-btn' + (view === 'deck' ? ' on' : '')} onClick={() => setView('deck')}>Deck</button>
+            <button role="tab" id="dk-tab-today" aria-selected={view === 'today'} aria-controls="dk-view" tabIndex={view === 'today' ? 0 : -1}
+              className={'dk-btn' + (view === 'today' ? ' on' : '')} onClick={() => setView('today')}>Today</button>
+          </div>
           {!full && <button className="dk-btn" onClick={enterFull} aria-label="Open fullscreen deck">Fullscreen</button>}
           {full && !standalone && <button className="dk-btn ao-fs-exit" onClick={exitFull} aria-label="Exit fullscreen deck">Exit</button>}
           <button className={'dk-btn' + (lite ? ' on' : '')} onClick={() => setLite(!lite)} title="Low-power: no animation, refresh every 15s">Lite</button>
@@ -529,16 +606,18 @@ export default function Deck() {
             <p className="dk-note dk-uscope">Claude plan usage, account-wide (not per agent).</p>
           </div>)}
       {error && <div className="dk-err">Can't reach the deck data ({error}). Retrying…</div>}
-      <main ref={gridRef} className="dk-grid">
-        {items.map(it => it.type === 'agent'
-          ? <AgentTile key={it.key} it={it} pressed={it.key === sel} blip={blips[it.agent.id] || 0} still={lite || hidden} onPick={() => setSel(it.key)}
-              setRef={el => { setTileRef(it.agent.id, el); }} pulses={brainPulses[it.agent.id]} />
-          : <HelperTile key={it.key} it={it} pressed={it.key === sel} onPick={() => setSel(it.key)} />)}
-        {!state && !error && Array.from({ length: 4 }, (_, i) => <div key={i} className="dk-tile is-ghost" />)}
-        <div className="dk-flights" aria-hidden="true">
-          {flights.map(f => <FlightLayer key={f.key} f={f} />)}
-        </div>
-      </main>
+      {view === 'today'
+        ? <div id="dk-view" role="tabpanel" aria-labelledby="dk-tab-today" className="dk-panel"><Timeline tl={tl} onPick={id => setSel('a:' + id)} /></div>
+        : <main id="dk-view" role="tabpanel" aria-labelledby="dk-tab-deck" ref={gridRef} className="dk-grid">
+            {items.map(it => it.type === 'agent'
+              ? <AgentTile key={it.key} it={it} pressed={it.key === sel} blip={blips[it.agent.id] || 0} still={lite || hidden} onPick={() => setSel(it.key)}
+                  setRef={el => { setTileRef(it.agent.id, el); }} pulses={brainPulses[it.agent.id]} />
+              : <HelperTile key={it.key} it={it} pressed={it.key === sel} onPick={() => setSel(it.key)} />)}
+            {!state && !error && Array.from({ length: 4 }, (_, i) => <div key={i} className="dk-tile is-ghost" />)}
+            <div className="dk-flights" aria-hidden="true">
+              {flights.map(f => <FlightLayer key={f.key} f={f} />)}
+            </div>
+          </main>}
       {picked && <Sheet onClose={() => setSel(null)}>
         {picked.type === 'agent'
           ? <AgentSheet key={picked.key} it={picked} sessions={(state.sessions || {})[picked.agent.id] || []} now={now}

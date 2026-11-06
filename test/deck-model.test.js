@@ -1,6 +1,15 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { buildItems, headerCounts, durationText, modelText, modelParts, usageText, meterLevel, activeTokens, currentSessionId, eventLabel, detailRows, traceModel, newToolCalls, countStep, todayParts, newWalks, walkLabel, toolRing, newBrainTrips, brainCounts, brainText, brainNotes } from '../src/deck-model.js';
+import { buildItems, headerCounts, durationText, modelText, modelParts, usageText, meterLevel, activeTokens, currentSessionId, eventLabel, detailRows, traceModel, newToolCalls, countStep, todayParts, newWalks, walkLabel, toolRing, newBrainTrips, brainCounts, brainText, brainNotes, timelineLanes, localMidnight } from '../src/deck-model.js';
+
+// Local-time helper: the timeline clock is local, so fixtures are built in local time too.
+const at = (h, m = 0) => new Date(2026, 10, 6, h, m).getTime() / 1000;
+const tlNow = at(10, 0);
+const tlDay = localMidnight(tlNow);
+const tlState = (sessions, agents) => ({
+  agents: agents || [{ id: 'dev', name: 'Dev', color: '#38D6F0' }, { id: 'ash', name: 'Ash', color: '#A0A0A0' }],
+  sessions,
+});
 
 const now = 1_800_000_000;
 const state = {
@@ -468,4 +477,80 @@ test('brainNotes: a count when present, null when missing, non-numeric or negati
   assert.equal(brainNotes(null), null);
   assert.equal(brainNotes({ notes: 'many' }), null);
   assert.equal(brainNotes({ notes: -1 }), null);
+});
+
+test('timeline: a session that started before midnight is clipped to midnight', () => {
+  // 23:00 the day before, ending 02:00 today
+  const s = { id: 's1', title: 'Overnight', status: 'done', started: tlDay - 3600, ended: at(2, 0), at: at(2, 0) };
+  const m = timelineLanes(tlState({ dev: [s] }), tlNow, tlDay);
+  const bar = m.lanes[0].bars[0];
+  assert.equal(bar.x0, 0);
+  assert.equal(bar.x1, 2);
+  assert.equal(bar.live, false);
+  assert.equal(bar.aria, 'Dev, Overnight, 00:00–02:00');
+});
+
+test('timeline: a working session runs to now and is live', () => {
+  const s = { id: 's2', title: '  Build the deck  ', status: 'working', started: at(9, 12), at: tlNow - 5, ended: null };
+  const m = timelineLanes(tlState({ dev: [s] }), tlNow, tlDay);
+  const bar = m.lanes[0].bars[0];
+  assert.ok(Math.abs(bar.x0 - 9.2) < 1e-9);
+  assert.equal(bar.x1, m.nowH);
+  assert.equal(m.nowH, 10);
+  assert.equal(bar.live, true);
+  assert.equal(bar.title, 'Build the deck');
+  assert.equal(bar.aria, 'Dev, Build the deck, 09:12–now');
+});
+
+test('timeline: a finished or idle bar ends at ended, else at, and never after now', () => {
+  const done = { id: 'd', title: 'Done one', status: 'done', started: at(8, 0), ended: at(9, 30), at: at(9, 30) };
+  const idle = { id: 'i', title: 'Idle one', status: 'idle', started: at(7, 0), ended: null, at: at(8, 0) };
+  const m = timelineLanes(tlState({ dev: [done, idle] }), tlNow, tlDay);
+  const first = m.lanes[0].bars.find(b => b.id === 'd');
+  const second = m.lanes[0].bars.find(b => b.id === 'i');
+  assert.equal(second.x0, 7);
+  assert.equal(second.x1, 8);
+  assert.equal(first.x1, 9.5);
+  assert.equal(first.aria, 'Dev, Done one, 08:00–09:30');
+});
+
+test('timeline: a session that ended before midnight is skipped', () => {
+  const old = { id: 'o', title: 'Yesterday', status: 'done', started: tlDay - 7200, ended: tlDay - 100, at: tlDay - 100 };
+  const m = timelineLanes(tlState({ dev: [old] }), tlNow, tlDay);
+  assert.equal(m.lanes[0].bars.length, 0);
+  assert.equal(m.lanes[0].empty, true);
+});
+
+test('timeline: a session with no started time is skipped, others still drawn', () => {
+  const noStart = { id: 'n', title: 'No start', status: 'done', started: null, ended: at(9, 0), at: at(9, 0) };
+  const bad = { id: 'b', title: 'Bad start', status: 'done', started: 'soon', ended: at(9, 0), at: at(9, 0) };
+  const ok = { id: 'k', title: 'Fine', status: 'done', started: at(8, 0), ended: at(9, 0), at: at(9, 0) };
+  const m = timelineLanes(tlState({ dev: [noStart, bad, ok] }), tlNow, tlDay);
+  assert.deepEqual(m.lanes[0].bars.map(b => b.id), ['k']);
+});
+
+test('timeline: lanes follow agent order, empty lanes are flagged, no sessions at all is data false', () => {
+  const none = timelineLanes(tlState({}), tlNow, tlDay);
+  assert.equal(none.data, false);
+  assert.deepEqual(none.lanes.map(l => [l.id, l.empty, l.bars.length]), [['dev', true, 0], ['ash', true, 0]]);
+  assert.equal(none.lanes[0].color, '#38D6F0');
+  const some = timelineLanes(tlState({ ash: [] }), tlNow, tlDay);
+  assert.equal(some.data, true, 'an empty list still counts as data');
+  assert.deepEqual(some.lanes.map(l => l.name), ['Dev', 'Ash']);
+  const noState = timelineLanes(null, tlNow, tlDay);
+  assert.deepEqual(noState.lanes, []);
+  assert.equal(noState.data, false);
+});
+
+test('timeline: bars are sorted by start and the track ends just after now', () => {
+  const a = { id: 'a', title: 'Late', status: 'done', started: at(9, 0), ended: at(9, 30), at: at(9, 30) };
+  const b = { id: 'b', title: 'Early', status: 'done', started: at(7, 0), ended: at(7, 45), at: at(7, 45) };
+  const m = timelineLanes(tlState({ dev: [a, b] }), tlNow, tlDay);
+  assert.deepEqual(m.lanes[0].bars.map(x => x.id), ['b', 'a']);
+  assert.ok(m.endH > m.nowH && m.endH - m.nowH <= 0.5);
+});
+
+test('localMidnight: the local midnight at or before a time', () => {
+  assert.equal(localMidnight(at(15, 30)), at(0, 0));
+  assert.equal(localMidnight(at(0, 0)), at(0, 0));
 });

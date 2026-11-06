@@ -351,6 +351,35 @@ html.ao-full-active { background-color: #0B0E11 !important; }
 .dk-tile.is-pressed .dk-brain-core, .dk-tile.is-pressed .dk-brain-pulse.is-write { background: var(--dk-on-hot); }
 .dk-tile.is-pressed .dk-brain-pulse.is-read { border-color: var(--dk-on-hot); }
 
+/* view switch (Deck / Today) in the header: two .dk-btn tabs; the selected one carries .on */
+.dk-views { display: inline-flex; gap: 6px; }
+.dk-panel { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+
+/* Today timeline: one swim-lane per agent from local midnight to now. Horizontal scroll (touch swipe) with the
+   lane labels sticky on the left. Bars are plain positioned boxes; the now-line and live bars move by transform only. */
+.dk-tl { flex: 1; min-height: 0; display: flex; flex-direction: column; padding: 6px 8px 10px; }
+.dk-tl-none { flex: 1; display: grid; place-items: center; color: var(--dk-mut); font-size: 12px; }
+.dk-tl-scroll { flex: 1; min-height: 0; overflow: auto; overscroll-behavior: contain; position: relative; scrollbar-width: thin; }
+.dk-tl-content { position: relative; min-height: 100%; }
+.dk-tl-axis { position: sticky; top: 0; z-index: 3; display: flex; height: 22px; background: var(--dk-bg); border-bottom: 1px solid var(--dk-line); }
+.dk-tl-corner { position: sticky; left: 0; z-index: 4; flex: none; width: var(--dk-tl-label); background: var(--dk-bg); }
+.dk-tl-track { position: relative; flex: none; overflow: hidden; }
+.dk-tl-tick { position: absolute; top: 0; bottom: 0; padding: 5px 0 0 4px; border-left: 1px solid var(--dk-rule); font-size: 9px; line-height: 1; color: var(--dk-faint); font-variant-numeric: tabular-nums; }
+.dk-tl-lane { display: flex; height: 42px; border-bottom: 1px solid var(--dk-rule); }
+.dk-tl-lane .dk-tl-track { height: 100%; }
+.dk-tl-name { position: sticky; left: 0; z-index: 2; flex: none; width: var(--dk-tl-label); display: flex; align-items: center; padding: 0 8px; background: var(--dk-bg);
+  border-left: 3px solid var(--dk-c); font-size: 11px; font-weight: 700; color: var(--dk-ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dk-tl-empty { position: absolute; left: 6px; top: 50%; transform: translateY(-50%); font-size: 10px; color: var(--dk-faint); white-space: nowrap; }
+.dk-tl-bar { position: absolute; top: 10px; height: 22px; min-width: 3px; padding: 0; border: 1px solid color-mix(in srgb, var(--dk-c) 70%, transparent); border-radius: 3px;
+  background: color-mix(in srgb, var(--dk-c) 28%, transparent); transform-origin: 0 50%; }
+.dk-tl-bar.is-live { background: color-mix(in srgb, var(--dk-c) 55%, transparent); box-shadow: 0 0 6px -2px var(--dk-glow); }
+.dk-tl-bar:hover { border-color: var(--dk-c); }
+.dk-tl-now { position: absolute; left: var(--dk-tl-label); top: 0; bottom: 0; width: 1px; z-index: 1; background: var(--dk-hot); box-shadow: 0 0 6px var(--dk-glow); pointer-events: none; }
+/* the now-line and live bars glide between 15s ticks; they start in place (.is-ready is set after the first frame) */
+.dk-root:not(.is-lite) .dk-tl.is-ready .dk-tl-now { transition: transform var(--dk-t-slow) linear; }
+.dk-root:not(.is-lite) .dk-tl.is-ready .dk-tl-bar.is-live { transition: transform var(--dk-t-slow) linear; }
+@media (max-width: 520px) { .dk-views .dk-btn { padding: 0 8px; min-width: 0; } }
+
 /* motion: state colour changes only, no looping meters; reduced motion keeps every state visible without animation */
 @media (prefers-reduced-motion: reduce) {
   .dk-root *, .dk-root *::before, .dk-root *::after {
@@ -365,6 +394,7 @@ html.ao-full-active { background-color: #0B0E11 !important; }
   .dk-root .dk-ring-seg, .dk-root .dk-ring-arc.is-active { animation: none !important; }   /* ring is static; running tool keeps full opacity */
   .dk-root .dk-ring-orbit { animation: none !important; }                       /* marker stays put at 12 o'clock */
   .dk-root .dk-brain-pulse { display: none !important; }                        /* no fly-in; the static node still shows reads and writes */
+  .dk-root .dk-tl-now, .dk-root .dk-tl-bar.is-live { transition: none !important; }   /* timeline: now-line and live bars jump to their place */
 }
 
 /* tab hidden: pause every animation (reused by later features); the .dk-root gets is-hidden from Deck() */

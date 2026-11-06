@@ -564,5 +564,43 @@ class AllWalksTests(unittest.TestCase):
             self.assertEqual(walks[0]["kind"], "brief")  # newest copy kept
 
 
+DECK_SCHEMA = """
+    create table sessions (id text primary key, source text, title text, display_name text, model text,
+                           started_at real, ended_at real, parent_session_id text, last_activity_at real,
+                           last_activity_description text, input_tokens int, output_tokens int,
+                           cache_read_tokens int, cache_write_tokens int);
+    create table messages (id integer primary key, session_id text, role text, content text,
+                           tool_calls text, tool_name text, timestamp real);
+"""
+
+
+class DeckTileTimesTests(unittest.TestCase):
+    def test_tiles_carry_started_and_ended(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            db = sqlite3.connect(str(root / "state.db"))
+            db.executescript(DECK_SCHEMA)
+            db.execute("insert into sessions (id, source, title, model, started_at, ended_at, last_activity_at) "
+                       "values ('done1', 'chat', 'Finished work', 'claude-sonnet', ?, ?, ?)",
+                       (NOW - 7200, NOW - 3600, NOW - 3600))
+            db.execute("insert into sessions (id, source, title, model, started_at, ended_at, last_activity_at) "
+                       "values ('live1', 'chat', 'Live work', 'claude-sonnet', ?, NULL, ?)",
+                       (NOW - 100, NOW - 10))
+            db.commit()
+            db.close()
+            tiles = collect.deck_tiles(root, [{"id": "default", "name": "Ash"}], NOW)["default"]
+            by_title = {t["title"]: t for t in tiles}
+            done, live = by_title["Finished work"], by_title["Live work"]
+            self.assertEqual(done["started"], NOW - 7200)
+            self.assertEqual(done["ended"], NOW - 3600)
+            self.assertEqual(done["status"], "done")
+            self.assertEqual(live["started"], NOW - 100)
+            self.assertIsNone(live["ended"])
+            self.assertEqual(live["status"], "working")
+            for t in tiles:
+                self.assertIn("started", t)
+                self.assertIn("ended", t)
+
+
 if __name__ == "__main__":
     unittest.main()

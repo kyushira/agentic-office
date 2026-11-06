@@ -578,7 +578,8 @@ def context_window(model: str | None) -> int | None:
 def deck_tiles(root: Path, agents: list[dict], now: float) -> dict[str, list[dict]]:
     """One tile per recent session across all profiles, plus running helpers.
 
-    Exported per tile: title (trimmed), agent, platform, status, last activity, a context estimate
+    Exported per tile: title (trimmed), agent, platform, status, last activity, started/ended (unix s or None,
+    for the Today timeline), a context estimate
     (sum of the live transcript's length / 3.5 + a fixed system-prompt allowance) and token totals.
     Message text is only measured (length()), never read out.
     """
@@ -603,7 +604,7 @@ def deck_tiles(root: Path, agents: list[dict], now: float) -> dict[str, list[dic
             except sqlite3.Error:
                 pass
             rows = c.execute(
-                f"select id, source, title, display_name, model, ended_at, parent_session_id, {act} as act, {desc} as descr, "
+                f"select id, source, title, display_name, model, started_at, ended_at, parent_session_id, {act} as act, {desc} as descr, "
                 f"coalesce(input_tokens,0) + coalesce(output_tokens,0) + coalesce(cache_read_tokens,0) + coalesce(cache_write_tokens,0) as tok "
                 f"from sessions where {act} >= ?{hide} order by act desc limit 150", (now - DECK_DAYS * 86400,)).fetchall()
             kids: dict[str, int] = {}
@@ -635,6 +636,7 @@ def deck_tiles(root: Path, agents: list[dict], now: float) -> dict[str, list[dic
                 tiles.append({
                     "id": f"{p['id']}/{r['id'][-12:]}", "agent": p["id"], "agentName": a["name"], "title": _short(title, 120),
                     "source": r["source"] or "chat", "status": status, "at": r["act"],
+                    "started": r["started_at"], "ended": r["ended_at"],
                     "ctx": ctx, "ctxPct": round(100 * ctx / win) if ctx and win else None, "model": chip(r["model"] or ""),
                     "tokens": r["tok"], "step": activity_text(r["descr"], None).split(" · ")[0] if status == "working" else "",
                     "helpers": kids.get(r["id"], 0),
