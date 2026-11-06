@@ -8,6 +8,7 @@ import MissionProjects from './MissionProjects.jsx';
 import { useDialogFocus } from './dialog-focus.js';
 import { Sprite } from './Sprite.jsx';
 import { useMedia, UpdatedAgo, LiveClock, Bell, NeedsYou, Roster, PaneTabs } from './DeckRevamp.jsx';
+import Rail from './Rail.jsx';
 
 
 const POLL_MS = 5000, POLL_LITE_MS = 15000, DETAIL_MS = 5000;
@@ -577,6 +578,8 @@ export default function Deck() {
 
   const root = (
     <div ref={rootRef} className={'dk-root' + (lite ? ' is-lite' : '') + (hidden ? ' is-hidden' : '') + (items.length && items.length <= 6 ? ' is-few' : '')} style={{ height: full ? '100%' : height }}>
+      {desktop && <Rail rootRef={rootRef} needsCount={needs.length} full={full} standalone={standalone} lite={lite}
+        onToggleFull={full ? exitFull : enterFull} onToggleLite={() => setLite(!lite)} />}
       <header className="dk-top">
         <div className="dk-brand">
           <h1 className="dk-title">Agent Deck</h1>
@@ -585,7 +588,7 @@ export default function Deck() {
         <div className="dk-sum">
           <UpdatedAgo at={updatedAt} error={!!error} />
           <span className="dk-pill dk-working-pill" title="Agents working now, of all agents">{counts ? `${counts.working} of ${counts.working + counts.idle} working` : 'loading…'}</span>
-          <button className={'dk-pill dk-usage dk-usage-btn is-' + ut.level} title={ut.title} aria-label={ut.aria} aria-expanded={showReason}
+          <button id="dk-sec-usage" className={'dk-pill dk-usage dk-usage-btn is-' + ut.level} title={ut.title} aria-label={ut.aria} aria-expanded={showReason}
             onClick={() => setShowReason(!showReason)}>
             {ut.level === 'na' && ut.reason ? <span className="dk-uw-na">usage n/a</span> : ut.windows.map(w => (
               <span key={w.key} className="dk-uw" aria-hidden="true">
@@ -655,13 +658,13 @@ export default function Deck() {
       </section>
       </div>
         <div className="dk-more">
-          <section className="dk-disc">
+          <section id="dk-sec-activity" className="dk-disc">
             <button type="button" className="dk-disc-h" aria-expanded={actOpen} aria-controls="dk-disc-act" onClick={() => setActOpen(!actOpen)}><span>Activity</span><i aria-hidden="true">{actOpen ? '▾' : '▸'}</i></button>
             {actOpen && <div id="dk-disc-act" className="dk-disc-b">
               <ActivityPanel agents={(state && state.agents) || []} lite={lite} idBase="all" onPickAgent={id => setSel('a:' + id)} />
             </div>}
           </section>
-          <section className="dk-disc">
+          <section id="dk-sec-projects" className="dk-disc">
             <button type="button" className="dk-disc-h" aria-expanded={projOpen} aria-controls="dk-disc-proj" onClick={() => setProjOpen(!projOpen)}><span>Projects</span><i aria-hidden="true">{projOpen ? '▾' : '▸'}</i></button>
             {projOpen && <div id="dk-disc-proj" className="dk-disc-b">
               <MissionProjects />

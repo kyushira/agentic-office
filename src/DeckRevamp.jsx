@@ -57,7 +57,7 @@ export function Bell({ count, onPick }) {
 export function NeedsYou({ items, onPick }) {
   if (!items.length) return null;
   return (
-    <section className="dk-needs" aria-labelledby="dk-needs-h">
+    <section id="dk-needs" className="dk-needs" aria-labelledby="dk-needs-h">
       <h2 id="dk-needs-h" className="dk-needs-h">Needs you <span className="dk-needs-n">{items.length}</span></h2>
       <ul className="dk-needs-list">
         {items.map(n => (
@@ -80,7 +80,7 @@ const STATUS_CLS = { working: 'is-working', waiting: 'is-waiting', idle: 'is-idl
 export function Roster({ agents, sessions, now, sel, onPick }) {
   if (!agents.length) return null;
   return (
-    <section className="dk-roster-wrap" aria-label="Agent roster">
+    <section id="dk-roster" className="dk-roster-wrap" aria-label="Agent roster">
       <ul className="dk-roster">
         {agents.map(a => {
           const word = statusWord(a.status);
