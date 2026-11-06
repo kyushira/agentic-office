@@ -1,7 +1,7 @@
 import { React, useState, useEffect, useRef, fetchJSON, API, USAGE_API, SESSION_API } from './sdk.js';
 import { ago, compact } from './format.js';
 import { portrait } from './portrait.js';
-import { buildItems, headerCounts, durationText, modelText, modelParts, usageText, meterLevel, activeTokens, currentSessionId, eventLabel, detailRows, traceModel, newToolCalls, countStep, todayParts, COUNT_MS, newWalks, walkLabel, toolRing } from './deck-model.js';
+import { buildItems, headerCounts, durationText, modelText, modelParts, usageText, meterLevel, activeTokens, currentSessionId, eventLabel, detailRows, traceModel, newToolCalls, countStep, todayParts, COUNT_MS, newWalks, walkLabel, toolRing, newBrainTrips, brainCounts, brainText, brainNotes } from './deck-model.js';
 import { isStandalone, wantsFull, withFullParam, requestNativeFullscreen, exitNativeFullscreen, markFullPath } from './fullscreen.js';
 
 const POLL_MS = 5000, POLL_LITE_MS = 15000, DETAIL_MS = 5000;
@@ -90,6 +90,26 @@ function ToolRing({ model, big }) {
   );
 }
 
+/**
+ * Brain node on a tile (bottom-right of the sprite box): a ring that is cyan when the agent had a memory
+ * or vault read today, and a filled core when it had a write. Each new trip is a `pulses` entry that
+ * flies in from the upper left and is absorbed; the parent drops it after BRAIN_MS. Read = outline dot,
+ * write = filled dot. Nothing is drawn with no trips.
+ */
+function BrainNode({ trips, pulses }) {
+  if (!Array.isArray(trips) || !trips.length) return null;
+  const c = brainCounts(trips), text = brainText(trips);
+  return (
+    <span className="dk-brain" role="img" aria-label={`Memory and vault: ${text}`} title={`Memory and vault trips: ${text}`}>
+      <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+        <circle className={'dk-brain-ring' + (c.reads ? ' has-read' : '')} cx="8" cy="8" r="6" />
+        {c.writes > 0 && <circle className="dk-brain-core" cx="8" cy="8" r="2.4" />}
+      </svg>
+      {(pulses || []).map((p, i) => <i key={p.key} className={'dk-brain-pulse is-' + p.kind} style={{ animationDelay: `${i * 150}ms` }} />)}
+    </span>
+  );
+}
+
 /** Legend under the big ring in the sheet: swatch (rank shade), tool label, count. */
 function ToolLegend({ segments }) {
   return (
@@ -144,7 +164,7 @@ function TodayLine({ a, still }) {
   );
 }
 
-function AgentTile({ it, pressed, onPick, blip, still, setRef }) {
+function AgentTile({ it, pressed, onPick, blip, still, setRef, pulses }) {
   const a = it.agent, working = it.working;
   const ring = toolRing(a.tools, a.activity, a.status);
   return (
@@ -155,7 +175,8 @@ function AgentTile({ it, pressed, onPick, blip, still, setRef }) {
       {it.helperCount > 0 && <span className="dk-count-chip">{it.helperCount} helper{it.helperCount > 1 ? 's' : ''}</span>}
       {it.ctxPct != null && !it.helperCount && <span className="dk-ctx">{it.ctxPct}% ctx</span>}
       <span className="dk-art"><Sprite who={a.id} working={working} />{!working && <em className="dk-zz">zz</em>}
-        {ring.segments.length > 0 && <span className="dk-ring-wrap"><ToolRing model={ring} /></span>}</span>
+        {ring.segments.length > 0 && <span className="dk-ring-wrap"><ToolRing model={ring} /></span>}
+        <BrainNode trips={a.brainTrips} pulses={still ? null : pulses} /></span>
       <b className="dk-name">{a.name}</b>
       <span className="dk-role">{a.role}</span>
       {a.remit && <span className="dk-remit" title={a.remit}>{a.remit}</span>}
@@ -208,6 +229,7 @@ function FlightLayer({ f }) {
 }
 
 const FLIGHT_MS = 2600, FLIGHT_STILL_MS = 4000;
+const BRAIN_MS = 1600;   // brain pulse lifetime: 1.2s flight plus the stagger for up to three trips
 
 const Pill = ({ status }) => <span className={'dk-pill is-' + status}>{status === 'done' ? '✓ done' : status}</span>;
 
@@ -245,7 +267,7 @@ function NowBlock({ det, err, now }) {
   );
 }
 
-function AgentSheet({ it, sessions, now, det, detErr }) {
+function AgentSheet({ it, sessions, now, det, detErr, notes }) {
   const [open, setOpen] = useState(null);
   const a = it.agent;
   const s = open && sessions.find(x => x.id === open);
@@ -266,6 +288,12 @@ function AgentSheet({ it, sessions, now, det, detErr }) {
         {ring.segments.length > 0
           ? <div className="dk-ring-row" style={{ '--dk-c': it.color }}><ToolRing model={ring} big /><ToolLegend segments={ring.segments} /></div>
           : <p className="dk-note">no data</p>}
+      </section>
+      <section><h3>Brain</h3>
+        {notes != null && <div className="dk-row-mini"><span>Vault notes</span><small>{compact(notes)}</small></div>}
+        {brainText(a.brainTrips)
+          ? <div className="dk-row-mini"><span>Memory and vault, last 5 min</span><small>{brainText(a.brainTrips)}</small></div>
+          : notes == null && <p className="dk-note">no data</p>}
       </section>
       {it.walks.length > 0 && <section><h3>Hand-offs</h3>
         {it.walks.map(w => <div key={w.id} className="dk-row-mini"><span>{w.label}</span><small>{ago(w.at, now)}</small></div>)}</section>}
@@ -340,6 +368,9 @@ export default function Deck() {
   const [flights, setFlights] = useState([]);                           // walks being drawn right now
   const setTileRef = (id, el) => { if (el) tileRefs.current.set(id, el); else tileRefs.current.delete(id); };
   useEffect(() => () => { for (const t of flightTimers.current.values()) clearTimeout(t); }, []);
+  const [brainPulses, setBrainPulses] = useState({});                   // agent id -> [{key, kind}] trips flying into the brain node
+  const brainTimers = useRef(new Set());
+  useEffect(() => () => { for (const t of brainTimers.current) clearTimeout(t); }, []);
 
   const load = () => {
     clearTimeout(timer.current);
@@ -366,7 +397,18 @@ export default function Deck() {
     const agents = state.agents || [];
     const fresh = newWalks(prevState.current, state, agents.map(a => a.id), Date.now() / 1000);
     const d = newToolCalls(prevState.current, state);
+    const bt = newBrainTrips(prevState.current, state, Date.now() / 1000);
     prevState.current = state;                                          // walks are seen now, even if not drawn
+    const bIds = Object.keys(bt);
+    if (bIds.length && !hidden && !liteRef.current && !reducedMotion()) {   // one-shot pulses; none when still
+      const keys = bIds.flatMap(id => bt[id].map(t => [id, String(t.id)]));
+      setBrainPulses(p => { const n = { ...p }; for (const id of bIds) n[id] = [...(n[id] || []), ...bt[id].map(t => ({ key: String(t.id), kind: t.kind === 'write' ? 'write' : 'read' }))]; return n; });
+      const tid = setTimeout(() => {
+        brainTimers.current.delete(tid);
+        setBrainPulses(p => { const n = { ...p }; for (const [id, k] of keys) n[id] = (n[id] || []).filter(x => x.key !== k); return n; });
+      }, BRAIN_MS);
+      brainTimers.current.add(tid);
+    }
     const ids = Object.keys(d);
     if (ids.length) setBlips(b => { const n = { ...b }; for (const id of ids) n[id] = (n[id] || 0) + 1; return n; });
     if (!fresh.length || hidden || !gridRef.current) return;            // nothing is queued while the tab is hidden
@@ -490,7 +532,7 @@ export default function Deck() {
       <main ref={gridRef} className="dk-grid">
         {items.map(it => it.type === 'agent'
           ? <AgentTile key={it.key} it={it} pressed={it.key === sel} blip={blips[it.agent.id] || 0} still={lite || hidden} onPick={() => setSel(it.key)}
-              setRef={el => { setTileRef(it.agent.id, el); }} />
+              setRef={el => { setTileRef(it.agent.id, el); }} pulses={brainPulses[it.agent.id]} />
           : <HelperTile key={it.key} it={it} pressed={it.key === sel} onPick={() => setSel(it.key)} />)}
         {!state && !error && Array.from({ length: 4 }, (_, i) => <div key={i} className="dk-tile is-ghost" />)}
         <div className="dk-flights" aria-hidden="true">
@@ -500,7 +542,7 @@ export default function Deck() {
       {picked && <Sheet onClose={() => setSel(null)}>
         {picked.type === 'agent'
           ? <AgentSheet key={picked.key} it={picked} sessions={(state.sessions || {})[picked.agent.id] || []} now={now}
-                      det={detOk && detOk.data} detErr={!!(detOk && detOk.err)} />
+                      det={detOk && detOk.data} detErr={!!(detOk && detOk.err)} notes={brainNotes(state.brain)} />
           : <HelperSheet it={picked} now={now} />}
       </Sheet>}
     </div>

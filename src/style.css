@@ -330,6 +330,27 @@ html.ao-full-active { background-color: #0B0E11 !important; }
 .dk-legend em { font-style: normal; font-size: 10px; color: var(--dk-hot); }
 .dk-lsw { flex: none; width: 10px; height: 10px; border-radius: 2px; background: var(--dk-c); }
 
+/* brain node: bottom-right of the sprite box, 30% of it. Ring cyan after a memory or vault read; core filled after a write.
+   A new trip flies a dot in from the upper left and it is absorbed (~1.2s, once). Lite, hidden and reduced motion: static only. */
+.dk-brain { position: absolute; right: -4%; bottom: -4%; width: 30%; aspect-ratio: 1 / 1; pointer-events: none; }
+.dk-brain svg { display: block; width: 100%; height: 100%; overflow: visible; }
+.dk-brain-ring { fill: none; stroke: var(--dk-line-2); stroke-width: 1.4; }
+.dk-brain-ring.has-read { stroke: var(--dk-hot); }
+.dk-brain-core { fill: var(--dk-hot); }
+.dk-brain-pulse { position: absolute; left: 50%; top: 50%; width: 5px; height: 5px; margin: -2.5px 0 0 -2.5px; border-radius: 50%; opacity: 0; }
+.dk-brain-pulse.is-read { border: 1px solid var(--dk-hot); background: transparent; }
+.dk-brain-pulse.is-write { background: var(--dk-hot); }
+.dk-root:not(.is-lite) .dk-brain-pulse { animation: dk-brain-in 1200ms var(--dk-ease) both; }
+@keyframes dk-brain-in {
+  0% { opacity: 0; transform: translate(-20px, -16px) scale(.8); }
+  15% { opacity: 1; }
+  85% { opacity: 1; transform: translate(0, 0) scale(1); }
+  100% { opacity: 0; transform: translate(0, 0) scale(.2); }
+}
+.dk-tile.is-pressed .dk-brain-ring { stroke: var(--dk-on-hot); }
+.dk-tile.is-pressed .dk-brain-core, .dk-tile.is-pressed .dk-brain-pulse.is-write { background: var(--dk-on-hot); }
+.dk-tile.is-pressed .dk-brain-pulse.is-read { border-color: var(--dk-on-hot); }
+
 /* motion: state colour changes only, no looping meters; reduced motion keeps every state visible without animation */
 @media (prefers-reduced-motion: reduce) {
   .dk-root *, .dk-root *::before, .dk-root *::after {
@@ -343,6 +364,7 @@ html.ao-full-active { background-color: #0B0E11 !important; }
   .dk-root .dk-meter > i { transition: none !important; }                      /* gauges jump to their value */
   .dk-root .dk-ring-seg, .dk-root .dk-ring-arc.is-active { animation: none !important; }   /* ring is static; running tool keeps full opacity */
   .dk-root .dk-ring-orbit { animation: none !important; }                       /* marker stays put at 12 o'clock */
+  .dk-root .dk-brain-pulse { display: none !important; }                        /* no fly-in; the static node still shows reads and writes */
 }
 
 /* tab hidden: pause every animation (reused by later features); the .dk-root gets is-hidden from Deck() */

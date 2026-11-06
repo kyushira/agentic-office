@@ -291,3 +291,53 @@ export function toolRing(tools, activity, status) {
     : 'Tools today: no data';
   return { segments, total, active: activeIdx >= 0 ? list[activeIdx].label : null, aria };
 }
+
+const TRIP_FRESH_S = 60;      // a trip older than this (tab was away) is counted as seen, never pulsed
+const TRIP_MAX = 3;           // newest new trips pulsed per agent per poll
+
+/**
+ * Brain trips that are new since the last /state poll: {agentId: [trip, ...]}, oldest first, newest
+ * TRIP_MAX per agent. A trip id already in that agent's previous brainTrips is not new. No previous poll,
+ * an agent not in the previous poll, or a previous agent with no brainTrips array gives nothing, so
+ * nothing replays on load. `now` (unix s, optional) drops trips older than TRIP_FRESH_S.
+ */
+export function newBrainTrips(prevState, nextState, now) {
+  const out = {};
+  if (!prevState || !nextState) return out;
+  const before = new Map((prevState.agents || []).map(a => [a.id, a]));
+  for (const a of nextState.agents || []) {
+    const was = before.get(a.id);
+    if (!was || !Array.isArray(was.brainTrips)) continue;
+    const seen = new Set(was.brainTrips.map(t => t && t.id));
+    const fresh = (Array.isArray(a.brainTrips) ? a.brainTrips : [])
+      .filter(t => t && t.id != null && !seen.has(t.id) && (now == null || now - (+t.at || 0) < TRIP_FRESH_S))
+      .sort((x, y) => (x.at || 0) - (y.at || 0))
+      .slice(-TRIP_MAX);
+    if (fresh.length) out[a.id] = fresh;
+  }
+  return out;
+}
+
+/** {reads, writes} over an agent's brainTrips; unknown kinds are not counted. */
+export function brainCounts(trips) {
+  const list = Array.isArray(trips) ? trips : [];
+  return {
+    reads: list.filter(t => t && t.kind === 'read').length,
+    writes: list.filter(t => t && t.kind === 'write').length,
+  };
+}
+
+/** "3 reads · 1 write" for the sheet and aria; null when there are no trips (render nothing). */
+export function brainText(trips) {
+  const { reads, writes } = brainCounts(trips);
+  if (!reads && !writes) return null;
+  const r = `${reads} read${reads === 1 ? '' : 's'}`, w = `${writes} write${writes === 1 ? '' : 's'}`;
+  return reads && writes ? `${r} · ${w}` : reads ? r : w;
+}
+
+/** Vault note count from state.brain.notes; null when missing or not a number (never invented). */
+export function brainNotes(brain) {
+  const raw = brain ? brain.notes : null;
+  const n = raw == null || raw === '' ? NaN : +raw;
+  return Number.isFinite(n) && n >= 0 ? n : null;
+}

@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { buildItems, headerCounts, durationText, modelText, modelParts, usageText, meterLevel, activeTokens, currentSessionId, eventLabel, detailRows, traceModel, newToolCalls, countStep, todayParts, newWalks, walkLabel, toolRing } from '../src/deck-model.js';
+import { buildItems, headerCounts, durationText, modelText, modelParts, usageText, meterLevel, activeTokens, currentSessionId, eventLabel, detailRows, traceModel, newToolCalls, countStep, todayParts, newWalks, walkLabel, toolRing, newBrainTrips, brainCounts, brainText, brainNotes } from '../src/deck-model.js';
 
 const now = 1_800_000_000;
 const state = {
@@ -410,4 +410,62 @@ test('toolRing: more than six tools still get shades (the last one takes the fai
   assert.equal(r.segments.length, 8);
   assert.equal(r.segments[7].shade, r.segments[6].shade);
   assert.ok(r.segments.every(s => s.shade > 0 && s.shade <= 1));
+});
+
+const tripState = (trips, extra = {}) => ({ agents: [
+  { id: 'dev', brainTrips: trips.dev || [] },
+  { id: 'ash', brainTrips: trips.ash || [] },
+], ...extra });
+const trip = (id, at, kind) => ({ id, at, kind });
+
+test('newBrainTrips: first load (no previous poll) gives nothing, so nothing replays', () => {
+  assert.deepEqual(newBrainTrips(null, tripState({ dev: [trip('d1', now - 5, 'read')] }), now), {});
+});
+
+test('newBrainTrips: same ids in the next poll give nothing; a new id is returned for its agent only', () => {
+  const prev = tripState({ dev: [trip('d1', now - 30, 'read')], ash: [trip('a1', now - 90, 'write')] });
+  assert.deepEqual(newBrainTrips(prev, tripState({ dev: [trip('d1', now - 30, 'read')], ash: [trip('a1', now - 90, 'write')] }), now), {});
+  const next = tripState({ dev: [trip('d2', now - 2, 'write'), trip('d1', now - 30, 'read')], ash: [trip('a1', now - 90, 'write')] });
+  const d = newBrainTrips(prev, next, now);
+  assert.deepEqual(Object.keys(d), ['dev']);
+  assert.deepEqual(d.dev.map(t => t.id), ['d2']);
+});
+
+test('newBrainTrips: an agent missing from the previous poll, or with no brainTrips there, gives nothing', () => {
+  const prev = { agents: [{ id: 'dev', brainTrips: [] }, { id: 'ash' }] };
+  const next = tripState({ dev: [trip('d1', now - 3, 'read')], ash: [trip('a1', now - 3, 'read')] });
+  assert.deepEqual(newBrainTrips(prev, next, now), { dev: [trip('d1', now - 3, 'read')] });
+  assert.deepEqual(newBrainTrips({ agents: [] }, next, now), {});
+});
+
+test('newBrainTrips: a trip older than a minute (tab was away) counts as seen, not pulsed', () => {
+  const prev = tripState({ dev: [] });
+  const next = tripState({ dev: [trip('old', now - 600, 'read'), trip('new', now - 4, 'write')] });
+  assert.deepEqual(newBrainTrips(prev, next, now).dev.map(t => t.id), ['new']);
+});
+
+test('newBrainTrips: at most three per agent per poll, the newest ones, oldest first', () => {
+  const prev = tripState({ dev: [] });
+  const next = tripState({ dev: [5, 1, 4, 2, 3].map(i => trip('t' + i, now - i, 'read')) });
+  assert.deepEqual(newBrainTrips(prev, next, now).dev.map(t => t.id), ['t3', 't2', 't1']);
+});
+
+test('brainText and brainCounts: singular/plural, both kinds, no trips is null', () => {
+  assert.equal(brainText([]), null);
+  assert.equal(brainText(undefined), null);
+  assert.equal(brainText([trip('a', 1, 'read')]), '1 read');
+  assert.equal(brainText([trip('a', 1, 'read'), trip('b', 2, 'read'), trip('c', 3, 'write')]), '2 reads · 1 write');
+  assert.equal(brainText([trip('a', 1, 'write'), trip('b', 2, 'write')]), '2 writes');
+  assert.deepEqual(brainCounts([trip('a', 1, 'read'), trip('b', 2, 'other'), null]), { reads: 1, writes: 0 });
+});
+
+test('brainNotes: a count when present, null when missing, non-numeric or negative', () => {
+  assert.equal(brainNotes({ notes: 1204 }), 1204);
+  assert.equal(brainNotes({ notes: 0 }), 0);
+  assert.equal(brainNotes({ notes: '42' }), 42);
+  assert.equal(brainNotes({ notes: null }), null);
+  assert.equal(brainNotes({}), null);
+  assert.equal(brainNotes(null), null);
+  assert.equal(brainNotes({ notes: 'many' }), null);
+  assert.equal(brainNotes({ notes: -1 }), null);
 });
