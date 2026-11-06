@@ -19,8 +19,6 @@ const ICONS = {
     <rect x="3.5" y="13.5" width="7" height="7" rx="1.5" /><rect x="13.5" y="13.5" width="7" height="7" rx="1.5" /></>),
   needs: svg(<><circle cx="12" cy="12" r="8.5" /><path d="M12 7.5v5.5M12 16v.5" /></>),
   live: svg(<path d="M4 5h16v10.5H9.5L5 19.5V15H4z" />),
-  activity: svg(<path d="M3 12h4l2.5-6 4 12 2.5-6H21" />),
-  projects: svg(<path d="M3.5 7.5a2 2 0 0 1 2-2h4l2 2h7a2 2 0 0 1 2 2v7.5a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2z" />),
   usage: svg(<><path d="M4.5 16a7.5 7.5 0 1 1 15 0" /><path d="M12 16l3.5-4" /></>),
   full: svg(<path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" />),
   lite: svg(<path d="M13 3L5.5 13.5H12L11 21l7.5-10.5H12z" />),

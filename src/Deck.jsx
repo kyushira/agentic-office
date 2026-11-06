@@ -2,9 +2,8 @@ import { React, useState, useEffect, useRef, fetchJSON, API, USAGE_API, SESSION_
 import { ago, compact, resetCountdown } from './format.js';
 import { buildItems, headerCounts, durationText, modelText, modelParts, usageText, meterLevel, activeTokens, currentSessionId, eventLabel, detailRows, traceModel, newToolCalls, countStep, todayParts, COUNT_MS, newWalks, walkLabel, toolRing, newBrainTrips, brainCounts, brainText, brainNotes, helperChanges, swarmTip, needsYou, greeting, resetSoon, RIGHT_PANE_DEFAULT, livePolls, commsPolls, speechText } from './deck-model.js';
 import { isStandalone, wantsFull, withFullParam, requestNativeFullscreen, exitNativeFullscreen, markFullPath } from './fullscreen.js';
-import { ActivityPanel, Live } from './Mission.jsx';
+import { Live } from './Mission.jsx';
 import MissionComms from './MissionComms.jsx';
-import MissionProjects from './MissionProjects.jsx';
 import { useDialogFocus } from './dialog-focus.js';
 import { Sprite } from './Sprite.jsx';
 import { useMedia, UpdatedAgo, LiveClock, Bell, NeedsYou, Roster, PaneTabs } from './DeckRevamp.jsx';
@@ -405,8 +404,6 @@ export default function Deck() {
   const [, setTick] = useState(0);
   const [usage, setUsage] = useState(null);
   const [showReason, setShowReason] = useState(false);
-  const [actOpen, setActOpen] = useState(false);     // disclosures: collapsed by default, not persisted
-  const [projOpen, setProjOpen] = useState(false);
   const [pane, setPane] = useState('office');                          // phone only: Office | Comms
   const [rightPane, setRightPane] = useState(RIGHT_PANE_DEFAULT);      // desktop only: right pane is Live (default) or Comms
   const desktop = useMedia('(min-width: 900px)');                      // side by side from 900px
@@ -657,20 +654,6 @@ export default function Deck() {
         {commsPolls({ desktop, pane, rightPane }) && <MissionComms agents={(state && state.agents) || []} agentKey="" lite={lite} />}
       </section>
       </div>
-        <div className="dk-more">
-          <section id="dk-sec-activity" className="dk-disc">
-            <button type="button" className="dk-disc-h" aria-expanded={actOpen} aria-controls="dk-disc-act" onClick={() => setActOpen(!actOpen)}><span>Activity</span><i aria-hidden="true">{actOpen ? '▾' : '▸'}</i></button>
-            {actOpen && <div id="dk-disc-act" className="dk-disc-b">
-              <ActivityPanel agents={(state && state.agents) || []} lite={lite} idBase="all" onPickAgent={id => setSel('a:' + id)} />
-            </div>}
-          </section>
-          <section id="dk-sec-projects" className="dk-disc">
-            <button type="button" className="dk-disc-h" aria-expanded={projOpen} aria-controls="dk-disc-proj" onClick={() => setProjOpen(!projOpen)}><span>Projects</span><i aria-hidden="true">{projOpen ? '▾' : '▸'}</i></button>
-            {projOpen && <div id="dk-disc-proj" className="dk-disc-b">
-              <MissionProjects />
-            </div>}
-          </section>
-        </div>
       </div>
       {picked && <Sheet onClose={() => setSel(null)} getReturn={sel && sel.startsWith('a:') ? () => tileRefs.current.get(sel.slice(2)) : null}>
         {picked.type === 'agent'

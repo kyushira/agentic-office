@@ -40,12 +40,6 @@
   grid-template-columns: repeat(auto-fill, minmax(148px, 1fr)); align-content: start; scrollbar-width: none; }
 .dk-grid::-webkit-scrollbar { display: none; }
 .dk-scroll { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
-.dk-more { display: grid; grid-template-columns: 1fr; gap: 8px; padding: 0 8px 12px; }
-@media (min-width: 760px) { .dk-more { grid-template-columns: 1fr 1fr; align-items: start; } }
-.dk-disc { border: 1px solid var(--dk-line); border-radius: 8px; background: var(--dk-tile); min-width: 0; }
-.dk-disc-h { width: 100%; display: flex; justify-content: space-between; align-items: center; min-height: 40px; padding: 8px 12px; background: none; border: 0; color: inherit; font: inherit; font-size: 12px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; cursor: pointer; }
-.dk-disc-b { padding: 0 0 8px; }
-.dk-disc-b .dk-mc-body { max-height: min(60vh, 520px); flex: none; }
 .dk-root .dk-mc-log, .dk-root .dk-mc-think, .dk-root .dk-mc-comms { user-select: text; -webkit-user-select: text; }
 .dk-reset { font-size: 11px; color: var(--dk-mut); white-space: nowrap; font-variant-numeric: tabular-nums; flex: none; }
 .dk-root:not(.is-lite) .dk-grid {   /* faint grid under the tiles; dropped in Lite */
@@ -468,41 +462,14 @@ html.ao-full-active { background-color: #0B0E11 !important; }
   .dk-root .dk-mc-row { padding: 4px 10px; }
 }
 
-/* Projects sub-tab: one glass card per project, one column on phones, two from 720px */
-.dk-root .dk-mc-projects { list-style: none; margin: 0; padding: 6px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; }
-@media (min-width: 720px) { .dk-root .dk-mc-projects { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-.dk-root .dk-mc-proj { min-width: 0; padding: 10px 12px; border: 1px solid var(--dk-line); border-radius: 10px; background: color-mix(in srgb, var(--dk-raise) 60%, transparent); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
-.dk-root .dk-mc-proj-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-width: 0; }
-.dk-root .dk-mc-proj-name { margin: 0; min-width: 0; font-size: 13px; font-weight: 600; color: var(--dk-ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.dk-root .dk-mc-status { flex: none; font-size: 10px; line-height: 1.4; padding: 1px 6px; border: 1px solid var(--dk-line-2); border-radius: 4px; color: var(--dk-faint); text-transform: uppercase; letter-spacing: .06em; }
-.dk-root .dk-mc-status.is-active { color: var(--dk-hot); border-color: var(--dk-dim); }
-.dk-root .dk-mc-status.is-quiet { color: var(--dk-warn); }
-.dk-root .dk-mc-status.is-stale { color: var(--dk-faint); }
-.dk-root .dk-mc-proj-act { margin: 4px 0 0; font-size: 11px; color: var(--dk-mut); }
-.dk-root .dk-mc-proj-commit { margin: 4px 0 0; font-size: 12px; color: var(--dk-soft); overflow-wrap: anywhere; }
-.dk-root .dk-mc-proj-commit.is-none { color: var(--dk-faint); }
-.dk-root .dk-mc-proj-branch { color: var(--dk-faint); font-size: 11px; }
-.dk-root .dk-mc-proj-reg { margin: 8px 0 0; display: grid; grid-template-columns: 4.5em minmax(0, 1fr); gap: 2px 8px; font-size: 12px; }
-.dk-root .dk-mc-proj-reg dt { color: var(--dk-mut); font-size: 11px; line-height: 1.6; }
-.dk-root .dk-mc-proj-reg dd { margin: 0; color: var(--dk-ink); overflow-wrap: anywhere; line-height: 1.6; }
-.dk-root .dk-mc-unset { color: var(--dk-faint); }
-.dk-root .dk-mc-briefs { margin-top: 8px; padding-top: 6px; border-top: 1px solid var(--dk-rule); }
-.dk-root .dk-mc-briefs-l { margin: 0; font-size: 10px; color: var(--dk-mut); text-transform: uppercase; letter-spacing: .08em; }
-.dk-root .dk-mc-briefs ul { list-style: none; margin: 2px 0 0; padding: 0; }
-.dk-root .dk-mc-briefs li { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; min-width: 0; padding: 2px 0; font-size: 11px; }
-.dk-root .dk-mc-brief-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--dk-soft); }
-.dk-root .dk-mc-briefs time { flex: none; color: var(--dk-faint); }
-.dk-root .dk-mc-more { min-height: 40px; margin-top: 2px; padding: 0 12px; border: 1px dashed var(--dk-line-2); border-radius: 6px; background: transparent; color: var(--dk-mut); font-size: 12px; }
-.dk-root .dk-mc-more[aria-expanded="true"] { color: var(--dk-hot); border-color: var(--dk-dim); }
-
 @media (prefers-reduced-motion: reduce) {
   .dk-root .dk-mc *, .dk-root .dk-mc *::before, .dk-root .dk-mc *::after { animation: none !important; transition: none !important; }
   .dk-root .dk-mc-flow.is-anim line { animation: none !important; stroke-dasharray: none; }
   .dk-root .dk-mc-caret { display: none; }
 }
 
-/* Single view: embedded Live/Comms in the Activity disclosure and the agent sheet */
-.dk-root .dk-act, .dk-root .dk-sheet .dk-mc-body { font-family: var(--dk-mono); }
+/* Single view: embedded Live/Comms in the agent sheet */
+.dk-root .dk-sheet .dk-mc-body { font-family: var(--dk-mono); }
 .dk-root .dk-sheet .dk-mc-tabs { padding: 0 0 8px; }
 .dk-root .dk-sheet .dk-mc-body { margin: 0 0 8px; flex: none; max-height: 52vh; }
 .dk-root button.dk-mc-who { background: none; border: 0; padding: 0; font: inherit; cursor: pointer; text-decoration: underline dotted; text-underline-offset: 2px; }

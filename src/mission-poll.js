@@ -1,10 +1,9 @@
 // Polling for the Mission Control panels. Mounted only while that panel is on screen, so unmounting
 // (tab or view change) stops the timer. No timers run while the document is hidden.
 import { useState, useEffect, useRef, fetchJSON } from './sdk.js';
-import { mergeRows, newIds, mergeThinking, feedQuery, commsQuery, PROJECTS_API, MC_CAP } from './mc-model.js';
+import { mergeRows, newIds, mergeThinking, feedQuery, commsQuery, MC_CAP } from './mc-model.js';
 
 export const MC_POLL_MS = 5000;
-export const PROJECTS_POLL_MS = 60000;
 
 export function reducedMotion() {
   return !!(typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
@@ -65,37 +64,4 @@ export function usePoll(kind, agentKey, ms = MC_POLL_MS) {
     thinking: mine ? d.thinking : [],
     err: mine ? d.err : '',
   };
-}
-
-/**
- * Polls /projects every PROJECTS_POLL_MS while the Projects panel is mounted and the document is visible.
- * Returns {data, err}: data is null until the first answer; after a failed poll the last good data stays.
- */
-export function useProjects() {
-  const [d, setD] = useState({ data: null, err: '' });
-  useEffect(() => {
-    let live = true, timer = 0, busy = false;
-    const stop = () => { clearTimeout(timer); timer = 0; };
-    const pull = () => {
-      stop();
-      if (!live || busy || document.hidden) return;
-      busy = true;
-      fetchJSON(PROJECTS_API)
-        .then(res => { if (live) setD({ data: res || null, err: '' }); })
-        .catch(e => { if (live) setD(x => ({ data: x.data, err: String((e && e.message) || e) })); })
-        .finally(() => {
-          busy = false;
-          if (live && !document.hidden) timer = setTimeout(pull, PROJECTS_POLL_MS);
-        });
-    };
-    const onVis = () => { if (document.hidden) stop(); else pull(); };
-    document.addEventListener('visibilitychange', onVis);
-    pull();
-    return () => {
-      live = false;
-      stop();
-      document.removeEventListener('visibilitychange', onVis);
-    };
-  }, []);
-  return d;
 }

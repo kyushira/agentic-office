@@ -10,8 +10,6 @@ export const RAIL_SECTIONS = [
   { id: 'office', label: 'Office', target: 'dk-pane-office' },
   { id: 'needs', label: 'Needs you', target: 'dk-needs', fallback: 'dk-roster' },
   { id: 'live', label: 'Live and Comms', target: 'dk-pane-comms' },
-  { id: 'activity', label: 'Activity', target: 'dk-sec-activity' },
-  { id: 'projects', label: 'Projects', target: 'dk-sec-projects' },
   { id: 'usage', label: 'Usage (5h reset)', target: 'dk-sec-usage' },
 ];
 
@@ -34,7 +32,7 @@ export function isAtBottom(scrollTop, clientHeight, scrollHeight, slack = 4) {
  *   atBottom: the scroll area is at its end, so the last visible section wins (a short page can never
  *             scroll its last section up to the line).
  *   current:  the id active now. It is kept while it still ties for the best position, so a click on a
- *             side-by-side section (Activity, Projects) is not undone by its neighbour.
+ *             side-by-side section is not undone by its neighbour.
  * Returns the chosen id, or `current` when nothing is measurable.
  */
 export function pickActive({ items, line, atBottom = false, current = null }) {
