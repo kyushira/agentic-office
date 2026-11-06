@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { buildItems, headerCounts, durationText, modelText, modelParts, usageText, meterLevel, activeTokens, currentSessionId, eventLabel, detailRows, traceModel, newToolCalls, countStep, todayParts, newWalks, walkLabel, toolRing, newBrainTrips, brainCounts, brainText, brainNotes, timelineLanes, localMidnight } from '../src/deck-model.js';
+import { buildItems, headerCounts, durationText, modelText, modelParts, usageText, meterLevel, activeTokens, currentSessionId, eventLabel, detailRows, traceModel, newToolCalls, countStep, todayParts, newWalks, walkLabel, toolRing, newBrainTrips, brainCounts, brainText, brainNotes, timelineLanes, localMidnight, helperChanges, swarmTip } from '../src/deck-model.js';
 
 // Local-time helper: the timeline clock is local, so fixtures are built in local time too.
 const at = (h, m = 0) => new Date(2026, 10, 6, h, m).getTime() / 1000;
@@ -548,6 +548,39 @@ test('timeline: bars are sorted by start and the track ends just after now', () 
   const m = timelineLanes(tlState({ dev: [a, b] }), tlNow, tlDay);
   assert.deepEqual(m.lanes[0].bars.map(x => x.id), ['b', 'a']);
   assert.ok(m.endH > m.nowH && m.endH - m.nowH <= 0.5);
+});
+
+test('helperChanges: first load gives nothing, a new live id is spawned, a gone or finished id is exited', () => {
+  const h1 = { id: 'h1', task: 'Read logs', model: 'haiku' };
+  const h2 = { id: 'h2', task: 'Write tests', model: 'sonnet' };
+  const h3 = { id: 'h3', task: 'Scan deps', model: 'haiku' };
+  const prev = { agents: [{ id: 'dev', helpers: [h1, h2], recentHelpers: [] }, { id: 'ash', helpers: [], recentHelpers: [] }] };
+  // h1 finished (moved to recentHelpers), h2 gone, h3 new
+  const next = { agents: [{ id: 'dev', helpers: [h3], recentHelpers: [{ ...h1, ended: 1 }] }, { id: 'ash', helpers: [], recentHelpers: [] }] };
+  assert.deepEqual(helperChanges(null, next), {});
+  assert.deepEqual(helperChanges(prev, null), {});
+  assert.deepEqual(helperChanges(next, next), {}, 'no change, no events');
+  assert.deepEqual(helperChanges(prev, next), {
+    dev: { spawned: ['h3'], exited: [{ id: 'h1', task: 'Read logs', model: 'haiku' }, { id: 'h2', task: 'Write tests', model: 'sonnet' }] },
+  });
+});
+
+test('helperChanges: an agent new to this poll is not animated, and a finished helper seen again is not spawned', () => {
+  const h1 = { id: 'h1', task: 'Read logs', model: 'haiku' };
+  const prev = { agents: [{ id: 'dev', helpers: [h1], recentHelpers: [] }] };
+  const next = { agents: [{ id: 'dev', helpers: [], recentHelpers: [{ ...h1, ended: 1 }] }, { id: 'new', helpers: [h1], recentHelpers: [] }] };
+  const out = helperChanges(prev, next);
+  assert.deepEqual(Object.keys(out), ['dev']);
+  assert.deepEqual(out.dev.spawned, []);
+  assert.deepEqual(out.dev.exited.map(e => e.id), ['h1']);
+});
+
+test('swarmTip: a count line then model and task per live helper, empty when none', () => {
+  assert.equal(swarmTip([]), '');
+  assert.equal(swarmTip(undefined), '');
+  assert.equal(swarmTip([{ id: 'a', task: ' Read logs ', model: 'haiku' }]), '1 helper running\nhaiku · Read logs');
+  assert.equal(swarmTip([{ id: 'a', task: 'X', model: '' }, { id: 'b', task: '', model: 'sonnet' }]),
+    '2 helpers running\nhelper · X\nsonnet · task');
 });
 
 test('localMidnight: the local midnight at or before a time', () => {

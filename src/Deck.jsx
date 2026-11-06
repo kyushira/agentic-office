@@ -1,7 +1,7 @@
 import { React, useState, useEffect, useRef, fetchJSON, API, USAGE_API, SESSION_API } from './sdk.js';
 import { ago, compact } from './format.js';
 import { portrait } from './portrait.js';
-import { buildItems, headerCounts, durationText, modelText, modelParts, usageText, meterLevel, activeTokens, currentSessionId, eventLabel, detailRows, traceModel, newToolCalls, countStep, todayParts, COUNT_MS, newWalks, walkLabel, toolRing, newBrainTrips, brainCounts, brainText, brainNotes, timelineLanes } from './deck-model.js';
+import { buildItems, headerCounts, durationText, modelText, modelParts, usageText, meterLevel, activeTokens, currentSessionId, eventLabel, detailRows, traceModel, newToolCalls, countStep, todayParts, COUNT_MS, newWalks, walkLabel, toolRing, newBrainTrips, brainCounts, brainText, brainNotes, timelineLanes, helperChanges, swarmTip } from './deck-model.js';
 import { isStandalone, wantsFull, withFullParam, requestNativeFullscreen, exitNativeFullscreen, markFullPath } from './fullscreen.js';
 
 const POLL_MS = 5000, POLL_LITE_MS = 15000, DETAIL_MS = 5000;
@@ -164,12 +164,41 @@ function TodayLine({ a, still }) {
   );
 }
 
-function AgentTile({ it, pressed, onPick, blip, still, setRef, pulses }) {
+const HELPER_DOTS = 6;   // most live helpers drawn around one tile
+
+/**
+ * Helper swarm: one dot per live helper (up to 6) on a slow orbit around the tile, plus dots that are drifting
+ * away (fx kind 'out'). Each dot sits in a slot rotated by its share of the circle, so the orbit spins the
+ * whole group and nothing moves by layout. `still` (Lite, reduced motion, tab hidden) draws the same dots at
+ * fixed angles with no rotation or entrance/exit motion. Pointer-events none, aria-hidden: the tile says it.
+ */
+function Swarm({ live, fx, still }) {
+  const ins = new Set(fx.filter(x => x.kind === 'in').map(x => x.id));
+  const liveIds = new Set(live.map(h => h.id));
+  const outs = fx.filter(x => x.kind === 'out' && !liveIds.has(x.id)).slice(0, HELPER_DOTS);
+  const dots = [...live.slice(0, HELPER_DOTS).map(h => ({ key: 'l' + h.id, cls: ins.has(h.id) ? ' is-in' : '' })),
+    ...outs.map(o => ({ key: 'o' + o.key, cls: ' is-out' }))];
+  const n = dots.length;
+  if (!n) return null;
+  return (
+    <span className={'dk-swarm' + (still ? ' is-still' : '')} aria-hidden="true">
+      <span className="dk-swarm-orbit">
+        {dots.map((d, i) => <span key={d.key} className="dk-hslot" style={{ transform: `rotate(${(i * 360) / n}deg)` }}><i className={'dk-hdot' + d.cls} /></span>)}
+      </span>
+    </span>
+  );
+}
+
+function AgentTile({ it, pressed, onPick, blip, still, setRef, pulses, fx }) {
   const a = it.agent, working = it.working;
   const ring = toolRing(a.tools, a.activity, a.status);
+  const hs = Array.isArray(a.helpers) ? a.helpers.filter(h => h && h.id != null) : [];
   return (
     <button ref={setRef} className={'dk-tile is-agent' + (working ? ' is-working' : ' is-rest') + (pressed ? ' is-pressed' : '') + (it.chip ? ' has-chip' : '') + (it.helperCount > 0 || it.ctxPct != null ? ' has-top' : '')} onClick={onPick}
-      style={{ '--dk-c': it.color, gridColumnStart: it.rowStart ? 1 : undefined }} aria-label={`${a.name}, ${a.role}, ${it.status}`}>
+      style={{ '--dk-c': it.color, gridColumnStart: it.rowStart ? 1 : undefined }}
+      aria-label={`${a.name}, ${a.role}, ${it.status}` + (hs.length ? `, ${hs.length} helper${hs.length === 1 ? '' : 's'} running` : '')}
+      title={swarmTip(hs) || undefined}>
+      {hs.length > 0 && <Swarm live={hs} fx={fx || []} still={still} />}
       {working && <i className="dk-sweep" aria-hidden="true" />}
       {working && <i className="dk-badge" />}
       {it.helperCount > 0 && <span className="dk-count-chip">{it.helperCount} helper{it.helperCount > 1 ? 's' : ''}</span>}
@@ -230,6 +259,7 @@ function FlightLayer({ f }) {
 
 const FLIGHT_MS = 2600, FLIGHT_STILL_MS = 4000;
 const BRAIN_MS = 1600;   // brain pulse lifetime: 1.2s flight plus the stagger for up to three trips
+const HELPER_IN_MS = 1200, HELPER_OUT_MS = 1600;   // swarm dot entrance and drift-off lifetimes (match style.css)
 
 const Pill = ({ status }) => <span className={'dk-pill is-' + status}>{status === 'done' ? '✓ done' : status}</span>;
 
@@ -429,6 +459,9 @@ export default function Deck() {
   const [flights, setFlights] = useState([]);                           // walks being drawn right now
   const setTileRef = (id, el) => { if (el) tileRefs.current.set(id, el); else tileRefs.current.delete(id); };
   useEffect(() => () => { for (const t of flightTimers.current.values()) clearTimeout(t); }, []);
+  const fxTimers = useRef(new Map());                                    // swarm fx key -> removal timeout
+  const [swarmFx, setSwarmFx] = useState({});                            // agent id -> [{key, kind, id, ...}] dots entering or leaving
+  useEffect(() => () => { for (const t of fxTimers.current.values()) clearTimeout(t); }, []);
   const [brainPulses, setBrainPulses] = useState({});                   // agent id -> [{key, kind}] trips flying into the brain node
   const brainTimers = useRef(new Set());
   useEffect(() => () => { for (const t of brainTimers.current) clearTimeout(t); }, []);
@@ -460,7 +493,27 @@ export default function Deck() {
     const fresh = newWalks(prevState.current, state, agents.map(a => a.id), Date.now() / 1000);
     const d = newToolCalls(prevState.current, state);
     const bt = newBrainTrips(prevState.current, state, Date.now() / 1000);
+    const hc = helperChanges(prevState.current, state);                 // helper spawns and exits since the last poll
     prevState.current = state;                                          // walks are seen now, even if not drawn
+    const fxStill = liteRef.current || reducedMotion() || hidden;       // no entrance or exit motion when still
+    if (!fxStill) {
+      const made = [];
+      for (const aid of Object.keys(hc)) {
+        for (const sid of hc[aid].spawned) made.push({ key: `in-${aid}-${sid}`, agent: aid, kind: 'in', id: sid, ms: HELPER_IN_MS });
+        for (const e of hc[aid].exited) made.push({ key: `out-${aid}-${e.id}`, agent: aid, kind: 'out', id: e.id, task: e.task, model: e.model, ms: HELPER_OUT_MS });
+      }
+      if (made.length) {
+        setSwarmFx(f => { const n = { ...f }; for (const m of made) n[m.agent] = [...(n[m.agent] || []).filter(x => x.key !== m.key), m]; return n; });
+        for (const m of made) {
+          const old = fxTimers.current.get(m.key);
+          if (old) clearTimeout(old);
+          fxTimers.current.set(m.key, setTimeout(() => {                 // one timeout per dot; removed after its motion
+            fxTimers.current.delete(m.key);
+            setSwarmFx(f => ({ ...f, [m.agent]: (f[m.agent] || []).filter(x => x.key !== m.key) }));
+          }, m.ms));
+        }
+      }
+    }
     const bIds = Object.keys(bt);
     if (bIds.length && !hidden && !liteRef.current && !reducedMotion()) {   // one-shot pulses; none when still
       const keys = bIds.flatMap(id => bt[id].map(t => [id, String(t.id)]));
@@ -611,7 +664,7 @@ export default function Deck() {
         : <main id="dk-view" role="tabpanel" aria-labelledby="dk-tab-deck" ref={gridRef} className="dk-grid">
             {items.map(it => it.type === 'agent'
               ? <AgentTile key={it.key} it={it} pressed={it.key === sel} blip={blips[it.agent.id] || 0} still={lite || hidden} onPick={() => setSel(it.key)}
-                  setRef={el => { setTileRef(it.agent.id, el); }} pulses={brainPulses[it.agent.id]} />
+                  setRef={el => { setTileRef(it.agent.id, el); }} pulses={brainPulses[it.agent.id]} fx={swarmFx[it.agent.id]} />
               : <HelperTile key={it.key} it={it} pressed={it.key === sel} onPick={() => setSel(it.key)} />)}
             {!state && !error && Array.from({ length: 4 }, (_, i) => <div key={i} className="dk-tile is-ghost" />)}
             <div className="dk-flights" aria-hidden="true">

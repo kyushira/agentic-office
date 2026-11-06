@@ -380,6 +380,21 @@ html.ao-full-active { background-color: #0B0E11 !important; }
 .dk-root:not(.is-lite) .dk-tl.is-ready .dk-tl-bar.is-live { transition: transform var(--dk-t-slow) linear; }
 @media (max-width: 520px) { .dk-views .dk-btn { padding: 0 8px; min-width: 0; } }
 
+/* helper swarm: one dot per live helper orbiting the agent tile. Overlay only (no layout change, no pointer events).
+   Each dot sits in a .dk-hslot rotated by its share of the circle; the .dk-swarm-orbit spins the group. */
+.dk-swarm { position: absolute; left: 50%; top: 50%; width: 0; height: 0; pointer-events: none; z-index: 2; --dk-orbit-r: 50px; }
+.dk-swarm-orbit { position: absolute; left: 0; top: 0; width: 0; height: 0; }
+.dk-hslot { position: absolute; left: 0; top: 0; width: 0; height: 0; }
+.dk-hdot { position: absolute; left: var(--dk-orbit-r); top: 0; width: 6px; height: 6px; margin: -3px 0 0 -3px; border-radius: 50%;
+  background: var(--dk-hot); box-shadow: 0 0 6px var(--dk-glow); opacity: .85; }
+.dk-root:not(.is-lite) .dk-swarm:not(.is-still) .dk-swarm-orbit { animation: dk-orbit 24s linear infinite; }
+.dk-root:not(.is-lite) .dk-swarm:not(.is-still) .dk-hdot.is-in { animation: dk-hdot-in 1.2s ease-out both; }
+.dk-root:not(.is-lite) .dk-swarm:not(.is-still) .dk-hdot.is-out { animation: dk-hdot-out 1.6s ease-in forwards; }
+@keyframes dk-orbit { to { transform: rotate(360deg); } }
+@keyframes dk-hdot-in { from { opacity: 0; transform: scale(.2); } to { opacity: .85; transform: scale(1); } }
+@keyframes dk-hdot-out { from { opacity: .85; transform: translateX(0); } to { opacity: 0; transform: translateX(16px); } }
+@media (max-width: 520px) { .dk-swarm { --dk-orbit-r: 40px; } }
+
 /* motion: state colour changes only, no looping meters; reduced motion keeps every state visible without animation */
 @media (prefers-reduced-motion: reduce) {
   .dk-root *, .dk-root *::before, .dk-root *::after {
@@ -395,6 +410,7 @@ html.ao-full-active { background-color: #0B0E11 !important; }
   .dk-root .dk-ring-orbit { animation: none !important; }                       /* marker stays put at 12 o'clock */
   .dk-root .dk-brain-pulse { display: none !important; }                        /* no fly-in; the static node still shows reads and writes */
   .dk-root .dk-tl-now, .dk-root .dk-tl-bar.is-live { transition: none !important; }   /* timeline: now-line and live bars jump to their place */
+  .dk-root .dk-swarm-orbit, .dk-root .dk-hdot { animation: none !important; }         /* swarm dots stay at their fixed angles */
 }
 
 /* tab hidden: pause every animation (reused by later features); the .dk-root gets is-hidden from Deck() */

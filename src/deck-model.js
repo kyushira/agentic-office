@@ -345,6 +345,40 @@ export function brainNotes(brain) {
 const TL_MARGIN_H = 0.25;     // room after the now-line, in hours
 const TL_DAY_H = 24;          // a bar that is still running is drawn to the end of the day, then scaled
 
+/**
+ * Helper changes between two /state polls, for the swarm dots: {agentId: {spawned: [ids], exited: [{id, task, model}]}}.
+ * spawned: a live helper whose id was in neither the previous helpers nor recentHelpers of that agent.
+ * exited: a previous live helper that is no longer live (it finished and moved to recentHelpers, or it is gone).
+ * No previous poll, or an agent that was not in the previous poll, gives nothing (nothing animates on load).
+ * Agents with no change are left out.
+ */
+export function helperChanges(prev, next) {
+  const out = {};
+  if (!prev || !next) return out;
+  const before = new Map((prev.agents || []).map(a => [a.id, a]));
+  for (const a of next.agents || []) {
+    const was = before.get(a.id);
+    if (!was) continue;
+    const prevLive = Array.isArray(was.helpers) ? was.helpers.filter(h => h && h.id != null) : [];
+    const prevRecent = Array.isArray(was.recentHelpers) ? was.recentHelpers : [];
+    const seen = new Set([...prevLive, ...prevRecent].map(h => h && h.id));
+    const nowLive = Array.isArray(a.helpers) ? a.helpers.filter(h => h && h.id != null) : [];
+    const nowIds = new Set(nowLive.map(h => h.id));
+    const spawned = nowLive.filter(h => !seen.has(h.id)).map(h => h.id);
+    const exited = prevLive.filter(h => !nowIds.has(h.id)).map(h => ({ id: h.id, task: h.task, model: h.model }));
+    if (spawned.length || exited.length) out[a.id] = { spawned, exited };
+  }
+  return out;
+}
+
+/** Tile tooltip for live helpers: "2 helpers running", then one "model · task" line each (empty when none). */
+export function swarmTip(helpers) {
+  const hs = Array.isArray(helpers) ? helpers.filter(h => h && h.id != null) : [];
+  if (!hs.length) return '';
+  const head = `${hs.length} helper${hs.length === 1 ? '' : 's'} running`;
+  return [head, ...hs.map(h => `${h.model || 'helper'} · ${String(h.task || '').trim() || 'task'}`)].join('\n');
+}
+
 /** Local midnight at or before `now` (unix s), as unix s. */
 export function localMidnight(now) {
   const d = new Date(now * 1000);
