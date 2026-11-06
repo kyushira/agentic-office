@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { buildItems, headerCounts, durationText, modelText, modelParts, usageText, meterLevel, activeTokens, currentSessionId, eventLabel, detailRows, traceModel, newToolCalls, countStep, todayParts } from '../src/deck-model.js';
+import { buildItems, headerCounts, durationText, modelText, modelParts, usageText, meterLevel, activeTokens, currentSessionId, eventLabel, detailRows, traceModel, newToolCalls, countStep, todayParts, newWalks, walkLabel } from '../src/deck-model.js';
 
 const now = 1_800_000_000;
 const state = {
@@ -290,4 +290,61 @@ test('todayParts: no today gives null; missing fields give null; real zeros stay
   assert.deepEqual(todayParts({ today: { tokens: 1200, toolCalls: 0, sessions: 2 } }), { tokens: 1200, toolCalls: 0, sessions: 2 });
   assert.deepEqual(todayParts({ today: { tokens: null, toolCalls: 5 } }), { tokens: null, toolCalls: 5, sessions: null });
   assert.deepEqual(todayParts({ today: { tokens: 'x', toolCalls: '', sessions: '7' } }), { tokens: null, toolCalls: null, sessions: 7 });
+});
+
+test('newWalks: no previous poll (first load or reload) shows nothing', () => {
+  const walks = [{ id: 'w9', at: now - 5, from: 'default', to: 'dev', kind: 'brief' }];
+  assert.deepEqual(newWalks(null, { walks }, ['default', 'dev']), []);
+  assert.deepEqual(newWalks(undefined, { walks }, ['default', 'dev']), []);
+});
+
+test('newWalks: ids already seen in the previous poll are ignored; only new ids come back', () => {
+  const prev = { walks: [{ id: 'w1', at: now - 30, from: 'default', to: 'dev' }] };
+  const next = { walks: [{ id: 'w1', at: now - 30, from: 'default', to: 'dev' }, { id: 'w2', at: now - 2, from: 'dev', to: 'default', kind: 'reply', subject: 'done' }] };
+  assert.deepEqual(newWalks(prev, next, ['default', 'dev']).map(w => w.id), ['w2']);
+  assert.deepEqual(newWalks(next, next, ['default', 'dev']), []);
+});
+
+test('newWalks: walks touching an agent not on the grid are ignored', () => {
+  const prev = { walks: [] };
+  const next = { walks: [{ id: 'a', at: now - 2, from: 'default', to: 'ghost' }, { id: 'b', at: now - 2, from: 'ghost', to: 'dev' }, { id: 'c', at: now - 2, from: 'default', to: 'dev' }] };
+  assert.deepEqual(newWalks(prev, next, ['default', 'dev']).map(w => w.id), ['c']);
+});
+
+test('newWalks: self-walks are ignored', () => {
+  const prev = { walks: [] };
+  const next = { walks: [{ id: 's', at: now - 2, from: 'dev', to: 'dev' }] };
+  assert.deepEqual(newWalks(prev, next, ['dev']), []);
+});
+
+test('newWalks: sorted by at, capped at the newest 4 per poll', () => {
+  const prev = { walks: [] };
+  const walks = [5, 1, 4, 2, 6, 3].map(n => ({ id: 'k' + n, at: now - 10 + n, from: 'default', to: 'dev' }));
+  const got = newWalks(prev, { walks }, ['default', 'dev']);
+  assert.equal(got.length, 4);
+  assert.deepEqual(got.map(w => w.id), ['k3', 'k4', 'k5', 'k6']);
+});
+
+test('newWalks: a walk older than a minute (tab was away) counts as seen, not animated', () => {
+  const prev = { walks: [] };
+  const next = { walks: [{ id: 'old', at: now - 300, from: 'default', to: 'dev' }, { id: 'new', at: now - 3, from: 'default', to: 'dev' }] };
+  assert.deepEqual(newWalks(prev, next, ['default', 'dev'], now).map(w => w.id), ['new']);
+  assert.deepEqual(newWalks(prev, next, ['default', 'dev']).map(w => w.id), ['old', 'new'], 'no clock given, no age check');
+});
+
+test('walkLabel: from, to, kind name and subject; long subject truncated to ~40 with an ellipsis', () => {
+  const names = { default: 'Ash', dev: 'Dev' };
+  assert.equal(walkLabel({ from: 'default', to: 'dev', kind: 'brief', subject: 'Fix login' }, names), 'Ash → Dev · new brief · Fix login');
+  assert.equal(walkLabel({ from: 'dev', to: 'default', kind: 'reply', subject: '' }, names), 'Dev → Ash · report');
+  assert.equal(walkLabel({ from: 'dev', to: 'default', kind: 'message' }, names), 'Dev → Ash · message');
+  const long = 'x'.repeat(39) + 'yyyyy';
+  const label = walkLabel({ from: 'dev', to: 'default', kind: 'message', subject: long }, names);
+  const subj = label.split(' · ')[2];
+  assert.equal(subj.length, 40);
+  assert.equal(subj.slice(-1), '…');
+  assert.equal(walkLabel({ from: 'dev', to: 'default', kind: 'message', subject: 'a'.repeat(40) }, names).endsWith('a'.repeat(40)), true, 'exactly 40 is kept whole');
+});
+
+test('walkLabel: unknown names and kinds fall back to the raw id and kind', () => {
+  assert.equal(walkLabel({ from: 'nova', to: 'dev', kind: 'poke' }, { dev: 'Dev' }), 'nova → Dev · poke');
 });

@@ -230,3 +230,33 @@ export function todayParts(a) {
   };
   return { tokens: num('tokens'), toolCalls: num('toolCalls'), sessions: num('sessions') };
 }
+
+const FLIGHT_MAX = 4;          // newest new walks shown per poll; the rest are counted as seen and dropped
+const WALK_FRESH_S = 60;       // a walk older than this (tab was away) is counted as seen, never animated
+const SUBJ_MAX = 40;
+
+/**
+ * Walks that are new since the last /state poll, for the message-flow overlay. A walk id seen in
+ * prevState (or any walk on the first poll, when prevState is null) never shows, so nothing replays
+ * on load or reload. Both ends must be agents on the grid (agentIds) and not the same agent.
+ * `now` (unix s, optional) drops walks older than WALK_FRESH_S. Returns the newest FLIGHT_MAX, oldest first.
+ */
+export function newWalks(prevState, nextState, agentIds, now) {
+  if (!prevState || !nextState) return [];
+  const seen = new Set((prevState.walks || []).map(w => w.id));
+  const shown = new Set(agentIds || []);
+  return (nextState.walks || [])
+    .filter(w => w.id != null && !seen.has(w.id) && w.from !== w.to && shown.has(w.from) && shown.has(w.to))
+    .filter(w => now == null || now - (+w.at || 0) < WALK_FRESH_S)
+    .sort((x, y) => (x.at || 0) - (y.at || 0))
+    .slice(-FLIGHT_MAX);
+}
+
+/** "Ash → Dev · new brief · <subject>"; the subject is cut to ~40 characters with an ellipsis, and omitted when empty. */
+export function walkLabel(w, names) {
+  const head = `${names[w.from] || w.from} → ${names[w.to] || w.to} · ${KIND[w.kind] || w.kind}`;
+  const subj = String(w.subject || '').trim();
+  if (!subj) return head;
+  const short = subj.length > SUBJ_MAX ? subj.slice(0, SUBJ_MAX - 1).trimEnd() + '…' : subj;
+  return `${head} · ${short}`;
+}

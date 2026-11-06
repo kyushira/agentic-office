@@ -36,7 +36,7 @@
 .dk-btn.on { color: var(--dk-hot); border-color: var(--dk-dim); box-shadow: 0 0 0 1px var(--dk-glow-soft), 0 0 10px var(--dk-glow-soft); }
 .dk-err { margin: 0 10px 8px; padding: 8px 10px; border: 1px solid color-mix(in srgb, var(--dk-red) 40%, transparent); border-radius: 6px; color: var(--dk-red); font-size: 12px; }
 
-.dk-grid { flex: 1; overflow-y: auto; overscroll-behavior: contain; padding: 0 8px 10px; display: grid; gap: 6px;
+.dk-grid { flex: 1; position: relative; overflow-y: auto; overscroll-behavior: contain; padding: 0 8px 10px; display: grid; gap: 6px;
   grid-template-columns: repeat(auto-fill, minmax(148px, 1fr)); align-content: start; scrollbar-width: none; }
 .dk-grid::-webkit-scrollbar { display: none; }
 .dk-root:not(.is-lite) .dk-grid {   /* faint grid under the tiles; dropped in Lite */
@@ -285,6 +285,23 @@ html.ao-full-active { background-color: #0B0E11 !important; }
   .dk-root .dk-urow { grid-template-columns: 6.5em 1fr 3em; }
   .dk-root .dk-ures { grid-column: 2 / -1; }
 }
+
+/* walks: message flow between agent tiles. The overlay sits inside the scrolling grid (out of grid flow, above the tiles,
+   aria-hidden). Animated flights use transform/opacity only; Lite and reduced motion get a static arrow and label. */
+.dk-flights { position: absolute; left: 0; top: 0; width: 0; height: 0; z-index: 2; pointer-events: none; }
+.dk-flight-line { position: absolute; overflow: visible; opacity: .6; }
+.dk-root:not(.is-lite) .dk-flight-line.is-anim { animation: dk-flight-line 2600ms ease-out both; }
+@keyframes dk-flight-line { 0% { opacity: 0; } 12% { opacity: .6; } 100% { opacity: 0; } }
+.dk-flight-dot { position: absolute; width: 6px; height: 6px; margin: 0; border-radius: 50%; background: var(--dk-c);
+  box-shadow: 0 0 6px var(--dk-c); opacity: 0; transform: translate(-50%, -50%); }
+.dk-root:not(.is-lite) .dk-flight-dot { animation: dk-flight-dot 1500ms ease-in-out both; }
+@keyframes dk-flight-dot { 0% { opacity: 0; transform: translate(-50%, -50%); } 10%, 85% { opacity: 1; }
+  100% { opacity: 0; transform: translate(calc(-50% + var(--dx)), calc(-50% + var(--dy))); } }
+.dk-flight-label { position: absolute; transform: translate(-50%, -50%); max-width: 180px; padding: 2px 6px; border: 1px solid var(--dk-hot);
+  border-radius: 4px; background: var(--dk-raise); color: var(--dk-ink); font: 500 9.5px/1.25 var(--dk-mono);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; box-shadow: 0 0 8px var(--dk-glow-soft); }
+.dk-root:not(.is-lite) .dk-flight-label.is-anim { animation: dk-flight-label 2600ms ease-out both; }
+@keyframes dk-flight-label { 0% { opacity: 0; } 15%, 75% { opacity: 1; } 100% { opacity: 0; } }
 
 /* motion: state colour changes only, no looping meters; reduced motion keeps every state visible without animation */
 @media (prefers-reduced-motion: reduce) {

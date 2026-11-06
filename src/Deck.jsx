@@ -1,7 +1,7 @@
 import { React, useState, useEffect, useRef, fetchJSON, API, USAGE_API, SESSION_API } from './sdk.js';
 import { ago, compact } from './format.js';
 import { portrait } from './portrait.js';
-import { buildItems, headerCounts, durationText, modelText, modelParts, usageText, meterLevel, activeTokens, currentSessionId, eventLabel, detailRows, traceModel, newToolCalls, countStep, todayParts, COUNT_MS } from './deck-model.js';
+import { buildItems, headerCounts, durationText, modelText, modelParts, usageText, meterLevel, activeTokens, currentSessionId, eventLabel, detailRows, traceModel, newToolCalls, countStep, todayParts, COUNT_MS, newWalks, walkLabel } from './deck-model.js';
 import { isStandalone, wantsFull, withFullParam, requestNativeFullscreen, exitNativeFullscreen, markFullPath } from './fullscreen.js';
 
 const POLL_MS = 5000, POLL_LITE_MS = 15000, DETAIL_MS = 5000;
@@ -102,10 +102,10 @@ function TodayLine({ a, still }) {
   );
 }
 
-function AgentTile({ it, pressed, onPick, blip, still }) {
+function AgentTile({ it, pressed, onPick, blip, still, setRef }) {
   const a = it.agent, working = it.working;
   return (
-    <button className={'dk-tile is-agent' + (working ? ' is-working' : ' is-rest') + (pressed ? ' is-pressed' : '') + (it.chip ? ' has-chip' : '') + (it.helperCount > 0 || it.ctxPct != null ? ' has-top' : '')} onClick={onPick}
+    <button ref={setRef} className={'dk-tile is-agent' + (working ? ' is-working' : ' is-rest') + (pressed ? ' is-pressed' : '') + (it.chip ? ' has-chip' : '') + (it.helperCount > 0 || it.ctxPct != null ? ' has-top' : '')} onClick={onPick}
       style={{ '--dk-c': it.color, gridColumnStart: it.rowStart ? 1 : undefined }} aria-label={`${a.name}, ${a.role}, ${it.status}`}>
       {working && <i className="dk-sweep" aria-hidden="true" />}
       {working && <i className="dk-badge" />}
@@ -138,6 +138,32 @@ function HelperTile({ it, pressed, onPick }) {
     </button>
   );
 }
+
+/**
+ * One hand-off on the grid overlay: a line and arrowhead from the sender tile to the receiver, a dot
+ * that travels along it (animated only), and the walk label at the midpoint. Coordinates are in grid
+ * scroll-content space. `still` (Lite or reduced motion) shows the arrow and label with no animation.
+ */
+function FlightLayer({ f }) {
+  const { x1, y1, x2, y2, color, label, lx, ly, still } = f;
+  const pad = 14, left = Math.min(x1, x2) - pad, top = Math.min(y1, y2) - pad;
+  const w = Math.abs(x2 - x1) + pad * 2, h = Math.abs(y2 - y1) + pad * 2;
+  const dx = x2 - x1, dy = y2 - y1, len = Math.hypot(dx, dy) || 1;
+  const ux = dx / len, uy = dy / len, px = -uy, py = ux, head = 8;
+  const tip = [x2 - left, y2 - top], b1 = [x2 - left - ux * head + px * 4, y2 - top - uy * head + py * 4];
+  const b2 = [x2 - left - ux * head - px * 4, y2 - top - uy * head - py * 4];
+  const anim = still ? '' : ' is-anim';
+  return (<>
+    <svg className={'dk-flight-line' + anim} style={{ left, top, width: w, height: h, color }} viewBox={`0 0 ${w} ${h}`} focusable="false">
+      <line x1={x1 - left} y1={y1 - top} x2={x2 - left} y2={y2 - top} stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+      <polygon points={[tip, b1, b2].map(p => p.join(',')).join(' ')} fill="currentColor" />
+    </svg>
+    {!still && <i className="dk-flight-dot" style={{ left: x1, top: y1, '--dx': dx + 'px', '--dy': dy + 'px', '--dk-c': color }} />}
+    <span className={'dk-flight-label' + anim} style={{ left: lx, top: ly }}>{label}</span>
+  </>);
+}
+
+const FLIGHT_MS = 2600, FLIGHT_STILL_MS = 4000;
 
 const Pill = ({ status }) => <span className={'dk-pill is-' + status}>{status === 'done' ? '✓ done' : status}</span>;
 
@@ -258,6 +284,12 @@ export default function Deck() {
   const prevState = useRef(null);                                       // last /state, for the tool-call diff
   const [blips, setBlips] = useState({});                               // agent id -> blip counter
   const [hidden, setHidden] = useState(() => document.visibilityState === 'hidden');
+  const gridRef = useRef(null);                                         // scroll container; overlay lives inside it
+  const tileRefs = useRef(new Map());                                   // agent id -> tile <button>
+  const flightTimers = useRef(new Map());                               // flight key -> removal timeout
+  const [flights, setFlights] = useState([]);                           // walks being drawn right now
+  const setTileRef = (id, el) => { if (el) tileRefs.current.set(id, el); else tileRefs.current.delete(id); };
+  useEffect(() => () => { for (const t of flightTimers.current.values()) clearTimeout(t); }, []);
 
   const load = () => {
     clearTimeout(timer.current);
@@ -281,10 +313,37 @@ export default function Deck() {
   }, []);
   useEffect(() => {
     if (!state) return;
+    const agents = state.agents || [];
+    const fresh = newWalks(prevState.current, state, agents.map(a => a.id), Date.now() / 1000);
     const d = newToolCalls(prevState.current, state);
-    prevState.current = state;
+    prevState.current = state;                                          // walks are seen now, even if not drawn
     const ids = Object.keys(d);
     if (ids.length) setBlips(b => { const n = { ...b }; for (const id of ids) n[id] = (n[id] || 0) + 1; return n; });
+    if (!fresh.length || hidden || !gridRef.current) return;            // nothing is queued while the tab is hidden
+    const names = Object.fromEntries(agents.map(a => [a.id, a.name]));
+    const colors = Object.fromEntries(agents.map(a => [a.id, a.color || '#8a8a8a']));
+    const still = liteRef.current || reducedMotion();
+    const gw = gridRef.current.clientWidth;
+    const made = [];
+    for (const w of fresh) {
+      const a = tileRefs.current.get(w.from), b = tileRefs.current.get(w.to);
+      if (!a || !b) continue;                                           // tile not in the DOM: skip this flight
+      const x1 = a.offsetLeft + a.offsetWidth / 2, y1 = a.offsetTop + a.offsetHeight / 2;
+      const x2 = b.offsetLeft + b.offsetWidth / 2, y2 = b.offsetTop + b.offsetHeight / 2;
+      const mx = (x1 + x2) / 2, lx = Math.min(Math.max(mx, 96), Math.max(96, gw - 96));
+      made.push({ key: String(w.id), x1, y1, x2, y2, lx, ly: (y1 + y2) / 2, color: colors[w.from] || '#8a8a8a',
+        label: walkLabel(w, names), still });
+    }
+    if (!made.length) return;
+    setFlights(f => [...f, ...made]);
+    for (const m of made) {
+      const old = flightTimers.current.get(m.key);
+      if (old) clearTimeout(old);
+      flightTimers.current.set(m.key, setTimeout(() => {
+        flightTimers.current.delete(m.key);
+        setFlights(f => f.filter(x => x.key !== m.key));
+      }, still ? FLIGHT_STILL_MS : FLIGHT_MS));
+    }
   }, [state]);
   useEffect(() => {
     let live = true;
@@ -378,11 +437,15 @@ export default function Deck() {
             <p className="dk-note dk-uscope">Claude plan usage, account-wide (not per agent).</p>
           </div>)}
       {error && <div className="dk-err">Can't reach the deck data ({error}). Retrying…</div>}
-      <main className="dk-grid">
+      <main ref={gridRef} className="dk-grid">
         {items.map(it => it.type === 'agent'
-          ? <AgentTile key={it.key} it={it} pressed={it.key === sel} blip={blips[it.agent.id] || 0} still={lite || hidden} onPick={() => setSel(it.key)} />
+          ? <AgentTile key={it.key} it={it} pressed={it.key === sel} blip={blips[it.agent.id] || 0} still={lite || hidden} onPick={() => setSel(it.key)}
+              setRef={el => { setTileRef(it.agent.id, el); }} />
           : <HelperTile key={it.key} it={it} pressed={it.key === sel} onPick={() => setSel(it.key)} />)}
         {!state && !error && Array.from({ length: 4 }, (_, i) => <div key={i} className="dk-tile is-ghost" />)}
+        <div className="dk-flights" aria-hidden="true">
+          {flights.map(f => <FlightLayer key={f.key} f={f} />)}
+        </div>
       </main>
       {picked && <Sheet onClose={() => setSel(null)}>
         {picked.type === 'agent'
