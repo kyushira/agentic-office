@@ -105,6 +105,15 @@ export function typeStep(len) {
   return Math.max(1, Math.ceil(len / 90));
 }
 
+/** Thinking agents seen so far for one key: the union of `prev` and `next`, first-seen order kept. */
+export function mergeThinking(prev, next) {
+  const out = [];
+  for (const id of [...(prev || []), ...(next || [])]) {
+    if (id && !out.includes(id)) out.push(id);
+  }
+  return out;
+}
+
 /** The 'Thoughts = narration + plan' note shows for a selected agent that has no real thinking rows. */
 export function showThoughtsNote(thinkingAgents, agentId) {
   return !!agentId && !(thinkingAgents || []).includes(agentId);

@@ -3,8 +3,16 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   mergeRows, newIds, statusCounts, shortTime, agentColor, agentName, chipLabel, commsFor,
-  feedQuery, commsQuery, thinkLabel, callParts, typeStep, showThoughtsNote, MC_CAP,
+  feedQuery, commsQuery, thinkLabel, callParts, typeStep, showThoughtsNote, mergeThinking, MC_CAP,
 } from '../src/mc-model.js';
+
+test('mergeThinking: union across polls, first-seen order, nothing lost on an empty poll', () => {
+  assert.deepEqual(mergeThinking(['dev'], []), ['dev']);
+  assert.deepEqual(mergeThinking(null, ['ash']), ['ash']);
+  assert.deepEqual(mergeThinking(['dev'], ['ash', 'dev']), ['dev', 'ash']);
+  assert.deepEqual(mergeThinking([], []), []);
+  assert.deepEqual(mergeThinking(undefined, undefined), []);
+});
 
 test('mergeRows: dedupes by id, newest first, incoming copy wins, capped', () => {
   const old = [{ id: 'a', ts: 10, text: 'old-a' }, { id: 'b', ts: 5 }];
