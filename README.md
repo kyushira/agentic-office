@@ -7,6 +7,19 @@ It's read-only, and its data endpoint sits behind the dashboard login.
 - Backend: `plugin/agent-office/dashboard/plugin_api.py` → `GET /api/plugins/agent-office/state`. It reads each profile's `state.db` read-only (`mode=ro`), polls every 5s and caches for 4s. The state payload never includes message text or tool arguments, and it never reads config secrets or `.env`.
 - Feed and comms: `GET /api/plugins/agent-office/feed?agent=&since=&limit=` returns newest-first assistant text, tool-call names with a short argument, and tool results (only assistant and tool rows; user messages are never read out). `GET /api/plugins/agent-office/comms?since=&limit=` returns `message_agent` and `delegate_task` calls from each sender's own db. Both are read-only and pass every string through `dashboard/redact.py` on the server before it leaves the API: provider keys (sk-, ghp_, AIza, xox, AKIA), bearer tokens, `key/token/secret/password` values, PEM private keys, `.env`-style blocks and 33+ character hex/base64 runs become `[redacted]`; a `.env` file reference (in arguments or in the result of that call) becomes `[redacted: .env file]`. Config secrets and `.env` contents are never read.
 
+- Projects: `GET /api/plugins/agent-office/projects` (cached 30s) lists the folders under `/opt/data/projects`, one card each: last commit (read-only `git log`, 3s timeout), briefs, and a status (active under 3 days, quiet 3 to 7, stale over 7). Only `owner` and `next` come from the registry below. Read-only; `dashboard/projects.py`.
+
+## Projects registry
+
+`/opt/data/projects/projects.json` is optional and hand-written. It is the only source of owner and next step on the Projects tab:
+
+    {"projects": {"<folder name>": {"owner": "dev", "next": "what is next", "note": "", "source": "_briefs/x.md"}}}
+
+- Keys are project folder names. A folder with no entry shows "not set" for owner and next step.
+- `owner` and `next` are strings (blank counts as not set); `note` and `source` are free text for people and are not shown.
+- Every string is redacted server-side. A missing file gives "No projects.json registry" on the tab; a malformed file is reported as an error and never crashes the API.
+- The file lives outside the repo and is not committed.
+
 ## Develop
 
     export PATH=/opt/hermes/tools/node-26.12.1-linux-x64/bin:$PATH

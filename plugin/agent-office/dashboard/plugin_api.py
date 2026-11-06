@@ -25,10 +25,16 @@ _fspec = importlib.util.spec_from_file_location("agent_office_feed", Path(__file
 feed = importlib.util.module_from_spec(_fspec)
 _fspec.loader.exec_module(feed)
 
+_pspec = importlib.util.spec_from_file_location("agent_office_projects", Path(__file__).with_name("projects.py"))
+projects = importlib.util.module_from_spec(_pspec)
+_pspec.loader.exec_module(projects)
+
 router = APIRouter()
 NO_STORE = {"Cache-Control": "no-store", "Pragma": "no-cache"}
 CACHE_SECS = 4.0
+PROJECTS_CACHE_SECS = 30.0
 _cache = {"at": 0.0, "data": None}
+_pcache = {"at": 0.0, "data": None}
 _lock = threading.Lock()
 
 
@@ -40,9 +46,23 @@ def _snapshot():
         return _cache["data"]
 
 
+def _projects_snapshot():
+    with _lock:
+        if _pcache["data"] is None or time.time() - _pcache["at"] > PROJECTS_CACHE_SECS:
+            _pcache["data"] = projects.projects()
+            _pcache["at"] = time.time()
+        return _pcache["data"]
+
+
 @router.get("/state")
 async def state():
     return await asyncio.to_thread(_snapshot)
+
+
+@router.get("/projects")
+async def projects_endpoint():
+    """Read-only project cards (git last commit, briefs, optional projects.json registry), cached 30s."""
+    return JSONResponse(await asyncio.to_thread(_projects_snapshot), headers=NO_STORE)
 
 
 @router.get("/usage")
