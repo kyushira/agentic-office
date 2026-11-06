@@ -277,7 +277,7 @@ html.ao-full-active { background-color: #0B0E11 !important; }
   .dk-top { flex-wrap: wrap; row-gap: 6px; }
   .dk-sum { flex: 1 1 100%; }
   .dk-top > .dk-grow { display: none; }
-  .dk-acts { flex: 1 1 100%; justify-content: flex-end; }
+  .dk-acts { flex: 1 1 100%; justify-content: flex-end; flex-wrap: wrap; row-gap: 6px; }
   .dk-count, .dk-usage { font-size: 11px; }
   .dk-root .dk-uw .dk-meter { width: 22px; }
   .dk-root .dk-usage-btn { gap: 6px; }
@@ -351,7 +351,13 @@ html.ao-full-active { background-color: #0B0E11 !important; }
 .dk-tile.is-pressed .dk-brain-core, .dk-tile.is-pressed .dk-brain-pulse.is-write { background: var(--dk-on-hot); }
 .dk-tile.is-pressed .dk-brain-pulse.is-read { border-color: var(--dk-on-hot); }
 
-/* view switch (Deck / Today) in the header: two .dk-btn tabs; the selected one carries .on */
+/* 360px phones: Deck | Today | Mission plus Fullscreen, Lite and refresh do not fit one row at 12px padding.
+   .dk-acts wraps (above), and the buttons tighten so the view tabs stay on one line. */
+@media (max-width: 400px) {
+  .dk-root .dk-acts .dk-btn { padding: 0 8px; }
+}
+
+/* view switch (Deck / Today / Mission) in the header: three .dk-btn tabs; the selected one carries .on */
 .dk-views { display: inline-flex; gap: 6px; }
 .dk-panel { flex: 1; min-height: 0; display: flex; flex-direction: column; }
 
