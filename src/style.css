@@ -114,6 +114,9 @@
   display: block; max-height: 2.5em; }
 .dk-root.is-few .dk-role, .dk-root.is-few .dk-remit, .dk-root.is-few .dk-models { font-size: 11px; }
 .dk-tile.is-pressed .dk-role, .dk-tile.is-pressed .dk-remit, .dk-tile.is-pressed .dk-models { color: var(--dk-on-hot); }
+.dk-tile.is-pressed .dk-ctx, .dk-tile.is-pressed .dk-parent { color: var(--dk-on-hot); }
+.dk-root .dk-tile.is-pressed .dk-meter { background: color-mix(in srgb, var(--dk-on-hot) 25%, transparent); }
+.dk-root .dk-tile.is-pressed .dk-meter > i { background: var(--dk-on-hot); }
 .dk-remit-full { font-size: 12px; line-height: 1.35; color: var(--dk-ink); margin: 0 0 10px; word-break: break-word; }
 
 @media (max-width: 600px) {
