@@ -8,7 +8,8 @@ secrets and short git SHAs pass through unchanged.
 Deliberate choices:
 - UUIDs are kept (their hyphen-separated groups are short); 7-12 hex git SHAs are kept.
 - Full 40-char SHAs and any 33+ run of hex/base64 characters are redacted.
-- A base64 run containing '/' is only caught via its key name, because '/' is how paths look.
+- A base64 run containing '/' (40+ chars, with a digit, an uppercase and a lowercase letter, not starting with '/')
+  is redacted. Absolute paths and any token that carries a URL ("://") or starts like a path are kept.
 - Conservative on key names: "max_tokens=4096" or "keys: none" are redacted too.
 """
 import re
@@ -37,11 +38,32 @@ _FLAG = re.compile(r"(--[A-Za-z0-9_\-]*(?i:KEY|TOKEN|SECRET|PASSWORD|PASSWD)[A-Z
 _HEX = re.compile(r"(?<![0-9A-Za-z])[0-9a-fA-F]{33,}(?![0-9A-Za-z])")
 _B64 = re.compile(r"(?<![A-Za-z0-9+/])[A-Za-z0-9+]{33,}={0,2}(?![A-Za-z0-9+/=])")
 _ENV_PATH = re.compile(r"(?<![A-Za-z0-9_\-])\.env(?![A-Za-z0-9_\-])")
+_SLASH_B64 = re.compile(r"(?<![A-Za-z0-9+/])[A-Za-z0-9+/]{40,}={0,2}(?![A-Za-z0-9+/=])")
+_PATH_LIKE = ("/", "./", "../", "~/")
 
 
 def is_env_path(s) -> bool:
     """True when the text references a .env file (".env", "/x/.env", ".env.local"); not "process.env" or "dotenv"."""
     return bool(s) and _ENV_PATH.search(str(s)) is not None
+
+
+def _slash_b64(m) -> str:
+    """A 40+ run with '/' that looks like base64 (digit, upper and lower letter) is a secret, unless it is a path
+    (starts with '/') or sits in a token that carries a URL or is path-shaped (e.g. https://host/Some/Path)."""
+    run = m.group(0)
+    if "/" not in run or run.startswith("/"):
+        return run
+    if not (any(c.isdigit() for c in run) and any(c.isupper() for c in run) and any(c.islower() for c in run)):
+        return run
+    s, lo, hi = m.string, m.start(), m.end()
+    while lo > 0 and not s[lo - 1].isspace():
+        lo -= 1
+    while hi < len(s) and not s[hi].isspace():
+        hi += 1
+    token = s[lo:hi]
+    if "://" in token or token.startswith(_PATH_LIKE):
+        return run
+    return MARK
 
 
 def _scrub(s: str) -> str:
@@ -57,6 +79,7 @@ def _scrub(s: str) -> str:
     s = _FLAG.sub(lambda m: m.group(1) + MARK, s)
     s = _HEX.sub(MARK, s)
     s = _B64.sub(MARK, s)
+    s = _SLASH_B64.sub(_slash_b64, s)
     return s
 
 

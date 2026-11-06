@@ -123,6 +123,36 @@ class RunTests(unittest.TestCase):
             self.assertEqual(redact.redact(text), text)
 
 
+class SlashBase64Tests(unittest.TestCase):
+    BLOB = "aB3dE5fG7hI9jK1lM2nO4pQ6rS8tU0vW/xY2zA4bC6dE8fG0"  # 48 chars, has '/', digit, upper, lower
+
+    def test_slash_base64_run_redacted(self):
+        self.assertEqual(redact.redact("blob " + self.BLOB + " end"), f"blob {M} end")
+        self.assertEqual(redact.redact("pad " + self.BLOB + "== end"), f"pad {M} end")
+
+    def test_slash_run_needs_digit_upper_and_lower(self):
+        no_digit = "aBcDeFgHiJkLmNoPqRsTuVwXyZ/aBcDeFgHiJkLmNoPqRsTuVwXyZ"
+        no_upper = "a3dfghij4klmn6pqrs8tuvw0xyz/a3dfghij4klmn6pqrs8tuvw0xyz"
+        no_lower = "A3DFGHIJ4KLMN6PQRS8TUVW0XYZ/A3DFGHIJ4KLMN6PQRS8TUVW0XYZ"
+        for text in (no_digit, no_upper, no_lower):
+            self.assertEqual(redact.redact(text), text)
+
+    def test_slash_run_under_40_kept(self):
+        short = "aB3dE5fG7hI9jK1lM2nO4pQ6rS8/tU0vWxY2zA"  # 38 chars
+        self.assertEqual(redact.redact(short), short)
+
+    def test_absolute_paths_kept(self):
+        for text in ("/opt/data/profiles/dev/cache/scratch",
+                     "/opt/data/Profiles2026/Dev/cache/ScratchDir/build42/outputArtifacts",
+                     "cd /opt/data/Profiles2026/Dev/cache/ScratchDir/build42/outputArtifacts ok"):
+            self.assertEqual(redact.redact(text), text)
+
+    def test_urls_kept(self):
+        for text in ("https://example.com/Some/Path/With/Mixed/Case/And123Digits/tail",
+                     "see https://h.example/Cache/Build2026/Artifacts/ZzYyXxWwVvUuTt/item.json ok"):
+            self.assertEqual(redact.redact(text), text)
+
+
 class TruncationTests(unittest.TestCase):
     def test_truncates_to_limit_with_ellipsis(self):
         out = redact.redact("word " * 40, 20)

@@ -4,12 +4,16 @@ Pure functions over each profile's state.db (opened with mode=ro via collect._co
 Only assistant and tool rows are read: user rows can be Sir's private messages, so they never leave here.
 Every string this module returns passes through redact.redact; a .env reference (in tool-call arguments or in
 the result of such a call) is replaced whole. Nothing is logged or cached.
+
+Model thinking is gated: /feed carries only a count-bearing 'thinking' row (kind 'thinking', empty text, chars);
+the text itself is read by thinking() for one row id on tap, redacted and capped at THINK_CAP.
 """
 from __future__ import annotations
 
 import importlib.util
 import json
 import math
+import re
 import sqlite3
 import time
 from pathlib import Path
@@ -27,8 +31,9 @@ redact = _load("redact")
 
 FEED_LIMIT, COMMS_LIMIT, MAX_LIMIT = 150, 100, 300
 TEXT_CAP, RESULT_CAP, ARG_CAP = 2000, 300, 160
-PREVIEW_CAP, BODY_CAP = 200, 6000
+PREVIEW_CAP, BODY_CAP, THINK_CAP = 200, 6000, 4000
 ENV_DAY = 86400  # how far back to look for the call that a .env result belongs to
+_THINK_ID = re.compile(r"([^:\s]+):([1-9][0-9]{0,17})~t")
 ARG_KEYS = ("command", "cmd", "path", "file_path", "target", "query", "goal", "url", "pattern", "name", "message")
 
 
@@ -95,11 +100,45 @@ def _env_call_ids(c: sqlite3.Connection, since: float) -> set[str]:
     return ids
 
 
+def _reasoning_cols(cols: set[str]) -> str:
+    """SELECT fragment for the three reasoning columns; a column missing from an older schema reads as null."""
+    return ", ".join(f"{k} as {k}" if k in cols else f"null as {k}"
+                     for k in ("reasoning", "reasoning_content", "reasoning_details"))
+
+
+def _thinking_text(reasoning, reasoning_content, details) -> str:
+    """Real model thinking of one assistant row: the reasoning column, else reasoning_content, else every non-empty
+    thinking block found anywhere in reasoning_details (signatures and empty blocks are ignored). '' when none."""
+    for v in (reasoning, reasoning_content):
+        if isinstance(v, str) and v.strip():
+            return v
+    if not isinstance(details, str) or not details.strip():
+        return ""
+    try:
+        stack = [json.loads(details)]
+    except ValueError:
+        return ""
+    out = []
+    while stack:  # iterative walk: a deeply nested wrapper cannot exhaust the recursion limit
+        node = stack.pop()
+        if isinstance(node, dict):
+            if node.get("type") == "thinking":
+                text = node.get("thinking")
+                if isinstance(text, str) and text.strip():
+                    out.append(text)
+                continue
+            stack.extend(reversed(list(node.values())))
+        elif isinstance(node, list):
+            stack.extend(reversed(node))
+    return "\n".join(out)
+
+
 def _feed_profile(pid: str, c: sqlite3.Connection, since: float, limit: int) -> list[dict]:
     cols = {r[1] for r in c.execute("pragma table_info(messages)")}
     tcid = "tool_call_id" if "tool_call_id" in cols else "null"
     rows = c.execute(
-        f"select id, session_id, role, content, tool_calls, tool_name, {tcid} as tcid, timestamp from messages "
+        f"select id, session_id, role, content, tool_calls, tool_name, {tcid} as tcid, timestamp, "
+        f"{_reasoning_cols(cols)} from messages "
         "where role in ('assistant', 'tool') and timestamp > ? order by timestamp desc, id desc limit ?",
         (since, limit)).fetchall()
     env_ids: set[str] = set()
@@ -126,6 +165,9 @@ def _feed_profile(pid: str, c: sqlite3.Connection, since: float, limit: int) -> 
                     pick = _pick(call["args"])
                     t = redact.redact(f"{call['name']}: {pick}" if pick else call["name"], ARG_CAP)
                 out.append(row(f"{base}#{k}", r, "call", t, call["name"]))
+            think = _thinking_text(r["reasoning"], r["reasoning_content"], r["reasoning_details"])
+            if think:  # chronologically before the text and calls above, so it sits after them in newest-first order
+                out.append({**row(f"{base}~t", r, "thinking", "", None), "chars": len(think)})
         else:
             content = r["content"] or ""
             if not content.strip():
@@ -196,7 +238,42 @@ def feed(agent: str | None = None, since: float | None = None, limit: int = FEED
     selected = [p for p in homes if agent is None or p["id"] == agent]
     rows = _each(selected, lambda p, c: _feed_profile(p["id"], c, since_ts, limit))
     rows.sort(key=lambda r: r["ts"], reverse=True)
-    return {"now": now, "agents": [p["id"] for p in homes], "rows": rows[:limit]}
+    rows = rows[:limit]
+    have = {r["agent"] for r in rows if r["kind"] == "thinking"}
+    return {"now": now, "agents": [p["id"] for p in homes], "rows": rows,
+            "thinking_agents": [p["id"] for p in homes if p["id"] in have]}
+
+
+def thinking(row_id, root=None) -> dict | None:
+    """Thinking text of one feed row ('<agent>:<rowid>~t'), redacted and capped. Read-only, one row, nothing kept.
+    None for a malformed id, an unknown agent, a missing row, or a row without real thinking."""
+    if not isinstance(row_id, str):
+        return None
+    m = _THINK_ID.fullmatch(row_id)
+    if m is None:
+        return None
+    agent, rid = m.group(1), int(m.group(2))
+    home = next((p for p in _homes(root) if p["id"] == agent), None)
+    if home is None:
+        return None
+    try:
+        c = collect._connect(home["home"])
+    except sqlite3.Error:
+        return None
+    try:
+        cols = {r[1] for r in c.execute("pragma table_info(messages)")}
+        r = c.execute(f"select timestamp, {_reasoning_cols(cols)} from messages "
+                      "where id = ? and role = 'assistant'", (rid,)).fetchone()
+    except sqlite3.Error:
+        return None
+    finally:
+        c.close()
+    if r is None:
+        return None
+    text = _thinking_text(r["reasoning"], r["reasoning_content"], r["reasoning_details"])
+    if not text:
+        return None
+    return {"id": row_id, "agent": agent, "ts": float(r["timestamp"]), "text": redact.redact(text, THINK_CAP)}
 
 
 def comms(since: float | None = None, limit: int = COMMS_LIMIT, root=None) -> dict:

@@ -128,9 +128,11 @@ def calls(*items):
                         "function": {"name": name, "arguments": json.dumps(args)}} for cid, name, args in items])
 
 
-def msg(role, content, ts, tool_calls=None, tool_name=None, tcid=None):
+def msg(role, content, ts, tool_calls=None, tool_name=None, tcid=None, reasoning=None, reasoning_content=None,
+        reasoning_details=None):
     return {"role": role, "content": content, "ts": ts, "tool_calls": tool_calls, "tool_name": tool_name,
-            "tcid": tcid}
+            "tcid": tcid, "reasoning": reasoning, "reasoning_content": reasoning_content,
+            "reasoning_details": reasoning_details}
 
 
 class Fixture(unittest.TestCase):
@@ -170,8 +172,9 @@ class Fixture(unittest.TestCase):
                    (sid, NOW - 1000, NOW))
         for m in rows:
             db.execute("insert into messages (session_id, role, content, tool_calls, tool_name, tool_call_id, "
-                       "timestamp) values (?, ?, ?, ?, ?, ?, ?)",
-                       (sid, m["role"], m["content"], m["tool_calls"], m["tool_name"], m["tcid"], m["ts"]))
+                       "timestamp, reasoning, reasoning_content, reasoning_details) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                       (sid, m["role"], m["content"], m["tool_calls"], m["tool_name"], m["tcid"], m["ts"],
+                        m["reasoning"], m["reasoning_content"], m["reasoning_details"]))
         db.commit()
         db.close()
 
@@ -182,7 +185,7 @@ class FeedTests(Fixture):
 
     def test_payload_shape_and_agents(self):
         out = self._feed()
-        self.assertEqual(set(out), {"now", "agents", "rows"})
+        self.assertEqual(set(out), {"now", "agents", "rows", "thinking_agents"})
         self.assertEqual(out["agents"], ["default", "dev"])
         self.assertTrue(out["rows"])
         for r in out["rows"]:
@@ -242,6 +245,108 @@ class FeedTests(Fixture):
         empty = feed.feed(root=self.root / "nowhere")
         self.assertEqual(empty["rows"], [])
         self.assertEqual(empty["agents"], [])
+
+
+class ThinkingTests(Fixture):
+    SECRET_THINK = "sk-" + "a1B2c3D4e5F6g7H8i9J0k1L2"
+
+    def _mind(self, rows):
+        self._db(self.root / "profiles" / "mind", rows)
+
+    def _feed(self, **kw):
+        return feed.feed(root=self.root, **kw)
+
+    def test_thinking_row_has_chars_and_empty_text(self):
+        think = "Plan: read the diff first."
+        self._mind([msg("assistant", "Reading the diff.", NOW - 10, reasoning=think)])
+        rows = self._feed(agent="mind")["rows"]
+        ids = [r["id"] for r in rows]
+        self.assertIn("mind:1~t", ids)
+        tr = next(r for r in rows if r["kind"] == "thinking")
+        self.assertEqual(set(tr), {"id", "agent", "ts", "session_id", "kind", "text", "tool", "chars"})
+        self.assertEqual(tr["chars"], len(think))
+        self.assertEqual(tr["text"], "")
+        self.assertIsNone(tr["tool"])
+        self.assertEqual(tr["agent"], "mind")
+        self.assertEqual(tr["ts"], NOW - 10)
+        self.assertNotIn(think, json.dumps(self._feed()))
+
+    def test_thinking_row_is_older_side_of_its_message_rows(self):
+        self._mind([msg("assistant", "Done.", NOW - 10, calls((("c-9", "terminal", {"command": "ls"}))),
+                        reasoning="Think first.")])
+        ids = [r["id"] for r in self._feed(agent="mind")["rows"]]
+        self.assertLess(ids.index("mind:1"), ids.index("mind:1~t"))
+        self.assertLess(ids.index("mind:1#0"), ids.index("mind:1~t"))
+
+    def test_thinking_from_reasoning_content_when_reasoning_empty(self):
+        self._mind([msg("assistant", "ok", NOW - 10, reasoning="", reasoning_content="Second channel.")])
+        tr = [r for r in self._feed(agent="mind")["rows"] if r["kind"] == "thinking"]
+        self.assertEqual([r["chars"] for r in tr], [len("Second channel.")])
+
+    def test_thinking_from_reasoning_details_blocks(self):
+        details = json.dumps({"type": "native_assistant", "content": [
+            {"type": "thinking", "thinking": "AAA", "signature": "sig1"},
+            {"type": "text", "text": "visible"},
+            {"type": "thinking", "thinking": "", "signature": "sig2"},
+            {"type": "thinking", "thinking": "BB"},
+        ]})
+        self._mind([msg("assistant", "ok", NOW - 10, reasoning_details=details)])
+        tr = [r for r in self._feed(agent="mind")["rows"] if r["kind"] == "thinking"]
+        self.assertEqual(len(tr), 1)
+        self.assertEqual(tr[0]["chars"], len("AAA\nBB"))
+        self.assertEqual(tr[0]["text"], "")
+
+    def test_no_thinking_row_for_empty_or_signature_only_blocks(self):
+        empty = json.dumps({"content": [{"type": "thinking", "thinking": "", "signature": "sig"},
+                                        {"type": "thinking", "thinking": "   "}]})
+        self._mind([msg("assistant", "ok", NOW - 10, reasoning="", reasoning_content=None,
+                        reasoning_details=empty),
+                    msg("assistant", "plain", NOW - 20)])
+        rows = self._feed(agent="mind")["rows"]
+        self.assertFalse([r for r in rows if r["kind"] == "thinking"])
+        self.assertEqual(self._feed()["thinking_agents"], [])
+
+    def test_thinking_agents_lists_only_agents_with_thinking_rows(self):
+        self._mind([msg("assistant", "x", NOW - 10, reasoning="Real thought.")])
+        self.assertEqual(self._feed()["thinking_agents"], ["mind"])
+        self.assertEqual(self._feed(agent="dev")["thinking_agents"], [])
+
+    def test_thinking_user_rows_never_counted(self):
+        self._mind([msg("user", "private", NOW - 10, reasoning="PRIVATE-THOUGHT")])
+        self.assertFalse([r for r in self._feed(agent="mind")["rows"] if r["kind"] == "thinking"])
+
+    def test_thinking_returns_redacted_text(self):
+        self._mind([msg("assistant", "x", NOW - 10,
+                        reasoning=f"Use key {self.SECRET_THINK} for the call. Then verify.")])
+        out = feed.thinking("mind:1~t", root=self.root)
+        self.assertEqual(set(out), {"id", "agent", "ts", "text"})
+        self.assertEqual(out["id"], "mind:1~t")
+        self.assertEqual(out["agent"], "mind")
+        self.assertEqual(out["ts"], NOW - 10)
+        self.assertNotIn(self.SECRET_THINK, out["text"])
+        self.assertIn("[redacted]", out["text"])
+        self.assertIn("Then verify.", out["text"])
+
+    def test_thinking_text_capped_at_4000(self):
+        self._mind([msg("assistant", "x", NOW - 10, reasoning="word " * 2000)])
+        out = feed.thinking("mind:1~t", root=self.root)
+        self.assertLessEqual(len(out["text"]), 4000)
+
+    def test_thinking_bad_or_unknown_ids_give_none(self):
+        self._mind([msg("user", "private", NOW - 10, reasoning="PRIVATE-THOUGHT"),
+                    msg("assistant", "no thinking here", NOW - 9)])
+        for bad in ("mind:1~t", "mind:2~t", "mind:999~t", "mind:x~t", "mind:-1~t", "mind:1", "mind:1~t ",
+                    "nobody:1~t", "../mind:1~t", "mind:1~t/../x", "mind:1~t; drop", "", "~t", "mind:1.5~t",
+                    "mind:" + "9" * 40 + "~t"):
+            self.assertIsNone(feed.thinking(bad, root=self.root), bad)
+        self.assertIsNone(feed.thinking(None, root=self.root))
+        self.assertIsNone(feed.thinking("mind:1~t", root=self.root / "nowhere"))
+
+    def test_thinking_does_not_write(self):
+        self._mind([msg("assistant", "x", NOW - 10, reasoning="Real thought.")])
+        before = sorted(p.relative_to(self.root).as_posix() for p in self.root.rglob("*"))
+        feed.thinking("mind:1~t", root=self.root)
+        self.assertEqual(before, sorted(p.relative_to(self.root).as_posix() for p in self.root.rglob("*")))
 
 
 class CommsTests(Fixture):
