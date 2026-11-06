@@ -3,6 +3,9 @@ import { ago, compact } from './format.js';
 import { portrait } from './portrait.js';
 import { buildItems, headerCounts, durationText, modelText, modelParts, usageText, meterLevel, activeTokens, currentSessionId, eventLabel, detailRows, traceModel, newToolCalls, countStep, todayParts, COUNT_MS, newWalks, walkLabel, toolRing, newBrainTrips, brainCounts, brainText, brainNotes, timelineLanes, helperChanges, swarmTip } from './deck-model.js';
 import { isStandalone, wantsFull, withFullParam, requestNativeFullscreen, exitNativeFullscreen, markFullPath } from './fullscreen.js';
+import Mission from './Mission.jsx';
+
+const VIEWS = ['deck', 'today', 'mission'];
 
 const POLL_MS = 5000, POLL_LITE_MS = 15000, DETAIL_MS = 5000;
 
@@ -373,7 +376,7 @@ function Sheet({ children, onClose }) {
 }
 
 const readLite = () => { try { return localStorage.getItem('agent-deck.lite') === '1'; } catch (e) { return false; } };
-const readView = () => { try { return localStorage.getItem('agent-deck.view') === 'today' ? 'today' : 'deck'; } catch (e) { return 'deck'; } };
+const readView = () => { try { const v = localStorage.getItem('agent-deck.view'); return VIEWS.includes(v) ? v : 'deck'; } catch (e) { return 'deck'; } };
 
 const TL_PX = 72, TL_LABEL = 84;   // px per hour; width of the sticky lane-label column (px)
 
@@ -628,15 +631,17 @@ export default function Deck() {
             onKeyDown={e => {
               if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
               e.preventDefault();
-              const next = view === 'deck' ? 'today' : 'deck';
+              const step = e.key === 'ArrowRight' ? 1 : VIEWS.length - 1;
+              const next = VIEWS[(VIEWS.indexOf(view) + step) % VIEWS.length];
               setView(next);
-              const tabs = e.currentTarget.querySelectorAll('[role="tab"]');
-              (next === 'deck' ? tabs[0] : tabs[1]).focus();
+              e.currentTarget.querySelectorAll('[role="tab"]')[VIEWS.indexOf(next)].focus();
             }}>
             <button role="tab" id="dk-tab-deck" aria-selected={view === 'deck'} aria-controls="dk-view" tabIndex={view === 'deck' ? 0 : -1}
               className={'dk-btn' + (view === 'deck' ? ' on' : '')} onClick={() => setView('deck')}>Deck</button>
             <button role="tab" id="dk-tab-today" aria-selected={view === 'today'} aria-controls="dk-view" tabIndex={view === 'today' ? 0 : -1}
               className={'dk-btn' + (view === 'today' ? ' on' : '')} onClick={() => setView('today')}>Today</button>
+            <button role="tab" id="dk-tab-mission" aria-selected={view === 'mission'} aria-controls="dk-view" tabIndex={view === 'mission' ? 0 : -1}
+              className={'dk-btn' + (view === 'mission' ? ' on' : '')} onClick={() => setView('mission')}>Mission</button>
           </div>
           {!full && <button className="dk-btn" onClick={enterFull} aria-label="Open fullscreen deck">Fullscreen</button>}
           {full && !standalone && <button className="dk-btn ao-fs-exit" onClick={exitFull} aria-label="Exit fullscreen deck">Exit</button>}
@@ -659,7 +664,9 @@ export default function Deck() {
             <p className="dk-note dk-uscope">Claude plan usage, account-wide (not per agent).</p>
           </div>)}
       {error && <div className="dk-err">Can't reach the deck data ({error}). Retrying…</div>}
-      {view === 'today'
+      {view === 'mission'
+        ? <div id="dk-view" role="tabpanel" aria-labelledby="dk-tab-mission" className="dk-panel"><Mission state={state} /></div>
+        : view === 'today'
         ? <div id="dk-view" role="tabpanel" aria-labelledby="dk-tab-today" className="dk-panel"><Timeline tl={tl} onPick={id => setSel('a:' + id)} /></div>
         : <main id="dk-view" role="tabpanel" aria-labelledby="dk-tab-deck" ref={gridRef} className="dk-grid">
             {items.map(it => it.type === 'agent'

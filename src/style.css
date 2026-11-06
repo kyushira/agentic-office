@@ -419,3 +419,70 @@ html.ao-full-active { background-color: #0B0E11 !important; }
   .dk-root .dk-meter { border: 1px solid CanvasText; }
   .dk-root .dk-meter > i { background: Highlight; }
 }
+
+/* Mission Control (Live transcript + Comms). Holographic dark glass: translucent tile, blur, 1px line, faint cyan glow. */
+.dk-root .dk-mc { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 0; font-family: var(--dk-mono); }
+.dk-root .dk-mc-bar { display: flex; flex-wrap: wrap; gap: 4px 12px; padding: 8px 10px; font-size: 12px; color: var(--dk-soft); flex: none; }
+.dk-root .dk-mc-cnt b { color: var(--dk-ink); font-weight: 600; margin-right: 3px; }
+.dk-root .dk-mc-cnt.is-working b { color: var(--dk-hot); }
+.dk-root .dk-mc-cnt.is-waiting b { color: var(--dk-warn); }
+.dk-root .dk-mc-chips { display: flex; gap: 6px; padding: 0 10px 8px; overflow-x: auto; overscroll-behavior-x: contain; scrollbar-width: none; flex: none; scroll-snap-type: x proximity; }
+.dk-root .dk-mc-chips::-webkit-scrollbar { display: none; }
+.dk-root .dk-mc-chip { flex: none; scroll-snap-align: start; min-height: 40px; min-width: 40px; max-width: 220px; display: inline-flex; flex-direction: column; align-items: flex-start; justify-content: center; gap: 2px;
+  padding: 5px 10px 5px 12px; text-align: left; border-radius: 8px; background: color-mix(in srgb, var(--dk-tile) 72%, transparent); border: 1px solid var(--dk-line); border-left: 3px solid var(--dk-c, var(--dk-line-2));
+  backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); color: var(--dk-soft); transition: border-color var(--dk-t) var(--dk-ease), box-shadow var(--dk-t) var(--dk-ease); }
+.dk-root .dk-mc-chip.is-on { border-color: var(--dk-dim); box-shadow: 0 0 0 1px var(--dk-glow-soft), 0 0 12px var(--dk-glow-soft); color: var(--dk-ink); }
+.dk-root .dk-mc-cname { font-weight: 600; font-size: 12px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dk-root .dk-mc-pill { font-size: 10px; color: var(--dk-mut); max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dk-root .dk-mc-tabs { display: flex; gap: 6px; padding: 0 10px 8px; flex: none; }
+.dk-root .dk-mc-tab { flex: 1; min-height: 40px; background: color-mix(in srgb, var(--dk-tile) 72%, transparent); border: 1px solid var(--dk-line-2); border-radius: 6px; color: var(--dk-soft); font-size: 12px; backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
+.dk-root .dk-mc-tab.is-on { color: var(--dk-hot); border-color: var(--dk-dim); box-shadow: 0 0 0 1px var(--dk-glow-soft), 0 0 10px var(--dk-glow-soft); }
+.dk-root .dk-mc-body { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; margin: 0 8px 8px; padding: 0; border: 1px solid var(--dk-line); border-radius: 8px;
+  background: color-mix(in srgb, var(--dk-tile) 72%, transparent); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); box-shadow: 0 0 14px var(--dk-glow-soft); scrollbar-width: thin; }
+.dk-root .dk-mc-note, .dk-root .dk-mc-thoughts { margin: 14px 12px; color: var(--dk-faint); font-size: 12px; }
+.dk-root .dk-mc-thoughts { margin: 8px 12px 0; font-size: 11px; }
+.dk-root .dk-mc-err { margin: 8px; padding: 8px 10px; border: 1px solid color-mix(in srgb, var(--dk-red) 40%, transparent); border-radius: 6px; color: var(--dk-red); font-size: 12px; }
+
+/* Live transcript: terminal style, newest first */
+.dk-root .dk-mc-log { list-style: none; margin: 0; padding: 4px 0; font-size: 12px; line-height: 1.45; }
+.dk-root .dk-mc-row { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 8px; padding: 4px 12px; border-bottom: 1px solid var(--dk-rule); }
+.dk-root .dk-mc-t { color: var(--dk-faint); font-size: 11px; flex: none; }
+.dk-root .dk-mc-who { flex: none; font-weight: 600; font-size: 11px; }
+.dk-root .dk-mc-txt { flex: 1 1 200px; min-width: 0; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--dk-ink); }
+.dk-root .dk-mc-row.is-call .dk-mc-txt { color: var(--dk-hot); }
+.dk-root .dk-mc-row.is-result .dk-mc-txt { color: var(--dk-faint); }
+.dk-root .dk-mc-caret { color: var(--dk-hot); }
+.dk-root .dk-mc-think-btn { min-height: 40px; padding: 0 12px; border: 1px dashed var(--dk-line-2); border-radius: 6px; background: transparent; color: var(--dk-mut); font-size: 12px; text-align: left; }
+.dk-root .dk-mc-think-btn[aria-expanded="true"] { color: var(--dk-hot); border-color: var(--dk-dim); }
+.dk-root .dk-mc-think { flex: 1 1 100%; margin: 4px 0 2px; padding: 8px 10px; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--dk-soft); background: var(--dk-sheet); border-left: 2px solid var(--dk-dim); border-radius: 4px; font: inherit; font-size: 12px; }
+
+/* Comms: from -> to bubbles */
+.dk-root .dk-mc-comms { list-style: none; margin: 0; padding: 6px; display: flex; flex-direction: column; gap: 8px; }
+.dk-root .dk-mc-bubble { border: 1px solid var(--dk-line); border-radius: 10px; background: color-mix(in srgb, var(--dk-raise) 60%, transparent); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
+.dk-root .dk-mc-bubble.is-delegate { border-color: var(--dk-dim); }
+.dk-root .dk-mc-bubble-btn { display: block; width: 100%; min-height: 40px; padding: 10px 12px; text-align: left; background: none; border: 0; color: var(--dk-ink); }
+.dk-root .dk-mc-route { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.dk-root .dk-mc-end { min-width: 0; max-width: 40%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; font-size: 12px; padding-left: 8px; border-left: 2px solid var(--dk-c, var(--dk-line-2)); }
+.dk-root .dk-mc-flow { flex: 1 1 36px; min-width: 24px; max-width: 64px; height: 10px; color: var(--dk-hot); overflow: visible; }
+.dk-root .dk-mc-flow line, .dk-root .dk-mc-flow polyline { stroke: currentColor; stroke-width: 1.2; stroke-linecap: round; }
+.dk-root .dk-mc-flow.is-anim line { stroke-dasharray: 100; animation: dk-mc-flow 900ms var(--dk-ease) 1 both; }
+@keyframes dk-mc-flow { from { stroke-dashoffset: 100; } to { stroke-dashoffset: 0; } }
+.dk-root .dk-mc-meta { display: flex; align-items: center; gap: 8px; margin-top: 6px; font-size: 11px; color: var(--dk-faint); }
+.dk-root .dk-mc-kind { padding: 1px 6px; border: 1px solid var(--dk-line-2); border-radius: 4px; color: var(--dk-soft); }
+.dk-root .dk-mc-kind.is-delegate { color: var(--dk-hot); border-color: var(--dk-dim); }
+.dk-root .dk-mc-expand { margin-left: auto; color: var(--dk-mut); }
+.dk-root .dk-mc-prev { display: block; margin-top: 6px; color: var(--dk-mut); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dk-root .dk-mc-full { margin: 0; padding: 0 12px 12px; white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; font-size: 12px; color: var(--dk-soft); }
+
+/* Phone: the bar and chips keep one line each; the transcript and bubbles take the full width */
+@media (max-width: 520px) {
+  .dk-root .dk-mc-body { margin: 0 4px 6px; }
+  .dk-root .dk-mc-end { max-width: 34%; }
+  .dk-root .dk-mc-row { padding: 4px 10px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dk-root .dk-mc *, .dk-root .dk-mc *::before, .dk-root .dk-mc *::after { animation: none !important; transition: none !important; }
+  .dk-root .dk-mc-flow.is-anim line { animation: none !important; stroke-dasharray: none; }
+  .dk-root .dk-mc-caret { display: none; }
+}
