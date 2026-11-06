@@ -643,4 +643,7 @@ html.ao-full-active { background-color: #0B0E11 !important; }
   .dk-root .dk-btn, .dk-root button.dk-pill, .dk-root button.dk-chip, .dk-root .dk-seg-btn { min-height: 40px; }
   .dk-root .dk-btn { min-width: 40px; }
   .dk-root .dk-bell { min-width: 40px; min-height: 40px; }
+  /* usage pill: keep the header pill height (28px) so it matches the span pills; the 40px tap target is an invisible hit area */
+  .dk-root .dk-usage-btn.dk-pill { min-height: 28px; position: relative; }
+  .dk-root .dk-usage-btn.dk-pill::before { content: ''; position: absolute; inset: -6px; }
 }
