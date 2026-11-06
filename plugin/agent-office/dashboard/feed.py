@@ -172,7 +172,10 @@ def _feed_profile(pid: str, c: sqlite3.Connection, since: float, limit: int) -> 
             content = r["content"] or ""
             if not content.strip():
                 continue
-            t = redact.ENV_MARK if r["tcid"] in env_ids else redact.redact(content, RESULT_CAP)
+            # Order matters: redact the whole result, then drop the untrusted wrapper (its ~330-char notice would
+            # otherwise use up the cap and leave the row blank), then cap.
+            t = redact.ENV_MARK if r["tcid"] in env_ids else redact.cap(
+                redact.strip_untrusted_wrapper(redact.redact(content)), RESULT_CAP)
             out.append(row(base, r, "result", t, r["tool_name"]))
     return out
 
