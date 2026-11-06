@@ -1,0 +1,157 @@
+"""Unit tests for redact.redact and redact.is_env_path (the server-side scrub for /feed and /comms). Run via unittest discover."""
+import importlib.util
+import unittest
+from pathlib import Path
+
+_SRC = Path(__file__).resolve().parent.parent / "plugin" / "agent-office" / "dashboard" / "redact.py"
+_spec = importlib.util.spec_from_file_location("redact", _SRC)
+redact = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(redact)
+
+M = "[redacted]"
+
+
+class ProviderTokenTests(unittest.TestCase):
+    def assertScrubbed(self, secret, text=None):
+        out = redact.redact(text if text is not None else f"token is {secret} ok")
+        self.assertNotIn(secret, out)
+        self.assertIn(M, out)
+
+    def test_anthropic_openai_keys(self):
+        self.assertScrubbed("sk-ant-api03-AbCdEfGhIjKlMnOpQrSt_uvwxyz0123")
+        self.assertScrubbed("sk-proj-AbCdEfGhIjKlMnOpQrStUvWxYz0123456789")
+        self.assertScrubbed("sk-" + "a1B2c3D4e5F6g7H8i9J0k1L2")
+
+    def test_github_tokens(self):
+        for prefix in ("ghp_", "gho_", "ghs_"):
+            self.assertScrubbed(prefix + "A1b2C3d4E5f6G7h8I9j0K1l2M3n4")
+        self.assertScrubbed("github_pat_11ABCDEFG0abcdefghij_KLMNOPQRSTUVWXYZ0123456789")
+
+    def test_google_slack_aws(self):
+        self.assertScrubbed("AIzaSyA1b2C3d4E5f6G7h8I9j0K1l2M3n4O5p6Q")
+        self.assertScrubbed("xoxb-1234567890-abcdefghijkl")
+        self.assertScrubbed("xoxp-1234567890-abcdefghijkl")
+        self.assertScrubbed("AKIAIOSFODNN7EXAMPLE")
+
+    def test_prefix_lookalikes_in_prose_are_kept(self):
+        for text in ("see task-runner and risk-based planning", "desk-side review", "ghp_short"):
+            self.assertEqual(redact.redact(text), text)
+
+
+class BearerAndKeyValueTests(unittest.TestCase):
+    def test_authorization_bearer(self):
+        self.assertEqual(redact.redact("Authorization: Bearer abc123def456ghi789"),
+                         "Authorization: Bearer [redacted]")
+        self.assertEqual(redact.redact("bearer eyJhbGciOiJIUzI1NiJ9.abcdefghijklmnop"), "bearer [redacted]")
+
+    def test_bearer_in_prose_is_kept(self):
+        self.assertEqual(redact.redact("Bearer tokens are required for this route."),
+                         "Bearer tokens are required for this route.")
+
+    def test_name_equals_value(self):
+        self.assertEqual(redact.redact("API_KEY=abc123xyz"), "API_KEY=[redacted]")
+        self.assertEqual(redact.redact("export DB_PASSWD=hunter2"), "export DB_PASSWD=[redacted]")
+        self.assertEqual(redact.redact("https://h.example/x?access_token=zzz111&page=2"),
+                         "https://h.example/x?access_token=[redacted]&page=2")
+
+    def test_name_colon_value(self):
+        self.assertEqual(redact.redact("password: hunter2"), "password: [redacted]")
+        self.assertEqual(redact.redact("Client-Secret: s3cr3t"), "Client-Secret: [redacted]")
+
+    def test_quoted_values(self):
+        self.assertEqual(redact.redact("client_secret = 'abc def'"), "client_secret = '[redacted]'")
+        self.assertEqual(redact.redact('auth_token="xyz"'), 'auth_token="[redacted]"')
+
+    def test_json_pairs(self):
+        self.assertEqual(redact.redact('{"client_secret": "s3cr3t", "page": "2"}'),
+                         '{"client_secret": "[redacted]", "page": "2"}')
+
+    def test_json_inside_tool_arguments_string(self):
+        blob = r'{\"api_key\": \"sk-x\", \"cmd\": \"ls\"}'
+        out = redact.redact(blob)
+        self.assertNotIn("sk-x", out)
+        self.assertIn(r'\"api_key\": \"[redacted]\"', out)
+        self.assertIn('"cmd', out)
+
+    def test_cli_flag_with_space(self):
+        self.assertEqual(redact.redact("tool --token hunter2 --verbose"), "tool --token [redacted] --verbose")
+
+    def test_plain_prose_is_untouched(self):
+        for text in ("Ship the feed and comms endpoints by Friday.",
+                     "The key idea is simple; keep it small.",
+                     "FOO=bar on its own is not a secret here."):
+            self.assertEqual(redact.redact(text), text)
+
+
+class BlockTests(unittest.TestCase):
+    def test_pem_private_key_removed(self):
+        pem = "before\n-----BEGIN RSA PRIVATE KEY-----\nMIIEowIBAAKCAQEA\nabc\n-----END RSA PRIVATE KEY-----\nafter"
+        out = redact.redact(pem)
+        self.assertNotIn("MIIEow", out)
+        self.assertEqual(out, "before\n[redacted]\nafter")
+
+    def test_unterminated_pem_removed_to_end(self):
+        out = redact.redact("-----BEGIN OPENSSH PRIVATE KEY-----\nAAAA")
+        self.assertEqual(out, M)
+
+    def test_env_block_values_redacted(self):
+        text = "A_NAME=alpha\nB_NAME=two words\nexport C_NAME=three"
+        self.assertEqual(redact.redact(text),
+                         "A_NAME=[redacted]\nB_NAME=[redacted]\nexport C_NAME=[redacted]")
+
+    def test_single_env_line_is_not_a_block(self):
+        self.assertEqual(redact.redact("PORT=8790"), "PORT=8790")
+
+
+class RunTests(unittest.TestCase):
+    def test_long_hex_redacted(self):
+        self.assertEqual(redact.redact("digest " + "0f" * 17 + " end"), "digest " + M + " end")
+        self.assertEqual(redact.redact("digest " + "0f" * 16 + " end"), "digest " + "0f" * 16 + " end")
+
+    def test_long_base64_redacted(self):
+        self.assertEqual(redact.redact("blob QUJDREVGR0hJSktMTU5PUFFSU1RVVldYWVphYmNkZWZnaGlqa2xtbm9w end"),
+                         f"blob {M} end")
+
+    def test_short_sha_and_uuid_kept(self):
+        for text in ("merged as 3f9a1c2 today", "commit 3f9a1c2b8d4e merged", "id 123e4567-e89b-12d3-a456-426614174000"):
+            self.assertEqual(redact.redact(text), text)
+
+    def test_paths_and_urls_kept(self):
+        for text in ("/opt/data/projects/agent-office-wt/mission-control/plugin/agent-office/dashboard/collect.py",
+                     "https://github.com/example/repo/pull/12",
+                     "see docs at https://hermes-agent.nousresearch.com/docs/configuration"):
+            self.assertEqual(redact.redact(text), text)
+
+
+class TruncationTests(unittest.TestCase):
+    def test_truncates_to_limit_with_ellipsis(self):
+        out = redact.redact("word " * 40, 20)
+        self.assertLessEqual(len(out), 20)
+        self.assertTrue(out.endswith("…"))
+
+    def test_short_text_unchanged(self):
+        self.assertEqual(redact.redact("short", 10), "short")
+
+    def test_secret_is_redacted_before_truncation(self):
+        out = redact.redact("prefix sk-" + "a" * 30 + " tail text here", 20)
+        self.assertNotIn("aaaa", out)
+        self.assertLessEqual(len(out), 20)
+
+    def test_none_and_non_string(self):
+        self.assertEqual(redact.redact(None), "")
+        self.assertEqual(redact.redact(42), "42")
+        self.assertEqual(redact.redact("abc", 0), "")
+
+
+class EnvPathTests(unittest.TestCase):
+    def test_env_references_detected(self):
+        for s in ("/opt/data/profiles/dev/.env", "cat .env", "read_file(.env.local)", '{"path": ".env"}'):
+            self.assertTrue(redact.is_env_path(s), s)
+
+    def test_similar_names_not_detected(self):
+        for s in ("process.env.API_URL", "python-dotenv loaded", "environment notes", "README.md", "", None):
+            self.assertFalse(redact.is_env_path(s), s)
+
+
+if __name__ == "__main__":
+    unittest.main()

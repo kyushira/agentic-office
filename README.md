@@ -4,7 +4,8 @@ A Hermes dashboard plugin ("Office" tab) that shows the agent team as a live 3D 
 It's read-only, and its data endpoint sits behind the dashboard login.
 
 - Frontend: three.js scene (`src/scene.js`) + React UI (React comes from the dashboard SDK), built to `plugin/agent-office/dashboard/dist/`.
-- Backend: `plugin/agent-office/dashboard/plugin_api.py` → `GET /api/plugins/agent-office/state`. It reads each profile's `state.db` read-only (`mode=ro`), polls every 5s and caches for 4s. It never reads message text, tool arguments, config secrets or `.env`.
+- Backend: `plugin/agent-office/dashboard/plugin_api.py` → `GET /api/plugins/agent-office/state`. It reads each profile's `state.db` read-only (`mode=ro`), polls every 5s and caches for 4s. The state payload never includes message text or tool arguments, and it never reads config secrets or `.env`.
+- Feed and comms: `GET /api/plugins/agent-office/feed?agent=&since=&limit=` returns newest-first assistant text, tool-call names with a short argument, and tool results (only assistant and tool rows; user messages are never read out). `GET /api/plugins/agent-office/comms?since=&limit=` returns `message_agent` and `delegate_task` calls from each sender's own db. Both are read-only and pass every string through `dashboard/redact.py` on the server before it leaves the API: provider keys (sk-, ghp_, AIza, xox, AKIA), bearer tokens, `key/token/secret/password` values, PEM private keys, `.env`-style blocks and 33+ character hex/base64 runs become `[redacted]`; a `.env` file reference (in arguments or in the result of that call) becomes `[redacted: .env file]`. Config secrets and `.env` contents are never read.
 
 ## Develop
 
