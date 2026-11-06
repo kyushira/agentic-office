@@ -16,7 +16,7 @@ export function reducedMotion() {
  * key starts over. Returns {rows, fresh, thinking, err} for the current key: rows is null until the
  * first answer, fresh holds ids that arrived in the latest poll (never on first load).
  */
-export function usePoll(kind, agentKey) {
+export function usePoll(kind, agentKey, ms = MC_POLL_MS) {
   const k = agentKey || '';
   const [d, setD] = useState({ key: null, rows: null, fresh: new Set(), thinking: [], err: '' });
   const cache = useRef({ key: null, rows: null, thinking: [] });
@@ -46,7 +46,7 @@ export function usePoll(kind, agentKey) {
         })
         .finally(() => {
           busy = false;
-          if (live && !document.hidden) timer = setTimeout(pull, MC_POLL_MS);
+          if (live && !document.hidden) timer = setTimeout(pull, ms);
         });
     };
     const onVis = () => { if (document.hidden) stop(); else pull(); };
@@ -57,7 +57,7 @@ export function usePoll(kind, agentKey) {
       stop();
       document.removeEventListener('visibilitychange', onVis);
     };
-  }, [kind, k]);
+  }, [kind, k, ms]);
   const mine = d.key === k;
   return {
     rows: mine ? d.rows : null,

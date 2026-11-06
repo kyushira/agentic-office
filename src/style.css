@@ -36,9 +36,18 @@
 .dk-btn.on { color: var(--dk-hot); border-color: var(--dk-dim); box-shadow: 0 0 0 1px var(--dk-glow-soft), 0 0 10px var(--dk-glow-soft); }
 .dk-err { margin: 0 10px 8px; padding: 8px 10px; border: 1px solid color-mix(in srgb, var(--dk-red) 40%, transparent); border-radius: 6px; color: var(--dk-red); font-size: 12px; }
 
-.dk-grid { flex: 1; position: relative; overflow-y: auto; overscroll-behavior: contain; padding: 0 8px 10px; display: grid; gap: 6px;
+.dk-grid { flex: none; position: relative; padding: 0 8px 10px; display: grid; gap: 6px;
   grid-template-columns: repeat(auto-fill, minmax(148px, 1fr)); align-content: start; scrollbar-width: none; }
 .dk-grid::-webkit-scrollbar { display: none; }
+.dk-scroll { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+.dk-more { display: grid; grid-template-columns: 1fr; gap: 8px; padding: 0 8px 12px; }
+@media (min-width: 760px) { .dk-more { grid-template-columns: 1fr 1fr; align-items: start; } }
+.dk-disc { border: 1px solid var(--dk-line); border-radius: 8px; background: var(--dk-tile); min-width: 0; }
+.dk-disc-h { width: 100%; display: flex; justify-content: space-between; align-items: center; min-height: 40px; padding: 8px 12px; background: none; border: 0; color: inherit; font: inherit; font-size: 12px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; cursor: pointer; }
+.dk-disc-b { padding: 0 0 8px; }
+.dk-disc-b .dk-mc-body { max-height: min(60vh, 520px); flex: none; }
+.dk-root .dk-mc-log, .dk-root .dk-mc-think, .dk-root .dk-mc-comms { user-select: text; -webkit-user-select: text; }
+.dk-reset { font-size: 11px; color: var(--dk-mut); white-space: nowrap; font-variant-numeric: tabular-nums; flex: none; }
 .dk-root:not(.is-lite) .dk-grid {   /* faint grid under the tiles; dropped in Lite */
   background-image: linear-gradient(var(--dk-grid-line) 1px, transparent 1px), linear-gradient(90deg, var(--dk-grid-line) 1px, transparent 1px);
   background-size: var(--dk-grid-size) var(--dk-grid-size); background-attachment: local; }
@@ -275,7 +284,8 @@ html.ao-full-active { background-color: #0B0E11 !important; }
 .dk-reason { font-size: 11px; color: var(--dk-mut); padding: 0 10px 6px; word-break: break-word; }
 @media (max-width: 520px) {
   .dk-top { flex-wrap: wrap; row-gap: 6px; }
-  .dk-sum { flex: 1 1 100%; }
+  .dk-sum { flex: 1 1 100%; flex-wrap: wrap; row-gap: 4px; }
+  .dk-reset { flex-basis: 100%; }
   .dk-top > .dk-grow { display: none; }
   .dk-acts { flex: 1 1 100%; justify-content: flex-end; flex-wrap: wrap; row-gap: 6px; }
   .dk-count, .dk-usage { font-size: 11px; }
@@ -357,35 +367,6 @@ html.ao-full-active { background-color: #0B0E11 !important; }
   .dk-root .dk-acts .dk-btn { padding: 0 8px; }
 }
 
-/* view switch (Deck / Today / Mission) in the header: three .dk-btn tabs; the selected one carries .on */
-.dk-views { display: inline-flex; gap: 6px; }
-.dk-panel { flex: 1; min-height: 0; display: flex; flex-direction: column; }
-
-/* Today timeline: one swim-lane per agent from local midnight to now. Horizontal scroll (touch swipe) with the
-   lane labels sticky on the left. Bars are plain positioned boxes; the now-line and live bars move by transform only. */
-.dk-tl { flex: 1; min-height: 0; display: flex; flex-direction: column; padding: 6px 8px 10px; }
-.dk-tl-none { flex: 1; display: grid; place-items: center; color: var(--dk-mut); font-size: 12px; }
-.dk-tl-scroll { flex: 1; min-height: 0; overflow: auto; overscroll-behavior: contain; position: relative; scrollbar-width: thin; }
-.dk-tl-content { position: relative; min-height: 100%; }
-.dk-tl-axis { position: sticky; top: 0; z-index: 3; display: flex; height: 22px; background: var(--dk-bg); border-bottom: 1px solid var(--dk-line); }
-.dk-tl-corner { position: sticky; left: 0; z-index: 4; flex: none; width: var(--dk-tl-label); background: var(--dk-bg); }
-.dk-tl-track { position: relative; flex: none; overflow: hidden; }
-.dk-tl-tick { position: absolute; top: 0; bottom: 0; padding: 5px 0 0 4px; border-left: 1px solid var(--dk-rule); font-size: 9px; line-height: 1; color: var(--dk-faint); font-variant-numeric: tabular-nums; }
-.dk-tl-lane { display: flex; height: 42px; border-bottom: 1px solid var(--dk-rule); }
-.dk-tl-lane .dk-tl-track { height: 100%; }
-.dk-tl-name { position: sticky; left: 0; z-index: 2; flex: none; width: var(--dk-tl-label); display: flex; align-items: center; padding: 0 8px; background: var(--dk-bg);
-  border-left: 3px solid var(--dk-c); font-size: 11px; font-weight: 700; color: var(--dk-ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.dk-tl-empty { position: absolute; left: 6px; top: 50%; transform: translateY(-50%); font-size: 10px; color: var(--dk-faint); white-space: nowrap; }
-.dk-tl-bar { position: absolute; top: 10px; height: 22px; min-width: 3px; padding: 0; border: 1px solid color-mix(in srgb, var(--dk-c) 70%, transparent); border-radius: 3px;
-  background: color-mix(in srgb, var(--dk-c) 28%, transparent); transform-origin: 0 50%; }
-.dk-tl-bar.is-live { background: color-mix(in srgb, var(--dk-c) 55%, transparent); box-shadow: 0 0 6px -2px var(--dk-glow); }
-.dk-tl-bar:hover { border-color: var(--dk-c); }
-.dk-tl-now { position: absolute; left: var(--dk-tl-label); top: 0; bottom: 0; width: 1px; z-index: 1; background: var(--dk-hot); box-shadow: 0 0 6px var(--dk-glow); pointer-events: none; }
-/* the now-line and live bars glide between 15s ticks; they start in place (.is-ready is set after the first frame) */
-.dk-root:not(.is-lite) .dk-tl.is-ready .dk-tl-now { transition: transform var(--dk-t-slow) linear; }
-.dk-root:not(.is-lite) .dk-tl.is-ready .dk-tl-bar.is-live { transition: transform var(--dk-t-slow) linear; }
-@media (max-width: 520px) { .dk-views .dk-btn { padding: 0 8px; min-width: 0; } }
-
 /* helper swarm: one dot per live helper orbiting the agent tile. Overlay only (no layout change, no pointer events).
    Each dot sits in a .dk-hslot rotated by its share of the circle; the .dk-swarm-orbit spins the group. */
 .dk-swarm { position: absolute; left: 50%; top: 50%; width: 0; height: 0; pointer-events: none; z-index: 2; --dk-orbit-r: 50px; }
@@ -414,7 +395,6 @@ html.ao-full-active { background-color: #0B0E11 !important; }
   .dk-root .dk-ring-seg, .dk-root .dk-ring-arc.is-active { animation: none !important; }   /* ring is static; running tool keeps full opacity */
   .dk-root .dk-ring-orbit { animation: none !important; }                       /* marker stays put at 12 o'clock */
   .dk-root .dk-brain-pulse { display: none !important; }                        /* no fly-in; the static node still shows reads and writes */
-  .dk-root .dk-tl-now, .dk-root .dk-tl-bar.is-live { transition: none !important; }   /* timeline: now-line and live bars jump to their place */
   .dk-root .dk-swarm-orbit, .dk-root .dk-hdot { animation: none !important; }         /* swarm dots stay at their fixed angles */
 }
 
@@ -519,3 +499,9 @@ html.ao-full-active { background-color: #0B0E11 !important; }
   .dk-root .dk-mc-flow.is-anim line { animation: none !important; stroke-dasharray: none; }
   .dk-root .dk-mc-caret { display: none; }
 }
+
+/* Single view: embedded Live/Comms in the Activity disclosure and the agent sheet */
+.dk-root .dk-act, .dk-root .dk-sheet .dk-mc-body { font-family: var(--dk-mono); }
+.dk-root .dk-sheet .dk-mc-tabs { padding: 0 0 8px; }
+.dk-root .dk-sheet .dk-mc-body { margin: 0 0 8px; flex: none; max-height: 52vh; }
+.dk-root button.dk-mc-who { background: none; border: 0; padding: 0; font: inherit; cursor: pointer; text-decoration: underline dotted; text-underline-offset: 2px; }

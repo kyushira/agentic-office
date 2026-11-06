@@ -342,9 +342,6 @@ export function brainNotes(brain) {
   return Number.isFinite(n) && n >= 0 ? n : null;
 }
 
-const TL_MARGIN_H = 0.25;     // room after the now-line, in hours
-const TL_DAY_H = 24;          // a bar that is still running is drawn to the end of the day, then scaled
-
 /**
  * Helper changes between two /state polls, for the swarm dots: {agentId: {spawned: [ids], exited: [{id, task, model}]}}.
  * spawned: a live helper whose id was in neither the previous helpers nor recentHelpers of that agent.
@@ -379,57 +376,3 @@ export function swarmTip(helpers) {
   return [head, ...hs.map(h => `${h.model || 'helper'} · ${String(h.task || '').trim() || 'task'}`)].join('\n');
 }
 
-/** Local midnight at or before `now` (unix s), as unix s. */
-export function localMidnight(now) {
-  const d = new Date(now * 1000);
-  d.setHours(0, 0, 0, 0);
-  return d.getTime() / 1000;
-}
-
-const clock = s => {
-  const d = new Date(s * 1000);
-  return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
-};
-/** A unix-seconds field from a tile; null when missing, empty, non-numeric or not positive. */
-const secsOf = v => {
-  if (v == null || v === '') return null;
-  const n = +v;
-  return Number.isFinite(n) && n > 0 ? n : null;
-};
-
-/**
- * Today's swim-lanes from state.agents and state.sessions (tiles with started, ended, at, status, title).
- * Times are hours since local midnight `dayStart` (default: localMidnight(now)). Returns
- * {data, dayStart, nowH, endH, dayH, lanes}: data is false when no agent has a sessions array (show "no data");
- * endH is nowH plus a small margin (the track's end); lanes follow state.agents order, each
- * {id, name, color, empty, bars}. A bar is {id, title, x0, x1, live, aria}: x0 and x1 are hours, clipped to
- * [midnight, now]; a working session runs to now (live). A session with no start, that starts after now, or
- * that ended before midnight is skipped. Bars are sorted by x0. aria reads "Dev, <title>, 09:12–10:40".
- */
-export function timelineLanes(state, now, dayStart) {
-  const day = dayStart == null ? localMidnight(now) : dayStart;
-  const nowH = (now - day) / 3600;
-  const sessions = (state && state.sessions) || {};
-  const data = Object.values(sessions).some(Array.isArray);
-  const agents = state && Array.isArray(state.agents) ? state.agents : [];
-  const lanes = agents.map(a => {
-    const bars = [];
-    const list = Array.isArray(sessions[a.id]) ? sessions[a.id] : [];
-    for (const s of list) {
-      const start = secsOf(s && s.started);
-      if (start == null || start > now) continue;
-      const live = s.status === 'working';
-      let end = live ? now : (secsOf(s.ended) != null ? secsOf(s.ended) : (secsOf(s.at) != null ? secsOf(s.at) : start));
-      if (end < start) end = start;
-      if (!live && end <= day) continue;                 // ended before midnight: not on today's lane
-      const x0 = (Math.max(start, day) - day) / 3600;
-      const x1 = (Math.min(end, now) - day) / 3600;
-      const title = String(s.title || '').trim() || 'untitled';
-      const to = live ? 'now' : clock(Math.min(end, now));
-      bars.push({ id: s.id, title, x0, x1, live, aria: `${a.name}, ${title}, ${clock(Math.max(start, day))}–${to}` });
-    }
-    bars.sort((p, q) => p.x0 - q.x0);
-    return { id: a.id, name: a.name, color: a.color || NO_COLOR, empty: bars.length === 0, bars };
-  });
-  return { data, dayStart: day, nowH, endH: nowH + TL_MARGIN_H, dayH: TL_DAY_H, lanes };
-}

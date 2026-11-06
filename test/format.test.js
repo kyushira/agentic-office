@@ -1,7 +1,7 @@
 // Unit tests for src/format.js (run by `npm test` via node:test).
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
-import { ago, compact, sparkPath, statusLabel, headline } from '../src/format.js';
+import { ago, compact, sparkPath, statusLabel, headline, resetCountdown } from '../src/format.js';
 
 describe('ago', () => {
   const now = 1_000_000;
@@ -109,5 +109,41 @@ describe('headline', () => {
   test('missing state or counts falls back to zeros', () => {
     assert.equal(headline(null), '0 agents · 0 running');
     assert.equal(headline({}), '0 agents · 0 running');
+  });
+});
+
+describe('resetCountdown', () => {
+  const nowMs = 1_800_000_000_000;
+  test('missing, empty or unparseable input returns null', () => {
+    assert.equal(resetCountdown(null, nowMs), null);
+    assert.equal(resetCountdown(undefined, nowMs), null);
+    assert.equal(resetCountdown('', nowMs), null);
+    assert.equal(resetCountdown('garbage', nowMs), null);
+  });
+  test('ISO string 2h14m ahead', () => {
+    const iso = new Date(nowMs + (2 * 3600 + 14 * 60) * 1000).toISOString();
+    assert.equal(resetCountdown(iso, nowMs), '2h 14m');
+  });
+  test('exact hours show a 0m remainder', () => {
+    const iso = new Date(nowMs + 3 * 3600 * 1000).toISOString();
+    assert.equal(resetCountdown(iso, nowMs), '3h 0m');
+  });
+  test('epoch seconds input', () => {
+    assert.equal(resetCountdown(nowMs / 1000 + 7200 + 14 * 60, nowMs), '2h 14m');
+  });
+  test('epoch ms input', () => {
+    assert.equal(resetCountdown(nowMs + 14 * 60 * 1000, nowMs), '14m');
+  });
+  test('under a minute ahead renders as <1m', () => {
+    assert.equal(resetCountdown(nowMs + 45_000, nowMs), '<1m');
+  });
+  test('59m59s ahead renders as 59m', () => {
+    assert.equal(resetCountdown(nowMs + 3_599_000, nowMs), '59m');
+  });
+  test('5 minutes past is still "now"', () => {
+    assert.equal(resetCountdown(nowMs - 5 * 60 * 1000, nowMs), 'now');
+  });
+  test('20 minutes past is stale and returns null', () => {
+    assert.equal(resetCountdown(nowMs - 20 * 60 * 1000, nowMs), null);
   });
 });

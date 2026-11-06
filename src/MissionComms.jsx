@@ -5,8 +5,8 @@ import { usePoll } from './mission-poll.js';
 import { FlowLine } from './MissionBits.jsx';
 
 /** Agent-to-agent messages and delegations, filtered by the selected agent (sender or receiver). */
-export default function MissionComms({ agents, agentKey }) {
-  const { rows, fresh, err } = usePoll('comms', '');
+export default function MissionComms({ agents, agentKey, lite = false }) {
+  const { rows, fresh, err } = usePoll('comms', '', lite ? 15000 : 5000);
   const [open, setOpen] = useState({});          // comms row id -> expanded
   const byId = Object.fromEntries(agents.map(a => [a.id, a]));
   const now = Date.now() / 1000;

@@ -27,3 +27,17 @@ export function headline(state) {
   const c = (state && state.counts) || { agents: 0, running: 0 };
   return `${c.agents} agent${c.agents === 1 ? '' : 's'} · ${c.running} running`;
 }
+/** Countdown to a reset time: 'now' (≤10m stale), '<1m', '2h 14m', '59m', or null if unknown/stale. */
+export function resetCountdown(resetsAt, nowMs) {
+  if (resetsAt == null || resetsAt === '') return null;
+  let t;
+  if (typeof resetsAt === 'number') t = resetsAt < 1e12 ? resetsAt * 1000 : resetsAt;
+  else t = new Date(resetsAt).getTime();
+  if (!Number.isFinite(t)) return null;
+  const diff = t - nowMs;
+  if (diff <= 0) return diff > -600000 ? 'now' : null;
+  if (diff < 60000) return '<1m';
+  const min = Math.floor(diff / 60000);
+  const h = Math.floor(min / 60), m = min % 60;
+  return h > 0 ? `${h}h ${m}m` : `${m}m`;
+}

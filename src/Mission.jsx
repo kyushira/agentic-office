@@ -1,70 +1,44 @@
 import { React, useState, useEffect, useRef, fetchJSON } from './sdk.js';
-import { statusCounts, agentColor, agentName, chipLabel, shortTime, callParts, thinkLabel, showThoughtsNote, THINK_API } from './mc-model.js';
+import { agentColor, agentName, shortTime, callParts, thinkLabel, showThoughtsNote, THINK_API } from './mc-model.js';
 import { usePoll } from './mission-poll.js';
 import { Typed } from './MissionBits.jsx';
 import MissionComms from './MissionComms.jsx';
-import MissionProjects from './MissionProjects.jsx';
-
-const SUBTABS = [['live', 'Live'], ['comms', 'Comms'], ['projects', 'Projects']];
 
 /**
- * Mission Control view: a counts bar and agent chips (from /state), then the Live transcript or the
- * Comms list. The active sub-panel polls only while mounted; this component mounts only while the
- * Mission view is on screen.
+ * Activity panel: a segmented Live / Comms switcher over one panel body. Only the selected panel is
+ * mounted, so only it polls. `lite` slows the Live poll for embedded use.
  */
-export default function Mission({ state }) {
-  const agents = (state && state.agents) || [];
-  const [sel, setSel] = useState(null);          // null = All
+export function ActivityPanel({ agents, agentKey = null, lite = false, idBase = 'all', onPickAgent }) {
   const [sub, setSub] = useState('live');
-  const key = sel && agents.some(a => a.id === sel) ? sel : null;
-  const counts = statusCounts(agents);
+  const TABS = [['live', 'Live'], ['comms', 'Comms']];
   const onTabKey = e => {
     if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
     e.preventDefault();
-    const i = SUBTABS.findIndex(([id]) => id === sub);
-    const next = SUBTABS[(i + (e.key === 'ArrowRight' ? 1 : SUBTABS.length - 1)) % SUBTABS.length][0];
+    const i = TABS.findIndex(([id]) => id === sub);
+    const next = TABS[(i + (e.key === 'ArrowRight' ? 1 : TABS.length - 1)) % TABS.length][0];
     setSub(next);
-    e.currentTarget.querySelector(`#dk-mc-tab-${next}`).focus();
+    e.currentTarget.querySelector(`#dk-${idBase}-tab-${next}`).focus();
   };
   return (
-    <section className="dk-mc" aria-label="Mission Control">
-      <div className="dk-mc-bar">
-        {state
-          ? ['working', 'waiting', 'idle', 'offline'].map(s => (
-            <span key={s} className={'dk-mc-cnt is-' + s}><b>{counts[s]}</b> {s}</span>))
-          : <span className="dk-mc-cnt">loading…</span>}
-      </div>
-      {sub !== 'projects' && <div className="dk-mc-chips" role="group" aria-label="Filter by agent">
-        <button type="button" className={'dk-mc-chip' + (key == null ? ' is-on' : '')} aria-pressed={key == null}
-          onClick={() => setSel(null)}>All</button>
-        {agents.map(a => (
-          <button key={a.id} type="button" className={'dk-mc-chip' + (key === a.id ? ' is-on' : '')}
-            style={{ '--dk-c': agentColor(a) }} aria-pressed={key === a.id} onClick={() => setSel(a.id)}
-            title={`${a.name}: ${chipLabel(a)}`}>
-            <span className="dk-mc-cname">{a.name}</span>
-            <span className="dk-mc-pill">{chipLabel(a)}</span>
-          </button>
-        ))}
-      </div>}
-      <div className="dk-mc-tabs" role="tablist" aria-label="Mission Control panels" onKeyDown={onTabKey}>
-        {SUBTABS.map(([id, label]) => (
-          <button key={id} type="button" role="tab" id={`dk-mc-tab-${id}`} aria-selected={sub === id}
-            aria-controls="dk-mc-panel" tabIndex={sub === id ? 0 : -1}
+    <section className="dk-act" aria-label="Activity">
+      <div className="dk-mc-tabs" role="tablist" aria-label="Activity panels" onKeyDown={onTabKey}>
+        {TABS.map(([id, label]) => (
+          <button key={id} type="button" role="tab" id={`dk-${idBase}-tab-${id}`} aria-selected={sub === id}
+            aria-controls={`dk-${idBase}-panel`} tabIndex={sub === id ? 0 : -1}
             className={'dk-mc-tab' + (sub === id ? ' is-on' : '')} onClick={() => setSub(id)}>{label}</button>
         ))}
       </div>
-      <div id="dk-mc-panel" role="tabpanel" aria-labelledby={`dk-mc-tab-${sub}`} className="dk-mc-body">
-        {sub === 'live' && <Live agentKey={key} agents={agents} />}
-        {sub === 'comms' && <MissionComms agents={agents} agentKey={key} />}
-        {sub === 'projects' && <MissionProjects />}
+      <div id={`dk-${idBase}-panel`} role="tabpanel" aria-labelledby={`dk-${idBase}-tab-${sub}`} className="dk-mc-body">
+        {sub === 'live' && <Live agentKey={agentKey} agents={agents} lite={lite} onPickAgent={onPickAgent} />}
+        {sub === 'comms' && <MissionComms agents={agents} agentKey={agentKey} lite={lite} />}
       </div>
     </section>
   );
 }
 
 /** Live transcript for one agent, or all merged. Remounted per agent so its reveal and typing state reset. */
-function Live({ agentKey, agents }) {
-  const { rows, fresh, thinking, err } = usePoll('feed', agentKey);
+export function Live({ agentKey, agents, lite = false, onPickAgent }) {
+  const { rows, fresh, thinking, err } = usePoll('feed', agentKey, lite ? 15000 : 5000);
   const [open, setOpen] = useState({});          // thinking row id -> revealed
   const [texts, setTexts] = useState({});        // thinking row id -> fetched text (component state only)
   const [thinkErr, setThinkErr] = useState({});
@@ -92,10 +66,14 @@ function Live({ agentKey, agents }) {
       {rows != null && agentKey && showThoughtsNote(thinking, agentKey) && rows.length > 0 &&
         <p className="dk-mc-thoughts">Thoughts = narration + plan</p>}
       {rows != null && rows.length > 0 && (
-        <ol className="dk-mc-log" role="log" aria-label={`Transcript, ${name}`}>
+        <ol className="dk-mc-log" role="log" aria-live="off" aria-label={`Transcript, ${name}`}>
           {rows.map(r => {
             const who = multi && byId[r.agent]
-              ? <span className="dk-mc-who" style={{ color: agentColor(byId[r.agent]) }}>{byId[r.agent].name}</span> : null;
+              ? (onPickAgent
+                ? <button type="button" className="dk-mc-who" style={{ color: agentColor(byId[r.agent]) }}
+                    onClick={() => onPickAgent(r.agent)} aria-label={`Open ${byId[r.agent].name}`}>{byId[r.agent].name}</button>
+                : <span className="dk-mc-who" style={{ color: agentColor(byId[r.agent]) }}>{byId[r.agent].name}</span>)
+              : null;
             const time = <time className="dk-mc-t">{shortTime(r.ts)}</time>;
             if (r.kind === 'thinking') {
               const isOpen = !!open[r.id];
