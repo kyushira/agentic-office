@@ -219,6 +219,18 @@ class FeedTests(Fixture):
         env = [r for r in self._feed(agent="dev")["rows"] if r["text"] == "[redacted: .env file]"]
         self.assertEqual(len(env), 2)  # the read_file call and its result
 
+    def test_wrapped_result_keeps_redaction(self):
+        # Hermes wraps web/browser/mcp results in <untrusted_tool_result>; the wrapper is display-only (JS side),
+        # so the backend must still redact the secret inside it and keep the marker.
+        wrapped = ('<untrusted_tool_result source="web_search">\nThe following content was retrieved from an external '
+                   'source.\n\nAPI_KEY=abcdef1234567890\nnote: password: hunter2hunter\n</untrusted_tool_result>')
+        self._db(self.root / "profiles" / "wrap", [msg("tool", wrapped, NOW - 5, tool_name="web_search", tcid="w-1")])
+        res = [r for r in self._feed(agent="wrap")["rows"] if r["kind"] == "result"]
+        self.assertEqual(len(res), 1)
+        self.assertIn("[redacted]", res[0]["text"])
+        self.assertNotIn("abcdef1234567890", json.dumps(res))
+        self.assertNotIn("hunter2hunter", json.dumps(res))
+
     def test_result_truncated_to_300(self):
         self._db(self.root / "profiles" / "big", [msg("tool", "x" * 1000, NOW - 5, tool_name="terminal")])
         big = [r for r in self._feed(agent="big")["rows"] if r["kind"] == "result"]

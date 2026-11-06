@@ -1,6 +1,7 @@
 import { React, useState, useEffect, useRef, fetchJSON } from './sdk.js';
 import { agentColor, agentName, shortTime, callParts, thinkLabel, showThoughtsNote, THINK_API } from './mc-model.js';
 import { usePoll } from './mission-poll.js';
+import { cleanToolResult } from './format.js';
 import { Typed } from './MissionBits.jsx';
 import MissionComms from './MissionComms.jsx';
 
@@ -90,7 +91,7 @@ export function Live({ agentKey, agents, lite = false, onPickAgent }) {
             }
             const isCall = r.kind === 'call';
             const c = isCall ? callParts(r) : null;
-            const display = isCall ? `▸ ${c.tool}${c.arg ? '  ' + c.arg : ''}` : String(r.text || '');
+            const display = isCall ? `▸ ${c.tool}${c.arg ? '  ' + c.arg : ''}` : cleanToolResult(r.text);
             return (
               <li key={r.id} className={'dk-mc-row is-' + (isCall ? 'call' : r.kind === 'result' ? 'result' : 'text')}>
                 {time}{who}
