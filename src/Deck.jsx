@@ -599,7 +599,7 @@ export default function Deck() {
         <div className="dk-acts">
           {!full && <button className="dk-btn" onClick={enterFull} aria-label="Open fullscreen deck">Fullscreen</button>}
           {full && !standalone && <button className="dk-btn ao-fs-exit" onClick={exitFull} aria-label="Exit fullscreen deck">Exit</button>}
-          <button className={'dk-btn' + (lite ? ' on' : '')} onClick={() => setLite(!lite)} title="Low-power: no animation, refresh every 15s">Lite</button>
+          <button className={'dk-btn' + (lite ? ' on' : '')} aria-pressed={lite} onClick={() => setLite(!lite)} title="Low-power: no animation, refresh every 15s">Lite</button>
           <button className="dk-btn" onClick={load} aria-label="Refresh">↻</button>
         </div>
       </header>

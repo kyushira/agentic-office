@@ -617,3 +617,16 @@ html.ao-full-active { background-color: #0B0E11 !important; }
 
 /* Comms bubbles: sender colour on the left edge (set per row in MissionComms), rounded */
 .dk-root .dk-mc-bubble { border-left: 3px solid var(--dk-c, var(--dk-line-2)); border-radius: 12px; }
+
+/* review fixes: helper chip gets its own row under the speech notice (no overlap at 360px or 1280px) */
+.dk-root.is-few .dk-tile.has-say.has-top { padding-top: 44px; }
+.dk-root .dk-tile.has-say.has-top { padding-top: 40px; }
+.dk-root .dk-tile.has-say.has-top .dk-count-chip { top: 26px; }
+.dk-root.is-few .dk-tile.has-say.has-top .dk-count-chip { top: 30px; }
+
+/* phone (< 600px): every control that is a button is at least 40px tall, icon buttons 40px wide; pills that are not buttons stay small */
+@media (max-width: 599px) {
+  .dk-root .dk-btn, .dk-root button.dk-pill, .dk-root button.dk-chip, .dk-root .dk-seg-btn { min-height: 40px; }
+  .dk-root .dk-btn { min-width: 40px; }
+  .dk-root .dk-bell { min-width: 40px; min-height: 40px; }
+}
