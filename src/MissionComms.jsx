@@ -25,7 +25,7 @@ export default function MissionComms({ agents, agentKey, lite = false }) {
             const isOpen = !!open[r.id];
             const from = agentName(agents, r.from), to = agentName(agents, r.to);
             return (
-              <li key={r.id} className={'dk-mc-bubble is-' + r.kind}>
+              <li key={r.id} className={'dk-mc-bubble is-' + r.kind} style={{ '--dk-c': agentColor(byId[r.from]) }}>
                 <button type="button" className="dk-mc-bubble-btn" aria-expanded={isOpen}
                   onClick={() => setOpen(o => ({ ...o, [r.id]: !o[r.id] }))}>
                   <span className="dk-mc-route">

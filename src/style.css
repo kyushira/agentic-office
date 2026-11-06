@@ -52,7 +52,7 @@
   background-image: linear-gradient(var(--dk-grid-line) 1px, transparent 1px), linear-gradient(90deg, var(--dk-grid-line) 1px, transparent 1px);
   background-size: var(--dk-grid-size) var(--dk-grid-size); background-attachment: local; }
 .dk-root :focus-visible { outline: 2px solid var(--dk-hot); outline-offset: 2px; }
-@media (max-width: 600px) { .dk-grid { grid-template-columns: repeat(4, 1fr); gap: 5px; padding: 0 6px 8px; } }
+@media (max-width: 600px) { .dk-grid { grid-template-columns: repeat(2, 1fr); gap: 7px; padding: 0 8px 8px; } }   /* phone: rooms two per row, nameplates readable */
 /* few tiles: big ones (2 columns on a phone, ~3 per row on desktop) */
 .dk-root.is-few .dk-grid { grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 8px; }
 @media (max-width: 600px) { .dk-root.is-few .dk-grid { grid-template-columns: repeat(2, 1fr); gap: 7px; } }
@@ -505,3 +505,115 @@ html.ao-full-active { background-color: #0B0E11 !important; }
 .dk-root .dk-sheet .dk-mc-tabs { padding: 0 0 8px; }
 .dk-root .dk-sheet .dk-mc-body { margin: 0 0 8px; flex: none; max-height: 52vh; }
 .dk-root button.dk-mc-who { background: none; border: 0; padding: 0; font: inherit; cursor: pointer; text-decoration: underline dotted; text-underline-offset: 2px; }
+
+/* ---- Phase 1 revamp: header pills, roster strip, needs-you lane, Office | Comms panes, room notices ----
+   Palette and font unchanged (cyan on graphite, JetBrains Mono). Every rule is scoped under .dk-root. */
+
+/* header: title and subline on the left, actions on the right, status pills on their own row (wraps at 360px) */
+.dk-root .dk-top { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 8px 10px; }
+.dk-root .dk-brand { grid-column: 1; grid-row: 1; min-width: 0; }
+.dk-root .dk-title { margin: 0; font-size: 15px; font-weight: 700; color: var(--dk-ink); letter-spacing: 0; }
+.dk-root .dk-sub { margin: 2px 0 0; font-size: 11px; color: var(--dk-mut); line-height: 1.3; overflow-wrap: anywhere; }
+.dk-root .dk-acts { grid-column: 2; grid-row: 1; flex-wrap: wrap; justify-content: flex-end; }
+.dk-root .dk-sum { grid-column: 1 / -1; grid-row: 2; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; min-width: 0; white-space: normal; overflow: visible; }
+.dk-root .dk-pill { display: inline-flex; align-items: center; gap: 6px; min-height: 28px; padding: 4px 10px; box-sizing: border-box;
+  border-radius: 999px; background: var(--dk-raise); border: 1px solid var(--dk-line); font: inherit; font-size: 11px; line-height: 1;
+  color: var(--dk-soft); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.dk-root button.dk-pill { cursor: pointer; }
+.dk-root .dk-pill.is-err { color: var(--dk-red); border-color: color-mix(in srgb, var(--dk-red) 50%, transparent); }
+.dk-root .dk-working-pill { color: var(--dk-ink); }
+.dk-root .dk-clock { color: var(--dk-ink); font-weight: 600; }
+.dk-root .dk-reset { flex-basis: auto; font-size: 11px; color: var(--dk-mut); }
+.dk-root .dk-reset.is-soon { color: var(--dk-red); border-color: color-mix(in srgb, var(--dk-red) 55%, transparent); }
+.dk-root .dk-tok { font-size: 11px; font-weight: 500; }
+.dk-root .dk-usage-btn.dk-pill { gap: 8px; }
+.dk-root .dk-bell { position: relative; min-width: 36px; justify-content: center; padding: 4px 8px; color: var(--dk-soft); }
+.dk-root .dk-bell:disabled { cursor: default; opacity: .6; }
+.dk-root .dk-bell.has-badge { color: var(--dk-ink); border-color: var(--dk-dim); }
+.dk-root .dk-bell-n { min-width: 16px; height: 16px; padding: 0 4px; border-radius: 999px; background: var(--dk-red); color: var(--dk-on-hot);
+  font-size: 10px; line-height: 16px; font-weight: 700; text-align: center; }
+
+/* roster strip: one card per agent; horizontal scroll with snap on phone, wraps on desktop */
+.dk-root .dk-roster-wrap { flex: none; padding: 8px 8px 0; }
+.dk-root .dk-roster { list-style: none; margin: 0; padding: 2px 2px 6px; display: flex; gap: 8px; overflow-x: auto; overscroll-behavior-x: contain;
+  scroll-snap-type: x proximity; scrollbar-width: none; }
+.dk-root .dk-roster::-webkit-scrollbar { display: none; }
+.dk-root .dk-rcard-li { flex: 0 0 auto; scroll-snap-align: start; }
+.dk-root .dk-rcard { display: flex; align-items: center; gap: 8px; min-width: 132px; min-height: 44px; padding: 5px 10px 5px 6px; box-sizing: border-box;
+  background: var(--dk-tile); border: 1px solid var(--dk-line); border-left: 3px solid var(--dk-c); border-radius: 10px; color: var(--dk-ink); text-align: left; }
+.dk-root .dk-rcard.is-pressed { border-color: var(--dk-dim); box-shadow: 0 0 0 1px var(--dk-glow-soft); }
+.dk-root .dk-rcard.is-offline { opacity: .6; }
+.dk-root .dk-rcard-art { flex: none; width: 32px; height: 32px; display: block; }
+.dk-root .dk-rcard-art .dk-sprite { width: 100%; height: 100%; }
+.dk-root .dk-rcard-txt { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.dk-root .dk-rcard-name { display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 700; white-space: nowrap; }
+.dk-root .dk-rtag { font-size: 9px; font-weight: 600; padding: 1px 5px; border-radius: 999px; border: 1px solid var(--dk-line-2); color: var(--dk-mut); }
+.dk-root .dk-rstat { display: flex; align-items: center; gap: 5px; font-size: 10px; color: var(--dk-mut); }
+.dk-root .dk-rdot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; flex: none; }
+.dk-root .dk-rcard.is-working .dk-rstat { color: var(--dk-hot); }
+.dk-root .dk-rcard.is-waiting .dk-rstat { color: var(--dk-warn); }
+.dk-root .dk-rcard.is-idle .dk-rstat { color: var(--dk-mut); }
+.dk-root .dk-rcard.is-offline .dk-rstat { color: var(--dk-faint); }
+@media (min-width: 900px) { .dk-root .dk-roster { flex-wrap: wrap; overflow: visible; } }
+
+/* needs-you lane: only rendered when something needs the user; amber for approvals, red chips for questions */
+.dk-root .dk-needs { flex: none; margin: 6px 8px 0; padding: 8px 10px; border-radius: 10px; box-sizing: border-box;
+  border: 1px solid color-mix(in srgb, var(--dk-warn) 40%, transparent); background: color-mix(in srgb, var(--dk-warn) 6%, var(--dk-tile)); }
+.dk-root .dk-needs-h { margin: 0 0 6px; font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--dk-warn); }
+.dk-root .dk-needs-n { display: inline-block; min-width: 18px; margin-left: 4px; padding: 0 5px; border-radius: 999px; background: var(--dk-warn);
+  color: #0B0E11; text-align: center; font-size: 10px; line-height: 16px; }
+.dk-root .dk-needs-list { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; }
+.dk-root .dk-chip { display: inline-flex; align-items: center; gap: 6px; min-height: 32px; max-width: 100%; padding: 4px 10px; box-sizing: border-box;
+  border-radius: 999px; border: 1px solid var(--dk-warn); background: color-mix(in srgb, var(--dk-warn) 12%, transparent); color: var(--dk-ink); font-size: 12px; }
+.dk-root .dk-chip.is-question { border-color: var(--dk-red); background: color-mix(in srgb, var(--dk-red) 14%, transparent); }
+.dk-root .dk-chip-who { font-weight: 700; white-space: nowrap; }
+.dk-root .dk-chip-what { min-width: 0; max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--dk-soft); }
+
+/* phone: Office | Comms segmented control (one page, one pane shown) */
+.dk-root .dk-seg { flex: none; display: flex; gap: 2px; margin: 8px 8px 0; padding: 3px; border-radius: 10px; border: 1px solid var(--dk-line-2); background: var(--dk-raise); }
+.dk-root .dk-seg-btn { flex: 1; min-height: 36px; border: 0; border-radius: 7px; background: transparent; color: var(--dk-mut); font-size: 12px; font-weight: 600; }
+.dk-root .dk-seg-btn.is-on { background: var(--dk-tile); color: var(--dk-hot); box-shadow: inset 0 0 0 1px var(--dk-dim); }
+.dk-root .dk-pane-h { display: none; }
+.dk-root .dk-panes { margin-top: 6px; min-width: 0; }
+.dk-root .dk-pane { min-width: 0; }
+.dk-root .dk-pane[hidden] { display: none; }
+.dk-root .dk-pane-comms { padding: 0 8px 6px; }
+.dk-root .dk-pane-comms .dk-mc-comms { padding: 0; }
+.dk-root .dk-pane-comms .dk-mc-note { margin: 10px 4px; }
+
+/* desktop (>= 900px): office 63% and comms 37% side by side; comms scrolls inside its own column */
+@media (min-width: 900px) {
+  .dk-root .dk-seg { display: none; }
+  .dk-root .dk-panes { display: grid; grid-template-columns: minmax(0, 63fr) minmax(0, 37fr); gap: 10px; align-items: start; padding: 0 8px; }
+  .dk-root .dk-pane-h { display: block; margin: 8px 2px 4px; font-size: 10px; font-weight: 600; letter-spacing: .1em; text-transform: uppercase; color: var(--dk-mut); }
+  .dk-root .dk-panes .dk-grid { padding: 0; }
+  .dk-root .dk-pane-comms { padding: 0; position: sticky; top: 0; max-height: 70vh; overflow-y: auto; overscroll-behavior: contain;
+    border: 1px solid var(--dk-line); border-radius: 12px; background: var(--dk-sheet); }
+  .dk-root .dk-pane-comms .dk-mc-comms { padding: 8px; }
+}
+
+/* office rooms: rounded cards, floor tinted with the agent colour, sprite art left alone by the nameplate */
+.dk-root .dk-tile.is-agent { border-radius: 10px; background: color-mix(in srgb, var(--dk-c) 8%, var(--dk-tile)); }
+.dk-root .dk-tile.is-agent.is-rest .dk-art { opacity: .5; }            /* idle rooms: dimmed sprite, text stays readable */
+.dk-root .dk-tile.is-agent.is-rest .dk-status { color: var(--dk-faint); }
+.dk-root .dk-tile.has-say { padding-top: 22px; }                       /* room for the speech notice above the sprite */
+
+/* speech-style notice above the sprite: current activity of a working agent */
+.dk-root .dk-say { position: absolute; top: 4px; left: 50%; transform: translateX(-50%); z-index: 2; pointer-events: none;
+  max-width: 92%; display: inline-flex; align-items: center; gap: 5px; padding: 2px 7px; box-sizing: border-box; border-radius: 8px;
+  background: var(--dk-raise); border: 1px solid var(--dk-line-2); color: var(--dk-ink); font-size: 9px; line-height: 1.3; }
+.dk-root .dk-say::after { content: ''; position: absolute; left: 50%; bottom: -5px; width: 8px; height: 8px; margin-left: -4px; transform: rotate(45deg);
+  background: var(--dk-raise); border-right: 1px solid var(--dk-line-2); border-bottom: 1px solid var(--dk-line-2); }
+.dk-root .dk-say-t { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* typing indicator: three dots, animated only when not Lite (reduced motion: static) */
+.dk-root .dk-typing { display: inline-flex; gap: 2px; align-items: center; flex: none; }
+.dk-root .dk-typing i { width: 3px; height: 3px; border-radius: 50%; background: var(--dk-hot); opacity: .35; }
+.dk-root:not(.is-lite) .dk-typing i { animation: dk-type 1.2s ease-in-out infinite; }
+.dk-root:not(.is-lite) .dk-typing i:nth-child(2) { animation-delay: .15s; }
+.dk-root:not(.is-lite) .dk-typing i:nth-child(3) { animation-delay: .3s; }
+@keyframes dk-type { 0%, 60%, 100% { opacity: .25; transform: translateY(0); } 30% { opacity: 1; transform: translateY(-2px); } }
+@media (prefers-reduced-motion: reduce) { .dk-root .dk-typing i { animation: none !important; } }
+
+/* Comms bubbles: sender colour on the left edge (set per row in MissionComms), rounded */
+.dk-root .dk-mc-bubble { border-left: 3px solid var(--dk-c, var(--dk-line-2)); border-radius: 12px; }

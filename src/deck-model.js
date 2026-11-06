@@ -368,6 +368,72 @@ export function helperChanges(prev, next) {
   return out;
 }
 
+/**
+ * Agents that need the user, in agent order: {id, name, color, kind, label}.
+ * kind 'question' = activity starts with 'asking a question' (a pending clarify call).
+ * kind 'approval' = status 'waiting' (collect.py sets it for 'waiting for approval'). A waiting agent whose
+ * activity is 'delegating · …' is excluded: collect.py marks a delegating agent with no live lead as waiting
+ * too, but it is waiting on its helpers, not on the user.
+ */
+export function needsYou(agents) {
+  const out = [];
+  for (const a of Array.isArray(agents) ? agents : []) {
+    if (!a) continue;
+    const act = String(a.activity || '').trim();
+    const base = { id: a.id, name: a.name || a.id, color: a.color || NO_COLOR };
+    if (/^asking a question/.test(act)) out.push({ ...base, kind: 'question', label: 'asking a question' });
+    else if (a.status === 'waiting' && !/^delegating/.test(act))
+      out.push({ ...base, kind: 'approval', label: /approval/.test(act) ? 'waiting for approval' : (act || 'waiting on you') });
+  }
+  return out;
+}
+
+const STATUS_WORDS = { working: 'Working', waiting: 'Waiting', idle: 'Idle', offline: 'Offline' };
+/** Status word for the roster (text, so state is not colour-only). Unknown statuses read as Idle. */
+export function statusWord(status) { return STATUS_WORDS[status] || 'Idle'; }
+
+/** Greeting for the header subline from the local hour (0-23). */
+export function greeting(hour) {
+  return hour >= 5 && hour < 12 ? 'Good morning' : hour >= 12 && hour < 18 ? 'Good afternoon' : 'Good evening';
+}
+
+/** Short duration tag: '<1m', '39m', '2h'. Negative or non-finite input gives null (no tag). */
+export function shortDuration(sec) {
+  const s = +sec;
+  if (!Number.isFinite(s) || s < 0) return null;
+  if (s < 60) return '<1m';
+  return s < 3600 ? `${Math.floor(s / 60)}m` : `${Math.floor(s / 3600)}h`;
+}
+
+/**
+ * Duration tag for a roster card: how long the agent's earliest working session has been running, from
+ * `started` (unix s) on the session rows. Null when the agent is not working or no started time is known.
+ */
+export function rosterDuration(a, sessions, now) {
+  if (!a || a.status !== 'working') return null;
+  const starts = (Array.isArray(sessions) ? sessions : [])
+    .filter(s => s && s.status === 'working' && Number.isFinite(+s.started) && +s.started > 0)
+    .map(s => +s.started);
+  if (!starts.length) return null;
+  return shortDuration(now - Math.min(...starts));
+}
+
+/** Clock face 'HH:MM' (24h, local) for a Date. */
+export function clockText(d) {
+  const p = n => String(n).padStart(2, '0');
+  return `${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+
+const SOON_S = 15 * 60;
+/** True when a 5h reset is under 15 minutes away (the header pill turns red). */
+export function resetSoon(resetsAt, nowMs) {
+  if (resetsAt == null || resetsAt === '') return false;
+  const t = typeof resetsAt === 'number' ? (resetsAt < 1e12 ? resetsAt * 1000 : resetsAt) : new Date(resetsAt).getTime();
+  if (!Number.isFinite(t)) return false;
+  const left = (t - nowMs) / 1000;
+  return left > 0 && left < SOON_S;
+}
+
 /** Tile tooltip for live helpers: "2 helpers running", then one "model · task" line each (empty when none). */
 export function swarmTip(helpers) {
   const hs = Array.isArray(helpers) ? helpers.filter(h => h && h.id != null) : [];

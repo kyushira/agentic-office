@@ -1,29 +1,16 @@
 import { React, useState, useEffect, useRef, fetchJSON, API, USAGE_API, SESSION_API } from './sdk.js';
 import { ago, compact, resetCountdown } from './format.js';
-import { portrait } from './portrait.js';
-import { buildItems, headerCounts, durationText, modelText, modelParts, usageText, meterLevel, activeTokens, currentSessionId, eventLabel, detailRows, traceModel, newToolCalls, countStep, todayParts, COUNT_MS, newWalks, walkLabel, toolRing, newBrainTrips, brainCounts, brainText, brainNotes, helperChanges, swarmTip } from './deck-model.js';
+import { buildItems, headerCounts, durationText, modelText, modelParts, usageText, meterLevel, activeTokens, currentSessionId, eventLabel, detailRows, traceModel, newToolCalls, countStep, todayParts, COUNT_MS, newWalks, walkLabel, toolRing, newBrainTrips, brainCounts, brainText, brainNotes, helperChanges, swarmTip, needsYou, greeting, resetSoon } from './deck-model.js';
 import { isStandalone, wantsFull, withFullParam, requestNativeFullscreen, exitNativeFullscreen, markFullPath } from './fullscreen.js';
 import { ActivityPanel, Live } from './Mission.jsx';
 import MissionComms from './MissionComms.jsx';
 import MissionProjects from './MissionProjects.jsx';
 import { useDialogFocus } from './dialog-focus.js';
+import { Sprite } from './Sprite.jsx';
+import { useMedia, UpdatedAgo, LiveClock, Bell, NeedsYou, Roster, PaneTabs } from './DeckRevamp.jsx';
 
 
 const POLL_MS = 5000, POLL_LITE_MS = 15000, DETAIL_MS = 5000;
-
-/** Pixel-art bust: base pixels + an eyes layer that blinks; a small bob while working. */
-function Sprite({ who, working, small, done }) {
-  const p = portrait(who);
-  const px = list => list.map(([x, y, c]) => <rect key={x + '-' + y} x={x} y={y} width="1" height="1" fill={c} />);
-  return (
-    <svg className={'dk-sprite' + (working ? ' is-work' : '') + (small ? ' is-small' : '') + (done ? ' is-done' : '')}
-      viewBox={`0 0 ${p.size} ${p.size}`} shapeRendering="crispEdges" aria-hidden="true">
-      {p.base.map(([x, y, w, c]) => <rect key={x + '-' + y} x={x} y={y} width={w} height="1" fill={c} />)}
-      <g className="dk-eyes-open">{px(p.open)}</g>
-      <g className="dk-eyes-shut">{px(p.closed)}</g>
-    </svg>
-  );
-}
 
 const pctStr = p => (p == null ? 'n/a' : Math.round(p) + '%');
 
@@ -199,7 +186,7 @@ function AgentTile({ it, pressed, onPick, blip, still, setRef, pulses, fx }) {
   const ring = toolRing(a.tools, a.activity, a.status);
   const hs = Array.isArray(a.helpers) ? a.helpers.filter(h => h && h.id != null) : [];
   return (
-    <button ref={setRef} className={'dk-tile is-agent' + (working ? ' is-working' : ' is-rest') + (pressed ? ' is-pressed' : '') + (it.chip ? ' has-chip' : '') + (it.helperCount > 0 || it.ctxPct != null ? ' has-top' : '')} onClick={onPick}
+    <button ref={setRef} className={'dk-tile is-agent' + (working ? ' is-working' : ' is-rest') + (pressed ? ' is-pressed' : '') + (it.chip ? ' has-chip' : '') + (it.helperCount > 0 || it.ctxPct != null ? ' has-top' : '') + (working ? ' has-say' : '')} onClick={onPick}
       style={{ '--dk-c': it.color, gridColumnStart: it.rowStart ? 1 : undefined }}
       aria-label={`${a.name}, ${a.role}, ${it.status}` + (hs.length ? `, ${hs.length} helper${hs.length === 1 ? '' : 's'} running` : '')}
       title={swarmTip(hs) || undefined}>
@@ -208,6 +195,10 @@ function AgentTile({ it, pressed, onPick, blip, still, setRef, pulses, fx }) {
       {working && <i className="dk-badge" />}
       {it.helperCount > 0 && <span className="dk-count-chip">{it.helperCount} helper{it.helperCount > 1 ? 's' : ''}</span>}
       {it.ctxPct != null && !it.helperCount && <span className="dk-ctx">{it.ctxPct}% ctx</span>}
+      {working && a.activity && <span className="dk-say" aria-hidden="true">
+        <span className="dk-say-t">{a.activity}</span>
+        {a.status === 'working' && <span className="dk-typing"><i /><i /><i /></span>}
+      </span>}
       <span className="dk-art"><Sprite who={a.id} working={working} />{!working && <em className="dk-zz">zz</em>}
         {ring.segments.length > 0 && <span className="dk-ring-wrap"><ToolRing model={ring} /></span>}
         <BrainNode trips={a.brainTrips} pulses={still ? null : pulses} /></span>
@@ -415,6 +406,9 @@ export default function Deck() {
   const [showReason, setShowReason] = useState(false);
   const [actOpen, setActOpen] = useState(false);     // disclosures: collapsed by default, not persisted
   const [projOpen, setProjOpen] = useState(false);
+  const [pane, setPane] = useState('office');                          // phone only: Office | Comms
+  const desktop = useMedia('(min-width: 900px)');                      // side by side from 900px
+  const [updatedAt, setUpdatedAt] = useState(null);                    // ms of the last good /state poll
   const [standalone] = useState(() => isStandalone(window));
   const [full, setFull] = useState(() => wantsFull(location.search, standalone));
   const timer = useRef(0), alive = useRef(true), liteRef = useRef(lite);
@@ -438,7 +432,7 @@ export default function Deck() {
   const load = () => {
     clearTimeout(timer.current);
     if (document.hidden) { timer.current = setTimeout(load, POLL_MS); return; }
-    fetchJSON(API).then(s => { if (alive.current) { setState(s); setError(''); } })
+    fetchJSON(API).then(s => { if (alive.current) { setState(s); setError(''); setUpdatedAt(Date.now()); } })
       .catch(e => alive.current && setError(String((e && e.message) || e)))
       .finally(() => { if (alive.current) timer.current = setTimeout(load, liteRef.current ? POLL_LITE_MS : POLL_MS); });
   };
@@ -558,6 +552,7 @@ export default function Deck() {
   const now = Date.now() / 1000;
   const items = state ? buildItems(state, now) : [];
   const counts = state ? headerCounts(items) : null;
+  const needs = state ? needsYou(state.agents || []) : [];
   const picked = items.find(i => i.key === sel) || null;
   const ut = usageText(usage);
   const detailId = picked && picked.type === 'agent' ? currentSessionId((state.sessions || {})[picked.agent.id]) : null;
@@ -582,20 +577,25 @@ export default function Deck() {
   const root = (
     <div ref={rootRef} className={'dk-root' + (lite ? ' is-lite' : '') + (hidden ? ' is-hidden' : '') + (items.length && items.length <= 6 ? ' is-few' : '')} style={{ height: full ? '100%' : height }}>
       <header className="dk-top">
+        <div className="dk-brand">
+          <h1 className="dk-title">Agent Deck</h1>
+          <p className="dk-sub">{greeting(new Date().getHours())} Sir · your AI team, live</p>
+        </div>
         <div className="dk-sum">
-          <span className="dk-count"><i className={'dk-dot' + (counts && counts.working ? ' on' : '')} />
-            <span className="dk-count-txt">{counts ? `${counts.working} working · ${counts.idle} idle · ${counts.helpers} helper${counts.helpers === 1 ? '' : 's'}` : 'loading…'}</span></span>
-          <button className={'dk-usage dk-usage-btn is-' + ut.level} title={ut.title} aria-label={ut.aria} aria-expanded={showReason}
+          <UpdatedAgo at={updatedAt} error={!!error} />
+          <span className="dk-pill dk-working-pill" title="Agents working now, of all agents">{counts ? `${counts.working} of ${counts.working + counts.idle} working` : 'loading…'}</span>
+          <button className={'dk-pill dk-usage dk-usage-btn is-' + ut.level} title={ut.title} aria-label={ut.aria} aria-expanded={showReason}
             onClick={() => setShowReason(!showReason)}>
             {ut.level === 'na' && ut.reason ? <span className="dk-uw-na">usage n/a</span> : ut.windows.map(w => (
               <span key={w.key} className="dk-uw" aria-hidden="true">
                 <span className="dk-uw-l">{w.short}</span><Meter pct={w.pct} decorative /><span className="dk-uw-v">{pctStr(w.pct)}</span>
               </span>))}
           </button>
-          {resetLabel && <span className="dk-reset" role="timer" aria-live="off" title="Claude 5-hour session window">{resetLabel}</span>}
-          <span className="dk-usage dk-tok" title="Tokens used by sessions that are working now, all agents">{compact(activeTokens(items))} tok <span className="dk-tok-lbl">active</span></span>
+          {resetLabel && <span className={'dk-pill dk-reset' + (resetSoon(fiveRaw, Date.now()) ? ' is-soon' : '')} role="timer" aria-live="off" title="Claude 5-hour session window">{resetLabel}</span>}
+          <span className="dk-pill dk-tok" title="Tokens used by sessions that are working now, all agents">{compact(activeTokens(items))} tok <span className="dk-tok-lbl">active</span></span>
+          <LiveClock />
+          <Bell count={needs.length} onPick={() => needs.length && setSel('a:' + needs[0].id)} />
         </div>
-        <span className="dk-grow" />
         <div className="dk-acts">
           {!full && <button className="dk-btn" onClick={enterFull} aria-label="Open fullscreen deck">Fullscreen</button>}
           {full && !standalone && <button className="dk-btn ao-fs-exit" onClick={exitFull} aria-label="Exit fullscreen deck">Exit</button>}
@@ -619,7 +619,14 @@ export default function Deck() {
           </div>)}
       {error && <div className="dk-err">Can't reach the deck data ({error}). Retrying…</div>}
       <div className="dk-scroll">
-      <main ref={gridRef} className="dk-grid">
+      <NeedsYou items={needs} onPick={id => setSel('a:' + id)} />
+      <Roster agents={(state && state.agents) || []} sessions={state && state.sessions} now={now} sel={sel} onPick={id => setSel('a:' + id)} />
+      {!desktop && <PaneTabs pane={pane} setPane={setPane} />}
+      <div className="dk-panes">
+      <section id="dk-pane-office" role="tabpanel" aria-labelledby="dk-pane-tab-office" className="dk-pane dk-pane-office"
+        hidden={!desktop && pane !== 'office'}>
+      <h2 className="dk-pane-h">Office</h2>
+      {(desktop || pane === 'office') && <main ref={gridRef} className="dk-grid">
             {items.map(it => it.type === 'agent'
               ? <AgentTile key={it.key} it={it} pressed={it.key === sel} blip={blips[it.agent.id] || 0} still={lite || hidden} onPick={() => setSel(it.key)}
                   setRef={el => { setTileRef(it.agent.id, el); }} pulses={brainPulses[it.agent.id]} fx={swarmFx[it.agent.id]} />
@@ -628,7 +635,14 @@ export default function Deck() {
             <div className="dk-flights" aria-hidden="true">
               {flights.map(f => <FlightLayer key={f.key} f={f} />)}
             </div>
-          </main>
+          </main>}
+      </section>
+      <section id="dk-pane-comms" role="tabpanel" aria-labelledby="dk-pane-tab-comms" className="dk-pane dk-pane-comms"
+        hidden={!desktop && pane !== 'comms'}>
+        <h2 className="dk-pane-h">Comms</h2>
+        {(desktop || pane === 'comms') && <MissionComms agents={(state && state.agents) || []} agentKey="" lite={lite} />}
+      </section>
+      </div>
         <div className="dk-more">
           <section className="dk-disc">
             <button type="button" className="dk-disc-h" aria-expanded={actOpen} aria-controls="dk-disc-act" onClick={() => setActOpen(!actOpen)}><span>Activity</span><i aria-hidden="true">{actOpen ? '▾' : '▸'}</i></button>

@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { buildItems, headerCounts, durationText, modelText, modelParts, usageText, meterLevel, activeTokens, currentSessionId, eventLabel, detailRows, traceModel, newToolCalls, countStep, todayParts, newWalks, walkLabel, toolRing, newBrainTrips, brainCounts, brainText, brainNotes, helperChanges, swarmTip } from '../src/deck-model.js';
+import { buildItems, headerCounts, durationText, modelText, modelParts, usageText, meterLevel, activeTokens, currentSessionId, eventLabel, detailRows, traceModel, newToolCalls, countStep, todayParts, newWalks, walkLabel, toolRing, newBrainTrips, brainCounts, brainText, brainNotes, helperChanges, swarmTip, needsYou, statusWord, greeting, shortDuration, rosterDuration, clockText, resetSoon } from '../src/deck-model.js';
 
 const now = 1_800_000_000;
 const state = {
@@ -503,3 +503,73 @@ test('swarmTip: a count line then model and task per live helper, empty when non
     '2 helpers running\nhelper · X\nsonnet · task');
 });
 
+
+// ---- Deck revamp phase 1: needs-you lane, roster and header helpers ----
+
+test('needsYou: waiting-for-approval and asking-a-question agents, in agent order', () => {
+  const agents = [
+    { id: 'default', name: 'Ash', status: 'idle', activity: 'idle · last: writing files', color: '#1' },
+    { id: 'dev', name: 'Dev', status: 'waiting', activity: 'waiting for approval', color: '#2' },
+    { id: 'red', name: 'Red', status: 'working', activity: 'asking a question · which branch?', color: '#3' },
+    { id: 'ops', name: 'Ops', status: 'waiting', activity: 'delegating · 2 helpers', color: '#4' },
+    { id: 'off', name: 'Off', status: 'offline', activity: 'no data' },
+  ];
+  const got = needsYou(agents);
+  assert.deepEqual(got.map(n => n.id), ['dev', 'red']);
+  assert.deepEqual(got[0], { id: 'dev', name: 'Dev', color: '#2', kind: 'approval', label: 'waiting for approval' });
+  assert.equal(got[1].kind, 'question');
+  assert.equal(got[1].label, 'asking a question');
+});
+
+test('needsYou: empty, missing and malformed input give an empty list', () => {
+  assert.deepEqual(needsYou([]), []);
+  assert.deepEqual(needsYou(undefined), []);
+  assert.deepEqual(needsYou([null, { id: 'x', status: 'working', activity: 'running tests' }]), []);
+});
+
+test('statusWord: words for each status, unknown reads as Idle', () => {
+  assert.equal(statusWord('working'), 'Working');
+  assert.equal(statusWord('waiting'), 'Waiting');
+  assert.equal(statusWord('idle'), 'Idle');
+  assert.equal(statusWord('offline'), 'Offline');
+  assert.equal(statusWord('weird'), 'Idle');
+});
+
+test('greeting: morning, afternoon, evening by local hour', () => {
+  assert.equal(greeting(4), 'Good evening');
+  assert.equal(greeting(5), 'Good morning');
+  assert.equal(greeting(11), 'Good morning');
+  assert.equal(greeting(12), 'Good afternoon');
+  assert.equal(greeting(17), 'Good afternoon');
+  assert.equal(greeting(18), 'Good evening');
+});
+
+test('shortDuration: <1m, minutes, hours; bad input gives null', () => {
+  assert.equal(shortDuration(30), '<1m');
+  assert.equal(shortDuration(39 * 60 + 20), '39m');
+  assert.equal(shortDuration(2 * 3600 + 900), '2h');
+  assert.equal(shortDuration(-5), null);
+  assert.equal(shortDuration(NaN), null);
+});
+
+test('rosterDuration: from the earliest working session; null when not working or no start', () => {
+  const sessions = [{ status: 'working', started: now - 2340 }, { status: 'working', started: now - 60 }, { status: 'idle', started: now - 9000 }];
+  assert.equal(rosterDuration({ status: 'working' }, sessions, now), '39m');
+  assert.equal(rosterDuration({ status: 'idle' }, sessions, now), null);
+  assert.equal(rosterDuration({ status: 'working' }, [{ status: 'working' }], now), null);
+  assert.equal(rosterDuration({ status: 'working' }, undefined, now), null);
+});
+
+test('clockText: 24h HH:MM with leading zeros', () => {
+  assert.equal(clockText(new Date(2026, 10, 6, 7, 5)), '07:05');
+  assert.equal(clockText(new Date(2026, 10, 6, 23, 59)), '23:59');
+});
+
+test('resetSoon: true only for a reset 0 to 15 minutes away', () => {
+  const at = ms => new Date(now * 1000 + ms).toISOString();
+  assert.equal(resetSoon(at(10 * 60000), now * 1000), true);
+  assert.equal(resetSoon(at(20 * 60000), now * 1000), false);
+  assert.equal(resetSoon(at(-60000), now * 1000), false);
+  assert.equal(resetSoon(null, now * 1000), false);
+  assert.equal(resetSoon(now + 300, now * 1000), true, 'unix seconds are accepted');
+});
