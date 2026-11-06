@@ -4,7 +4,53 @@ import assert from 'node:assert/strict';
 import {
   mergeRows, newIds, statusCounts, shortTime, agentColor, agentName, chipLabel, commsFor,
   feedQuery, commsQuery, thinkLabel, callParts, typeStep, showThoughtsNote, mergeThinking, MC_CAP,
+  projectStatusLabel, sourceLabel, sortProjects, visibleBriefs, registryHint, BRIEFS_SHOWN, PROJECTS_API,
 } from '../src/mc-model.js';
+
+test('projectStatusLabel and sourceLabel: known values, unknown shown as given', () => {
+  assert.equal(projectStatusLabel('active'), 'active');
+  assert.equal(projectStatusLabel('quiet'), 'quiet');
+  assert.equal(projectStatusLabel('stale'), 'stale');
+  assert.equal(projectStatusLabel('weird'), 'weird');
+  assert.equal(projectStatusLabel(undefined), 'unknown');
+  assert.equal(projectStatusLabel('constructor'), 'constructor');
+  assert.equal(sourceLabel('git'), 'git commit');
+  assert.equal(sourceLabel('brief'), 'brief');
+  assert.equal(sourceLabel('dir'), 'folder mtime');
+  assert.equal(sourceLabel('toString'), 'activity');
+});
+
+test('sortProjects: active, then quiet, then stale; newest first within a status; copy only', () => {
+  const list = [
+    { name: 'old', status: 'stale', last_activity: 1 },
+    { name: 'q', status: 'quiet', last_activity: 50 },
+    { name: 'a1', status: 'active', last_activity: 10 },
+    { name: 'a3', status: 'active', last_activity: 99 },
+    { name: 'a2', status: 'active', last_activity: 99 },
+  ];
+  const before = list.map(p => p.name);
+  assert.deepEqual(sortProjects(list).map(p => p.name), ['a2', 'a3', 'a1', 'q', 'old']);
+  assert.deepEqual(list.map(p => p.name), before);
+  assert.deepEqual(sortProjects(null), []);
+  assert.deepEqual(sortProjects([null, { name: 'x', status: 'active', last_activity: 1 }]).map(p => p.name), ['x']);
+});
+
+test('visibleBriefs: the newest three until expanded', () => {
+  const briefs = [1, 2, 3, 4, 5].map(i => ({ name: 'b' + i, mtime: i }));
+  assert.equal(BRIEFS_SHOWN, 3);
+  assert.deepEqual(visibleBriefs(briefs, false).map(b => b.name), ['b1', 'b2', 'b3']);
+  assert.equal(visibleBriefs(briefs, true).length, 5);
+  assert.deepEqual(visibleBriefs([], false), []);
+  assert.deepEqual(visibleBriefs(undefined, true), []);
+});
+
+test('registryHint: only when the registry is absent or malformed', () => {
+  assert.equal(registryHint({ registry: false }), 'No projects.json registry: owner/next step not set');
+  assert.equal(registryHint({ registry: false, error: 'bad json' }), 'No projects.json registry: owner/next step not set');
+  assert.equal(registryHint({ registry: true }), null);
+  assert.equal(registryHint(null), null);
+  assert.equal(PROJECTS_API, '/api/plugins/agent-office/projects');
+});
 
 test('mergeThinking: union across polls, first-seen order, nothing lost on an empty poll', () => {
   assert.deepEqual(mergeThinking(['dev'], []), ['dev']);

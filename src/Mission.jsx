@@ -3,8 +3,9 @@ import { statusCounts, agentColor, agentName, chipLabel, shortTime, callParts, t
 import { usePoll } from './mission-poll.js';
 import { Typed } from './MissionBits.jsx';
 import MissionComms from './MissionComms.jsx';
+import MissionProjects from './MissionProjects.jsx';
 
-const SUBTABS = [['live', 'Live'], ['comms', 'Comms']];
+const SUBTABS = [['live', 'Live'], ['comms', 'Comms'], ['projects', 'Projects']];
 
 /**
  * Mission Control view: a counts bar and agent chips (from /state), then the Live transcript or the
@@ -20,7 +21,8 @@ export default function Mission({ state }) {
   const onTabKey = e => {
     if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
     e.preventDefault();
-    const next = sub === 'live' ? 'comms' : 'live';
+    const i = SUBTABS.findIndex(([id]) => id === sub);
+    const next = SUBTABS[(i + (e.key === 'ArrowRight' ? 1 : SUBTABS.length - 1)) % SUBTABS.length][0];
     setSub(next);
     e.currentTarget.querySelector(`#dk-mc-tab-${next}`).focus();
   };
@@ -32,7 +34,7 @@ export default function Mission({ state }) {
             <span key={s} className={'dk-mc-cnt is-' + s}><b>{counts[s]}</b> {s}</span>))
           : <span className="dk-mc-cnt">loading…</span>}
       </div>
-      <div className="dk-mc-chips" role="group" aria-label="Filter by agent">
+      {sub !== 'projects' && <div className="dk-mc-chips" role="group" aria-label="Filter by agent">
         <button type="button" className={'dk-mc-chip' + (key == null ? ' is-on' : '')} aria-pressed={key == null}
           onClick={() => setSel(null)}>All</button>
         {agents.map(a => (
@@ -43,7 +45,7 @@ export default function Mission({ state }) {
             <span className="dk-mc-pill">{chipLabel(a)}</span>
           </button>
         ))}
-      </div>
+      </div>}
       <div className="dk-mc-tabs" role="tablist" aria-label="Mission Control panels" onKeyDown={onTabKey}>
         {SUBTABS.map(([id, label]) => (
           <button key={id} type="button" role="tab" id={`dk-mc-tab-${id}`} aria-selected={sub === id}
@@ -52,9 +54,9 @@ export default function Mission({ state }) {
         ))}
       </div>
       <div id="dk-mc-panel" role="tabpanel" aria-labelledby={`dk-mc-tab-${sub}`} className="dk-mc-body">
-        {sub === 'live'
-          ? <Live agentKey={key} agents={agents} />
-          : <MissionComms agents={agents} agentKey={key} />}
+        {sub === 'live' && <Live agentKey={key} agents={agents} />}
+        {sub === 'comms' && <MissionComms agents={agents} agentKey={key} />}
+        {sub === 'projects' && <MissionProjects />}
       </div>
     </section>
   );

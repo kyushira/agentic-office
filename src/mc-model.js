@@ -118,3 +118,39 @@ export function mergeThinking(prev, next) {
 export function showThoughtsNote(thinkingAgents, agentId) {
   return !!agentId && !(thinkingAgents || []).includes(agentId);
 }
+
+export const PROJECTS_API = '/api/plugins/agent-office/projects';
+export const BRIEFS_SHOWN = 3;    // briefs listed on a project card until expanded
+const STATUS_RANK = { active: 0, quiet: 1, stale: 2 };
+const STATUS_LABEL = { active: 'active', quiet: 'quiet', stale: 'stale' };
+const SOURCE_LABEL = { git: 'git commit', brief: 'brief', dir: 'folder mtime' };
+
+/** Label for a project status; an unknown status is shown as given, never dropped. */
+export function projectStatusLabel(status) {
+  return Object.prototype.hasOwnProperty.call(STATUS_LABEL, status) ? STATUS_LABEL[status] : String(status || 'unknown');
+}
+
+/** Where a project's last activity came from: 'git commit', 'brief' or 'folder mtime'. */
+export function sourceLabel(source) {
+  return Object.prototype.hasOwnProperty.call(SOURCE_LABEL, source) ? SOURCE_LABEL[source] : 'activity';
+}
+
+/** Active first, then quiet, then stale; newest activity first within a status, then by name. Returns a copy. */
+export function sortProjects(list) {
+  const rank = s => (Object.prototype.hasOwnProperty.call(STATUS_RANK, s) ? STATUS_RANK[s] : 3);
+  return [...(list || [])].filter(Boolean).sort((a, b) =>
+    rank(a.status) - rank(b.status)
+    || (b.last_activity || 0) - (a.last_activity || 0)
+    || (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
+}
+
+/** Briefs on a card: the newest BRIEFS_SHOWN, or all of them when expanded. */
+export function visibleBriefs(briefs, expanded) {
+  const list = briefs || [];
+  return expanded ? list : list.slice(0, BRIEFS_SHOWN);
+}
+
+/** Hint under the Projects tab when there is no projects.json registry; null when there is one (or no answer yet). */
+export function registryHint(data) {
+  return data && data.registry === false ? 'No projects.json registry: owner/next step not set' : null;
+}
