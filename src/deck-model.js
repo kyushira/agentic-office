@@ -200,3 +200,33 @@ export function detailRows(d) {
     helpers: `${working} working / ${helpers.length}`,
   };
 }
+
+/** Count-up duration in ms (CountUp in Deck.jsx). */
+export const COUNT_MS = 700;
+
+/**
+ * Value on the way from `from` to `to` at progress t (0..1, clamped): ease-out cubic, rounded to an
+ * integer. Non-finite inputs return `to` so a bad value jumps rather than shows NaN.
+ */
+export function countStep(from, to, t) {
+  if (!Number.isFinite(from) || !Number.isFinite(to)) return to;
+  const p = Number.isFinite(t) ? Math.min(1, Math.max(0, t)) : 1;
+  const e = 1 - Math.pow(1 - p, 3);
+  return Math.round(from + (to - from) * e);
+}
+
+/**
+ * Today's totals for an agent from `today` = {tokens, toolCalls, sessions}. Null when the agent has
+ * no `today` at all (render nothing); a field that is missing or not a number is null (render a dash).
+ * Real zeros stay 0.
+ */
+export function todayParts(a) {
+  const t = a && a.today;
+  if (!t) return null;
+  const num = k => {
+    if (t[k] == null || t[k] === '') return null;
+    const n = +t[k];
+    return Number.isFinite(n) ? n : null;
+  };
+  return { tokens: num('tokens'), toolCalls: num('toolCalls'), sessions: num('sessions') };
+}

@@ -63,6 +63,13 @@
 .dk-tile.is-working::before { width: 62%; }
 .dk-tile.is-working::after { height: 62%; }
 .dk-tile.is-working { border-color: var(--dk-dim); box-shadow: 0 0 0 1px var(--dk-glow-soft), 0 0 14px -4px var(--dk-glow); }
+/* edge-sweep: a slow, faint cyan band that travels along the top edge of a working agent tile.
+   Its own element (the ::before/::after are the L-brackets). Starts off-tile; only transform animates. */
+.dk-sweep { position: absolute; left: 0; top: 0; height: 2px; width: 40%; z-index: 0; pointer-events: none; opacity: .45; transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent, var(--dk-hot), transparent); }
+.dk-root:not(.is-lite) .dk-tile.is-working .dk-sweep { animation: dk-sweep 7s linear infinite; }
+@keyframes dk-sweep { from { transform: translateX(-100%); } to { transform: translateX(250%); } }   /* 40% band, 250% of it = across the tile */
+.dk-tile.is-pressed .dk-sweep, .dk-root.is-lite .dk-sweep { display: none; }
 .dk-tile:active, .dk-tile.is-pressed { background: var(--dk-hot); border-color: var(--dk-hot); }
 .dk-tile.is-pressed .dk-name, .dk-tile.is-pressed .dk-status, .dk-tile.is-pressed .dk-zz { color: var(--dk-on-hot); }
 .dk-tile.is-ghost { opacity: .4; }
@@ -131,6 +138,9 @@
 @keyframes dk-scroll { from { transform: translateX(0); } to { transform: translateX(-10px); } }
 .dk-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .dk-tile.is-pressed .dk-trace { stroke: var(--dk-on-hot); }
+/* today's totals: one faint mono line under the strip; fits on desktop, ellipsis on a phone (full text in title) */
+.dk-today { display: block; width: 100%; min-width: 0; margin-top: 2px; font-size: 9px; line-height: 1.25; color: var(--dk-faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-variant-numeric: tabular-nums; }
+.dk-tile.is-pressed .dk-today { color: var(--dk-on-hot); }
 .dk-tile.is-pressed .dk-blip { background: var(--dk-on-hot); }
 .dk-tile.is-pressed .dk-strip-none { color: var(--dk-on-hot); }
 
@@ -147,6 +157,7 @@
   .dk-sep { font-size: 0; }                                   /* hides " · helpers " ... */
   .dk-sep::before { content: '+ '; font-size: 7px; }          /* ... line 2: "+ Haiku" */
   .dk-zz { font-size: 8px; }
+  .dk-today { font-size: 7px; letter-spacing: -.04em; }
   .dk-badge { top: 4px; left: 4px; width: 5px; height: 5px; }
 }
 
@@ -238,7 +249,9 @@ html.ao-full-active { background-color: #0B0E11 !important; }
 
 /* usage and context meters: real data only; the track is --dk-line-2 so an empty meter stays visible */
 .dk-root .dk-meter { display: inline-block; position: relative; height: 4px; border-radius: 2px; background: var(--dk-line-2); overflow: hidden; vertical-align: middle; }
-.dk-root .dk-meter > i { position: absolute; left: 0; top: 0; bottom: 0; display: block; background: var(--dk-hot); transition: width var(--dk-t-slow) var(--dk-ease); }
+/* fill is a full-width bar scaled by transform (set inline as scaleX(pct/100)), so it eases without relayout */
+.dk-root .dk-meter > i { position: absolute; left: 0; top: 0; bottom: 0; width: 100%; transform-origin: 0 50%; display: block; background: var(--dk-hot); transition: transform var(--dk-t-slow) var(--dk-ease); }
+.dk-root.is-lite .dk-meter > i { transition: none; }
 .dk-root .dk-meter.is-warn > i { background: var(--dk-warn); }
 .dk-root .dk-meter.is-hot > i { background: var(--dk-red); }
 .dk-root .dk-tile .dk-meter { display: block; width: 70%; height: 3px; margin: 5px auto 0; }
@@ -282,6 +295,8 @@ html.ao-full-active { background-color: #0B0E11 !important; }
   .dk-root .dk-eyes-shut { animation: none !important; opacity: 0; }
   .dk-root .dk-eyes-open { animation: none !important; opacity: 1; }
   .dk-root .dk-trace-run, .dk-root .dk-blip { animation: none !important; }   /* static trace, no blip */
+  .dk-root .dk-sweep { display: none !important; }                             /* no edge-sweep */
+  .dk-root .dk-meter > i { transition: none !important; }                      /* gauges jump to their value */
 }
 
 /* tab hidden: pause every animation (reused by later features); the .dk-root gets is-hidden from Deck() */

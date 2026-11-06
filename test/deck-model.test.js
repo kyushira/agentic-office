@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { buildItems, headerCounts, durationText, modelText, modelParts, usageText, meterLevel, activeTokens, currentSessionId, eventLabel, detailRows, traceModel, newToolCalls } from '../src/deck-model.js';
+import { buildItems, headerCounts, durationText, modelText, modelParts, usageText, meterLevel, activeTokens, currentSessionId, eventLabel, detailRows, traceModel, newToolCalls, countStep, todayParts } from '../src/deck-model.js';
 
 const now = 1_800_000_000;
 const state = {
@@ -257,4 +257,37 @@ test('newToolCalls: a drop (midnight reset) gives nothing, and an agent new to t
   const added = { agents: [{ id: 'dev', today: { toolCalls: 90 } }, { id: 'red', today: { toolCalls: 7 } }] };
   assert.deepEqual(newToolCalls(prev, added), {}, 'red has no earlier count to diff against');
   assert.deepEqual(newToolCalls({ agents: [{ id: 'dev' }] }, { agents: [{ id: 'dev', today: { toolCalls: 2 } }] }), {}, 'no today count before');
+});
+
+test('countStep: starts at from, lands on to, clamps t', () => {
+  assert.equal(countStep(10, 500, 0), 10);
+  assert.equal(countStep(10, 500, 1), 500);
+  assert.equal(countStep(10, 500, -3), 10);
+  assert.equal(countStep(10, 500, 7), 500);
+});
+
+test('countStep: ease-out puts the midpoint well past halfway (0.875 of the way at t=0.5)', () => {
+  assert.equal(countStep(0, 1000, 0.5), 875);
+  assert.equal(countStep(1000, 0, 0.5), 125);
+});
+
+test('countStep: moves monotonically toward the target and returns integers', () => {
+  const up = [], down = [];
+  for (let i = 0; i <= 20; i++) { up.push(countStep(3, 97, i / 20)); down.push(countStep(97, 3, i / 20)); }
+  for (let i = 1; i < up.length; i++) { assert.ok(up[i] >= up[i - 1]); assert.ok(down[i] <= down[i - 1]); }
+  for (const v of [...up, ...down]) assert.ok(Number.isInteger(v), `not an integer: ${v}`);
+});
+
+test('countStep: equal values and non-finite inputs give the target, never NaN', () => {
+  assert.equal(countStep(42, 42, 0.3), 42);
+  assert.equal(countStep(NaN, 5, 0.5), 5);
+  assert.equal(countStep(1, 9, NaN), 9);
+  assert.equal(countStep(1, undefined, 0.5), undefined);
+});
+
+test('todayParts: no today gives null; missing fields give null; real zeros stay 0', () => {
+  assert.equal(todayParts({}), null);
+  assert.deepEqual(todayParts({ today: { tokens: 1200, toolCalls: 0, sessions: 2 } }), { tokens: 1200, toolCalls: 0, sessions: 2 });
+  assert.deepEqual(todayParts({ today: { tokens: null, toolCalls: 5 } }), { tokens: null, toolCalls: 5, sessions: null });
+  assert.deepEqual(todayParts({ today: { tokens: 'x', toolCalls: '', sessions: '7' } }), { tokens: null, toolCalls: null, sessions: 7 });
 });

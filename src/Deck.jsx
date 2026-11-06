@@ -1,7 +1,7 @@
 import { React, useState, useEffect, useRef, fetchJSON, API, USAGE_API, SESSION_API } from './sdk.js';
 import { ago, compact } from './format.js';
 import { portrait } from './portrait.js';
-import { buildItems, headerCounts, durationText, modelText, modelParts, usageText, meterLevel, activeTokens, currentSessionId, eventLabel, detailRows, traceModel, newToolCalls } from './deck-model.js';
+import { buildItems, headerCounts, durationText, modelText, modelParts, usageText, meterLevel, activeTokens, currentSessionId, eventLabel, detailRows, traceModel, newToolCalls, countStep, todayParts, COUNT_MS } from './deck-model.js';
 import { isStandalone, wantsFull, withFullParam, requestNativeFullscreen, exitNativeFullscreen, markFullPath } from './fullscreen.js';
 
 const POLL_MS = 5000, POLL_LITE_MS = 15000, DETAIL_MS = 5000;
@@ -28,7 +28,7 @@ const pctStr = p => (p == null ? 'n/a' : Math.round(p) + '%');
  */
 function Meter({ pct, label, decorative }) {
   const lvl = meterLevel(pct);
-  const fill = lvl === 'na' ? null : <i style={{ width: Math.max(0, Math.min(100, +pct)) + '%' }} />;
+  const fill = lvl === 'na' ? null : <i style={{ transform: `scaleX(${Math.max(0, Math.min(100, +pct)) / 100})` }} />;
   if (decorative || lvl === 'na') return <span className={'dk-meter is-' + lvl} aria-hidden="true">{fill}</span>;
   return <span className={'dk-meter is-' + lvl} role="meter" aria-valuemin={0} aria-valuemax={100}
     aria-valuenow={Math.round(+pct)} aria-label={label}>{fill}</span>;
@@ -63,11 +63,51 @@ function ActivityStrip({ spark, working, blip }) {
   );
 }
 
-function AgentTile({ it, pressed, onPick, blip }) {
+const reducedMotion = () => !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+
+/**
+ * A number that rolls from the value on screen to a new one (COUNT_MS, ease-out, rAF). The first
+ * render shows the value at once. `still` (Lite or tab hidden) and reduced motion jump instead.
+ */
+function CountUp({ value, format, still }) {
+  const [shown, setShown] = useState(value);
+  const shownRef = useRef(value);            // what is on screen now, so a new target rolls from there
+  useEffect(() => {
+    const from = shownRef.current;
+    if (from === value || still || reducedMotion()) { shownRef.current = value; setShown(value); return; }
+    let raf = 0, t0 = null;
+    const tick = now => {
+      if (t0 == null) t0 = now;
+      const v = countStep(from, value, (now - t0) / COUNT_MS);
+      shownRef.current = v;
+      setShown(v);
+      if (now - t0 < COUNT_MS) raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [value, still]);
+  return format(shown);
+}
+
+/** Today's totals under the strip: '{tokens} tok · {toolCalls} tools · {sessions} sess'. A field not reported shows a dash. */
+function TodayLine({ a, still }) {
+  const t = todayParts(a);
+  if (!t) return null;
+  const full = v => (v == null ? 'not reported' : String(v));
+  const cell = (v, unit) => <>{v == null ? '—' : <CountUp value={v} format={compact} still={still} />} {unit}</>;
+  return (
+    <span className="dk-today" title={`Today: ${full(t.tokens)} tokens · ${full(t.toolCalls)} tool calls · ${full(t.sessions)} sessions`}>
+      {cell(t.tokens, 'tok')} · {cell(t.toolCalls, 'tools')} · {cell(t.sessions, 'sess')}
+    </span>
+  );
+}
+
+function AgentTile({ it, pressed, onPick, blip, still }) {
   const a = it.agent, working = it.working;
   return (
     <button className={'dk-tile is-agent' + (working ? ' is-working' : ' is-rest') + (pressed ? ' is-pressed' : '') + (it.chip ? ' has-chip' : '') + (it.helperCount > 0 || it.ctxPct != null ? ' has-top' : '')} onClick={onPick}
       style={{ '--dk-c': it.color, gridColumnStart: it.rowStart ? 1 : undefined }} aria-label={`${a.name}, ${a.role}, ${it.status}`}>
+      {working && <i className="dk-sweep" aria-hidden="true" />}
       {working && <i className="dk-badge" />}
       {it.helperCount > 0 && <span className="dk-count-chip">{it.helperCount} helper{it.helperCount > 1 ? 's' : ''}</span>}
       {it.ctxPct != null && !it.helperCount && <span className="dk-ctx">{it.ctxPct}% ctx</span>}
@@ -77,6 +117,7 @@ function AgentTile({ it, pressed, onPick, blip }) {
       {a.remit && <span className="dk-remit" title={a.remit}>{a.remit}</span>}
       <span className="dk-status">{it.status}</span>
       <ActivityStrip spark={a.spark} working={working} blip={blip} />
+      <TodayLine a={a} still={still} />
       {it.ctxPct != null && <Meter pct={it.ctxPct} decorative />}
       <span className="dk-models" title={modelText(a)}><ModelLines a={a} /></span>
       {it.chip && <span className="dk-handoff" style={{ '--dk-from': it.chip.color }}>← {it.chip.text}</span>}
@@ -339,7 +380,7 @@ export default function Deck() {
       {error && <div className="dk-err">Can't reach the deck data ({error}). Retrying…</div>}
       <main className="dk-grid">
         {items.map(it => it.type === 'agent'
-          ? <AgentTile key={it.key} it={it} pressed={it.key === sel} blip={blips[it.agent.id] || 0} onPick={() => setSel(it.key)} />
+          ? <AgentTile key={it.key} it={it} pressed={it.key === sel} blip={blips[it.agent.id] || 0} still={lite || hidden} onPick={() => setSel(it.key)} />
           : <HelperTile key={it.key} it={it} pressed={it.key === sel} onPick={() => setSel(it.key)} />)}
         {!state && !error && Array.from({ length: 4 }, (_, i) => <div key={i} className="dk-tile is-ghost" />)}
       </main>
