@@ -390,7 +390,6 @@ html.ao-full-active { background-color: #0B0E11 !important; }
 .dk-root:not(.is-lite) .dk-swarm:not(.is-still) .dk-swarm-orbit { animation: dk-orbit 24s linear infinite; }
 .dk-root:not(.is-lite) .dk-swarm:not(.is-still) .dk-hdot.is-in { animation: dk-hdot-in 1.2s ease-out both; }
 .dk-root:not(.is-lite) .dk-swarm:not(.is-still) .dk-hdot.is-out { animation: dk-hdot-out 1.6s ease-in forwards; }
-@keyframes dk-orbit { to { transform: rotate(360deg); } }
 @keyframes dk-hdot-in { from { opacity: 0; transform: scale(.2); } to { opacity: .85; transform: scale(1); } }
 @keyframes dk-hdot-out { from { opacity: .85; transform: translateX(0); } to { opacity: 0; transform: translateX(16px); } }
 @media (max-width: 520px) { .dk-swarm { --dk-orbit-r: 40px; } }

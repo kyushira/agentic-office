@@ -198,7 +198,7 @@ function AgentTile({ it, pressed, onPick, blip, still, setRef, pulses, fx }) {
       style={{ '--dk-c': it.color, gridColumnStart: it.rowStart ? 1 : undefined }}
       aria-label={`${a.name}, ${a.role}, ${it.status}` + (hs.length ? `, ${hs.length} helper${hs.length === 1 ? '' : 's'} running` : '')}
       title={swarmTip(hs) || undefined}>
-      {hs.length > 0 && <Swarm live={hs} fx={fx || []} still={still} />}
+      {(hs.length > 0 || (fx || []).some(x => x.kind === 'out')) && <Swarm live={hs} fx={fx || []} still={still} />}
       {working && <i className="dk-sweep" aria-hidden="true" />}
       {working && <i className="dk-badge" />}
       {it.helperCount > 0 && <span className="dk-count-chip">{it.helperCount} helper{it.helperCount > 1 ? 's' : ''}</span>}
