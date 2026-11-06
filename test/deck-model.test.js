@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { buildItems, headerCounts, durationText, modelText, modelParts, usageText, activeTokens, currentSessionId, eventLabel, detailRows } from '../src/deck-model.js';
+import { buildItems, headerCounts, durationText, modelText, modelParts, usageText, meterLevel, activeTokens, currentSessionId, eventLabel, detailRows } from '../src/deck-model.js';
 
 const now = 1_800_000_000;
 const state = {
@@ -148,4 +148,61 @@ test('detailRows: activity, last tool and working helper count', () => {
 test('detailRows: bare payload falls back to status and no tool', () => {
   assert.deepEqual(detailRows({ status: 'idle', helpers: [] }), { activity: 'idle', tool: null, helpers: '0 working / 0' });
   assert.deepEqual(detailRows({}), { activity: 'idle', tool: null, helpers: '0 working / 0' });
+});
+
+test('meterLevel: ok below 70, warn from 70, hot from 90, na without a number', () => {
+  assert.equal(meterLevel(0), 'ok');
+  assert.equal(meterLevel(69.9), 'ok');
+  assert.equal(meterLevel(70), 'warn');
+  assert.equal(meterLevel(89.9), 'warn');
+  assert.equal(meterLevel(90), 'hot');
+  assert.equal(meterLevel(100), 'hot');
+  assert.equal(meterLevel('42'), 'ok');
+  for (const p of [null, undefined, '', NaN, 'abc']) assert.equal(meterLevel(p), 'na', String(p));
+});
+
+test('usageText windows: available payload gives both windows with pct, reset text and level', () => {
+  const r = usageText({ available: true, five_hour: { pct: 42.4, resets_at: 1_800_000_000 }, seven_day: { pct: 73, resets_at: 1_800_500_000 } });
+  assert.deepEqual(r.windows.map(w => [w.key, w.label, w.short, w.pct, w.level]), [
+    ['five_hour', 'Session · 5h', '5h', 42.4, 'ok'],
+    ['seven_day', 'Week · 7d', 'wk', 73, 'warn'],
+  ]);
+  assert.notEqual(r.windows[0].resets, 'n/a');
+  assert.notEqual(r.windows[1].resets, 'n/a');
+  assert.equal(r.aria, 'Claude plan usage: session 5h 42%, week 73%');
+  assert.equal(r.short, '5h 42% · wk 73%', 'existing fields unchanged');
+  assert.equal(r.level, 'warn');
+});
+
+test('usageText windows: a missing pct gives n/a for that window only, resets n/a when missing', () => {
+  const r = usageText({ available: true, five_hour: { pct: null, resets_at: null }, seven_day: { pct: 95 } });
+  const [five, week] = r.windows;
+  assert.equal(five.pct, null);
+  assert.equal(five.level, 'na');
+  assert.equal(five.resets, 'reset time not reported');
+  assert.equal(week.pct, 95);
+  assert.equal(week.level, 'hot');
+  assert.equal(week.resets, 'reset time not reported');
+  assert.equal(r.aria, 'Claude plan usage: session 5h n/a, week 95%');
+});
+
+test('usageText windows: unavailable payload has both windows n/a with the reason in aria', () => {
+  const r = usageText({ available: false, reason: 'no Claude subscription login found' });
+  assert.deepEqual(r.windows.map(w => [w.pct, w.level, w.resets]), [[null, 'na', 'n/a'], [null, 'na', 'n/a']]);
+  assert.equal(r.aria, 'Claude plan usage n/a: no Claude subscription login found');
+  const none = usageText(null);
+  assert.equal(none.windows.length, 2);
+  assert.ok(none.windows.every(w => w.pct === null && w.level === 'na'));
+});
+
+test('usageText windows: pct is clamped to 0-100', () => {
+  const r = usageText({ available: true, five_hour: { pct: 130 }, seven_day: { pct: -4 } });
+  assert.deepEqual(r.windows.map(w => w.pct), [100, 0]);
+});
+
+test('usageText: unavailable without a reason says so in aria only; reason and title keep old text', () => {
+  const r = usageText({ available: false });
+  assert.equal(r.aria, 'Claude plan usage n/a: source did not say why');
+  assert.equal(r.reason, 'unknown');
+  assert.equal(r.title, 'Plan usage n/a: unknown');
 });

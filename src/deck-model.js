@@ -77,12 +77,34 @@ function resetText(ts) {
   return isNaN(d) ? 'n/a' : d.toLocaleString('en-GB', { weekday: 'short', hour: '2-digit', minute: '2-digit' });
 }
 
-/** Claude plan usage for the header: {short, title, level, reason} from the /usage payload; level is ok|warn|hot|na; reason is set only when unavailable. */
+/** Level for a percent meter: ok below 70, warn from 70, hot from 90; na when there is no number. */
+export function meterLevel(pct) {
+  if (pct == null || pct === '' || isNaN(+pct)) return 'na';
+  const p = +pct;
+  return p >= 90 ? 'hot' : p >= 70 ? 'warn' : 'ok';
+}
+
+// Plan windows shown in the header: payload key, panel label, compact label, spoken name for aria.
+const PLAN_WINDOWS = [['five_hour', 'Session · 5h', '5h', 'session 5h'], ['seven_day', 'Week · 7d', 'wk', 'week']];
+
+/**
+ * Claude plan usage for the header: {short, title, level, reason, windows, aria} from the /usage payload.
+ * level is ok|warn|hot|na (from the larger window); reason is set only when unavailable.
+ * windows: one per plan window {key, label, short, pct (0-100 or null), resets ('n/a' when missing), level}.
+ */
 export function usageText(u) {
   const five = (u && u.five_hour) || {}, week = (u && u.seven_day) || {};
-  if (!u || !u.available) {
+  const live = !!(u && u.available);
+  const windows = PLAN_WINDOWS.map(([key, label, short]) => {
+    const w = live ? (u[key] || {}) : {};
+    const pct = live && w.pct != null && !isNaN(+w.pct) ? Math.max(0, Math.min(100, +w.pct)) : null;
+    const resets = !live ? 'n/a' : (w.resets_at == null || w.resets_at === '') ? 'reset time not reported' : resetText(w.resets_at);
+    return { key, label, short, pct, resets, level: meterLevel(pct) };
+  });
+  if (!live) {
     const reason = (u && u.reason) || 'unknown';
-    return { short: '5h n/a · wk n/a', title: 'Plan usage n/a: ' + reason, level: 'na', reason };
+    return { short: '5h n/a · wk n/a', title: 'Plan usage n/a: ' + reason, level: 'na', reason,
+      windows, aria: 'Claude plan usage n/a: ' + ((u && u.reason) || 'source did not say why') };
   }
   const pcts = [five.pct, week.pct].filter(p => p != null && !isNaN(+p)).map(Number);
   const max = pcts.length ? Math.max(...pcts) : null;
@@ -92,6 +114,8 @@ export function usageText(u) {
     title: `Claude plan: 5-hour resets ${resetText(five.resets_at)}; weekly resets ${resetText(week.resets_at)}`,
     level,
     reason: null,
+    windows,
+    aria: 'Claude plan usage: ' + PLAN_WINDOWS.map(([key, , , word]) => `${word} ${pctText(u[key] && u[key].pct)}`).join(', '),
   };
 }
 

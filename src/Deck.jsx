@@ -1,7 +1,7 @@
 import { React, useState, useEffect, useRef, fetchJSON, API, USAGE_API, SESSION_API } from './sdk.js';
 import { ago, compact } from './format.js';
 import { portrait } from './portrait.js';
-import { buildItems, headerCounts, durationText, modelText, modelParts, usageText, activeTokens, currentSessionId, eventLabel, detailRows } from './deck-model.js';
+import { buildItems, headerCounts, durationText, modelText, modelParts, usageText, meterLevel, activeTokens, currentSessionId, eventLabel, detailRows } from './deck-model.js';
 import { isStandalone, wantsFull, withFullParam, requestNativeFullscreen, exitNativeFullscreen, markFullPath } from './fullscreen.js';
 
 const POLL_MS = 5000, POLL_LITE_MS = 15000, DETAIL_MS = 5000;
@@ -18,6 +18,20 @@ function Sprite({ who, working, small, done }) {
       <g className="dk-eyes-shut">{px(p.closed)}</g>
     </svg>
   );
+}
+
+const pctStr = p => (p == null ? 'n/a' : Math.round(p) + '%');
+
+/**
+ * Thin percent bar (cyan ok, amber warn, red hot). No value means a bare track.
+ * Inside a button the button's aria-label carries the number, so pass `decorative`.
+ */
+function Meter({ pct, label, decorative }) {
+  const lvl = meterLevel(pct);
+  const fill = lvl === 'na' ? null : <i style={{ width: Math.max(0, Math.min(100, +pct)) + '%' }} />;
+  if (decorative || lvl === 'na') return <span className={'dk-meter is-' + lvl} aria-hidden="true">{fill}</span>;
+  return <span className={'dk-meter is-' + lvl} role="meter" aria-valuemin={0} aria-valuemax={100}
+    aria-valuenow={Math.round(+pct)} aria-label={label}>{fill}</span>;
 }
 
 // Desktop reads "Opus 5.5 · helpers Haiku". On phone (style.css) the main model gets line 1 and the
@@ -43,6 +57,7 @@ function AgentTile({ it, pressed, onPick }) {
       <span className="dk-role">{a.role}</span>
       {a.remit && <span className="dk-remit" title={a.remit}>{a.remit}</span>}
       <span className="dk-status">{it.status}</span>
+      {it.ctxPct != null && <Meter pct={it.ctxPct} decorative />}
       <span className="dk-models" title={modelText(a)}><ModelLines a={a} /></span>
       {it.chip && <span className="dk-handoff" style={{ '--dk-from': it.chip.color }}>← {it.chip.text}</span>}
     </button>
@@ -69,7 +84,8 @@ function SessionDetail({ s, now, onBack }) {
   const rows = [
     ['Status', <Pill status={s.status} />], ['Where', s.source], ['Model', s.model || '—'],
     ['Now', s.status === 'working' ? s.step || 'working' : '—'],
-    ['Context', s.ctx ? `~${compact(s.ctx)} tokens${s.ctxPct != null ? ` (${s.ctxPct}%)` : ''}` : '—'],
+    ['Context', s.ctx ? <>{`~${compact(s.ctx)} tokens${s.ctxPct != null ? ` (${s.ctxPct}%)` : ''}`}
+      {s.ctxPct != null && <Meter pct={s.ctxPct} label={`Context window used, ${s.ctxPct}%`} />}</> : '—'],
     ['Tokens (session)', compact(s.tokens)], ['Helpers spawned', String(s.helpers || 0)], ['Last active', ago(s.at, now)],
   ];
   return (
@@ -122,6 +138,7 @@ function AgentSheet({ it, sessions, now, det, detErr }) {
             <span className="dk-wrap dk-stitle">{x.title}</span>
             <span className="dk-smeta"><Pill status={x.status} />{x.ctxPct != null && <span>{x.ctxPct}% ctx</span>}
               <span>{ago(x.at, now)}</span>{x.model && <span>{x.model}</span>}<span>{compact(x.tokens)} tok</span></span>
+            {x.ctxPct != null && <Meter pct={x.ctxPct} decorative />}
           </button>
         ))}
         {!sessions.length && <p className="dk-note">No sessions in the last 14 days.</p>}
@@ -253,9 +270,14 @@ export default function Deck() {
         <div className="dk-sum">
           <span className="dk-count"><i className={'dk-dot' + (counts && counts.working ? ' on' : '')} />
             <span className="dk-count-txt">{counts ? `${counts.working} working · ${counts.idle} idle · ${counts.helpers} helper${counts.helpers === 1 ? '' : 's'}` : 'loading…'}</span></span>
-          <button className={'dk-usage dk-usage-btn is-' + ut.level} title={ut.title} aria-expanded={showReason}
-            onClick={() => setShowReason(!showReason)}>{ut.short}</button>
-          <span className="dk-usage" title="Tokens used in active sessions">{compact(activeTokens(items))} tok</span>
+          <button className={'dk-usage dk-usage-btn is-' + ut.level} title={ut.title} aria-label={ut.aria} aria-expanded={showReason}
+            onClick={() => setShowReason(!showReason)}>
+            {ut.level === 'na' && ut.reason ? <span className="dk-uw-na">usage n/a</span> : ut.windows.map(w => (
+              <span key={w.key} className="dk-uw" aria-hidden="true">
+                <span className="dk-uw-l">{w.short}</span><Meter pct={w.pct} decorative /><span className="dk-uw-v">{pctStr(w.pct)}</span>
+              </span>))}
+          </button>
+          <span className="dk-usage dk-tok" title="Tokens used by sessions that are working now, all agents">{compact(activeTokens(items))} tok <span className="dk-tok-lbl">active</span></span>
         </div>
         <span className="dk-grow" />
         <div className="dk-acts">
@@ -265,7 +287,20 @@ export default function Deck() {
           <button className="dk-btn" onClick={load} aria-label="Refresh">↻</button>
         </div>
       </header>
-      {showReason && ut.reason && <div className="dk-reason">{ut.reason}</div>}
+      {showReason && (ut.reason
+        ? <div className="dk-reason">Plan usage unavailable: {ut.reason}</div>
+        : <div className="dk-uplan" role="group" aria-label="Claude plan usage">
+            {ut.windows.map(w => (
+              <div key={w.key} className="dk-urow">
+                <span className="dk-ulabel">{w.label}</span>
+                <Meter pct={w.pct} label={`${w.label}: ${pctStr(w.pct)}`} />
+                <span className="dk-upct">{pctStr(w.pct)}</span>
+                {w.resets === 'n/a' || w.resets === 'reset time not reported'
+                  ? <span className="dk-ures">reset time not reported</span>
+                  : <span className="dk-ures">resets {w.resets}</span>}
+              </div>))}
+            <p className="dk-note dk-uscope">Claude plan usage, account-wide (not per agent).</p>
+          </div>)}
       {error && <div className="dk-err">Can't reach the deck data ({error}). Retrying…</div>}
       <main className="dk-grid">
         {items.map(it => it.type === 'agent'
