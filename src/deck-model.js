@@ -145,6 +145,51 @@ export function eventLabel(e) {
   return e.kind || '';
 }
 
+const TRACE = { cell: 10, base: 13, top: 2, height: 16 };   // viewBox units: one hour = 10 wide, 16 tall
+
+/**
+ * Activity strip geometry from spark.toolCalls (hourly buckets, oldest first). Each hour is a flat
+ * baseline with a spike up to its share of the busiest hour. One flat cell is added on the right so
+ * the slow scroll never shows an empty edge. Null means "no data": missing, empty or all zeros.
+ */
+export function traceModel(spark) {
+  const raw = spark && Array.isArray(spark.toolCalls) ? spark.toolCalls : [];
+  const counts = raw.map(v => { const n = +v; return Number.isFinite(n) && n > 0 ? n : 0; });
+  if (!counts.some(v => v > 0)) return null;
+  const { cell, base, top, height } = TRACE;
+  const max = Math.max(...counts);
+  const points = [];
+  counts.forEach((v, i) => {
+    const x = i * cell, peak = base - (v / max) * (base - top);
+    points.push([x, base], [x + 4, base], [x + 5, peak], [x + 6, base]);
+  });
+  const end = counts.length * cell;
+  points.push([end, base], [end + cell, base]);
+  return { width: end, height, points };
+}
+
+function toolTotal(a) {
+  const v = a && a.today ? a.today.toolCalls : null;
+  const n = v == null ? NaN : +v;
+  return Number.isFinite(n) ? n : null;
+}
+
+/**
+ * Tool calls that landed between two consecutive /state polls: {agentId: delta}, deltas > 0 only.
+ * No previous poll, an agent not in the previous poll, or a drop (midnight reset) gives nothing.
+ */
+export function newToolCalls(prev, next) {
+  const out = {};
+  if (!prev || !next) return out;
+  const before = new Map((prev.agents || []).map(a => [a.id, a]));
+  for (const a of next.agents || []) {
+    const was = before.has(a.id) ? toolTotal(before.get(a.id)) : null;
+    const now = toolTotal(a);
+    if (was != null && now != null && now > was) out[a.id] = now - was;
+  }
+  return out;
+}
+
 /** Rows for the sheet's "Now" block from a session detail payload. */
 export function detailRows(d) {
   const helpers = d.helpers || [];

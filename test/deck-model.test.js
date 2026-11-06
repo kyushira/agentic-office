@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { buildItems, headerCounts, durationText, modelText, modelParts, usageText, meterLevel, activeTokens, currentSessionId, eventLabel, detailRows } from '../src/deck-model.js';
+import { buildItems, headerCounts, durationText, modelText, modelParts, usageText, meterLevel, activeTokens, currentSessionId, eventLabel, detailRows, traceModel, newToolCalls } from '../src/deck-model.js';
 
 const now = 1_800_000_000;
 const state = {
@@ -205,4 +205,56 @@ test('usageText: unavailable without a reason says so in aria only; reason and t
   assert.equal(r.aria, 'Claude plan usage n/a: source did not say why');
   assert.equal(r.reason, 'unknown');
   assert.equal(r.title, 'Plan usage n/a: unknown');
+});
+
+test('traceModel: missing, empty or all-zero counts give null (rendered as "no data")', () => {
+  assert.equal(traceModel(undefined), null);
+  assert.equal(traceModel(null), null);
+  assert.equal(traceModel({}), null);
+  assert.equal(traceModel({ toolCalls: 'nope' }), null);
+  assert.equal(traceModel({ toolCalls: [] }), null);
+  assert.equal(traceModel({ toolCalls: new Array(12).fill(0) }), null);
+});
+
+test('traceModel: 12 hourly buckets give 4 points each plus one flat pad cell, in a 120x16 box', () => {
+  const t = traceModel({ toolCalls: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5] });
+  assert.equal(t.width, 120);
+  assert.equal(t.height, 16);
+  assert.equal(t.points.length, 4 * 12 + 2);
+  assert.deepEqual(t.points[0], [0, 13]);
+  assert.deepEqual(t.points[t.points.length - 1], [130, 13]);
+});
+
+test('traceModel: spikes are normalised to the busiest hour (peak at y=2, half of it at y=7.5)', () => {
+  const t = traceModel({ toolCalls: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 4] });
+  const peakOf = i => t.points[4 * i + 2];           // third point of each bucket is the spike top
+  assert.deepEqual(peakOf(11), [115, 2]);            // busiest hour reaches the top
+  assert.deepEqual(peakOf(10), [105, 7.5]);          // half of the busiest hour sits halfway
+  assert.deepEqual(peakOf(0), [5, 13]);              // an empty hour stays on the baseline
+  for (const [, y] of t.points) assert.ok(y >= 2 && y <= 13, 'y in range: ' + y);
+});
+
+test('traceModel: non-numeric and negative counts count as zero', () => {
+  const t = traceModel({ toolCalls: ['x', -3, null, 2] });
+  assert.ok(t, 'one real count is enough to draw');
+  assert.deepEqual(t.points[4 * 3 + 2], [35, 2]);     // the 2 is the busiest hour
+  assert.deepEqual(t.points[4 * 0 + 2], [5, 13]);
+  assert.equal(traceModel({ toolCalls: ['x', -3, null] }), null);
+});
+
+test('newToolCalls: no previous poll gives nothing; increases give deltas per agent', () => {
+  const prev = { agents: [{ id: 'dev', today: { toolCalls: 10 } }, { id: 'ash', today: { toolCalls: 4 } }] };
+  const next = { agents: [{ id: 'dev', today: { toolCalls: 13 } }, { id: 'ash', today: { toolCalls: 4 } }] };
+  assert.deepEqual(newToolCalls(null, next), {});
+  assert.deepEqual(newToolCalls(prev, next), { dev: 3 });
+  assert.deepEqual(newToolCalls(next, next), {}, 'no change, no blip');
+});
+
+test('newToolCalls: a drop (midnight reset) gives nothing, and an agent new to the poll is ignored', () => {
+  const prev = { agents: [{ id: 'dev', today: { toolCalls: 90 } }] };
+  const reset = { agents: [{ id: 'dev', today: { toolCalls: 0 } }] };
+  assert.deepEqual(newToolCalls(prev, reset), {});
+  const added = { agents: [{ id: 'dev', today: { toolCalls: 90 } }, { id: 'red', today: { toolCalls: 7 } }] };
+  assert.deepEqual(newToolCalls(prev, added), {}, 'red has no earlier count to diff against');
+  assert.deepEqual(newToolCalls({ agents: [{ id: 'dev' }] }, { agents: [{ id: 'dev', today: { toolCalls: 2 } }] }), {}, 'no today count before');
 });

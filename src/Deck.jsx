@@ -1,7 +1,7 @@
 import { React, useState, useEffect, useRef, fetchJSON, API, USAGE_API, SESSION_API } from './sdk.js';
 import { ago, compact } from './format.js';
 import { portrait } from './portrait.js';
-import { buildItems, headerCounts, durationText, modelText, modelParts, usageText, meterLevel, activeTokens, currentSessionId, eventLabel, detailRows } from './deck-model.js';
+import { buildItems, headerCounts, durationText, modelText, modelParts, usageText, meterLevel, activeTokens, currentSessionId, eventLabel, detailRows, traceModel, newToolCalls } from './deck-model.js';
 import { isStandalone, wantsFull, withFullParam, requestNativeFullscreen, exitNativeFullscreen, markFullPath } from './fullscreen.js';
 
 const POLL_MS = 5000, POLL_LITE_MS = 15000, DETAIL_MS = 5000;
@@ -44,7 +44,26 @@ function ModelLines({ a }) {
   </>);
 }
 
-function AgentTile({ it, pressed, onPick }) {
+/**
+ * Hourly tool-call trace (last 12h) from spark.toolCalls. Scrolls only for a working agent with data;
+ * `blip` is a counter that bumps when new tool calls land (the dot is remounted by key to replay).
+ */
+function ActivityStrip({ spark, working, blip }) {
+  const t = traceModel(spark);
+  if (!t) return <span className="dk-strip-none">no data</span>;
+  const pts = t.points.map(p => p.join(',')).join(' ');
+  return (
+    <span className={'dk-strip' + (working ? ' is-scroll' : '')}>
+      <svg viewBox={`0 0 ${t.width} ${t.height}`} preserveAspectRatio="none" aria-hidden="true" focusable="false">
+        <g className="dk-trace-run"><polyline className="dk-trace" points={pts} vectorEffect="non-scaling-stroke" /></g>
+      </svg>
+      {blip > 0 && <i key={blip} className="dk-blip" />}
+      <span className="dk-sr">tool calls per hour, last 12h</span>
+    </span>
+  );
+}
+
+function AgentTile({ it, pressed, onPick, blip }) {
   const a = it.agent, working = it.working;
   return (
     <button className={'dk-tile is-agent' + (working ? ' is-working' : ' is-rest') + (pressed ? ' is-pressed' : '') + (it.chip ? ' has-chip' : '') + (it.helperCount > 0 || it.ctxPct != null ? ' has-top' : '')} onClick={onPick}
@@ -57,6 +76,7 @@ function AgentTile({ it, pressed, onPick }) {
       <span className="dk-role">{a.role}</span>
       {a.remit && <span className="dk-remit" title={a.remit}>{a.remit}</span>}
       <span className="dk-status">{it.status}</span>
+      <ActivityStrip spark={a.spark} working={working} blip={blip} />
       {it.ctxPct != null && <Meter pct={it.ctxPct} decorative />}
       <span className="dk-models" title={modelText(a)}><ModelLines a={a} /></span>
       {it.chip && <span className="dk-handoff" style={{ '--dk-from': it.chip.color }}>← {it.chip.text}</span>}
@@ -194,6 +214,9 @@ export default function Deck() {
   const [full, setFull] = useState(() => wantsFull(location.search, standalone));
   const timer = useRef(0), alive = useRef(true), liteRef = useRef(lite);
   liteRef.current = lite;
+  const prevState = useRef(null);                                       // last /state, for the tool-call diff
+  const [blips, setBlips] = useState({});                               // agent id -> blip counter
+  const [hidden, setHidden] = useState(() => document.visibilityState === 'hidden');
 
   const load = () => {
     clearTimeout(timer.current);
@@ -210,6 +233,18 @@ export default function Deck() {
     return () => window.removeEventListener('resize', size);
   }, []);
   useEffect(() => { const id = setInterval(() => setTick(x => x + 1), 15000); return () => clearInterval(id); }, []);
+  useEffect(() => {
+    const onVis = () => setHidden(document.visibilityState === 'hidden');
+    document.addEventListener('visibilitychange', onVis);
+    return () => document.removeEventListener('visibilitychange', onVis);
+  }, []);
+  useEffect(() => {
+    if (!state) return;
+    const d = newToolCalls(prevState.current, state);
+    prevState.current = state;
+    const ids = Object.keys(d);
+    if (ids.length) setBlips(b => { const n = { ...b }; for (const id of ids) n[id] = (n[id] || 0) + 1; return n; });
+  }, [state]);
   useEffect(() => {
     let live = true;
     const pull = () => fetchJSON(USAGE_API).catch(() => ({ available: false })).then(u => { if (live) setUsage(u); });
@@ -265,7 +300,7 @@ export default function Deck() {
   const detOk = detail && detail.sid === detailId ? detail : null;
 
   const root = (
-    <div ref={rootRef} className={'dk-root' + (lite ? ' is-lite' : '') + (items.length && items.length <= 6 ? ' is-few' : '')} style={{ height: full ? '100%' : height }}>
+    <div ref={rootRef} className={'dk-root' + (lite ? ' is-lite' : '') + (hidden ? ' is-hidden' : '') + (items.length && items.length <= 6 ? ' is-few' : '')} style={{ height: full ? '100%' : height }}>
       <header className="dk-top">
         <div className="dk-sum">
           <span className="dk-count"><i className={'dk-dot' + (counts && counts.working ? ' on' : '')} />
@@ -304,7 +339,7 @@ export default function Deck() {
       {error && <div className="dk-err">Can't reach the deck data ({error}). Retrying…</div>}
       <main className="dk-grid">
         {items.map(it => it.type === 'agent'
-          ? <AgentTile key={it.key} it={it} pressed={it.key === sel} onPick={() => setSel(it.key)} />
+          ? <AgentTile key={it.key} it={it} pressed={it.key === sel} blip={blips[it.agent.id] || 0} onPick={() => setSel(it.key)} />
           : <HelperTile key={it.key} it={it} pressed={it.key === sel} onPick={() => setSel(it.key)} />)}
         {!state && !error && Array.from({ length: 4 }, (_, i) => <div key={i} className="dk-tile is-ghost" />)}
       </main>

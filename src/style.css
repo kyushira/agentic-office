@@ -119,6 +119,21 @@
 .dk-root .dk-tile.is-pressed .dk-meter > i { background: var(--dk-on-hot); }
 .dk-remit-full { font-size: 12px; line-height: 1.35; color: var(--dk-ink); margin: 0 0 10px; word-break: break-word; }
 
+/* live activity strip: hourly tool-call trace under the status line, 16px tall; blip = new tool calls */
+.dk-strip { position: relative; display: block; width: 100%; height: 16px; margin-top: 3px; overflow: hidden; }
+.dk-strip svg { display: block; width: 100%; height: 100%; }
+.dk-trace { fill: none; stroke: var(--dk-c); stroke-width: 1.25; stroke-linejoin: round; stroke-linecap: round; }
+.dk-strip-none { display: block; width: 100%; height: 16px; margin-top: 3px; font-size: 9px; line-height: 16px; color: var(--dk-faint); white-space: nowrap; overflow: hidden; }
+.dk-blip { position: absolute; right: 0; top: 50%; width: 5px; height: 5px; margin-top: -2.5px; border-radius: 50%; background: var(--dk-c); opacity: 0; }
+.dk-root:not(.is-lite) .dk-blip { animation: dk-blip 900ms var(--dk-ease) both; }
+@keyframes dk-blip { from { opacity: 1; transform: scale(1); } to { opacity: 0; transform: scale(2.6); } }
+.dk-root:not(.is-lite) .dk-strip.is-scroll .dk-trace-run { animation: dk-scroll 20s linear infinite; }   /* one hour per loop, working agents only */
+@keyframes dk-scroll { from { transform: translateX(0); } to { transform: translateX(-10px); } }
+.dk-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.dk-tile.is-pressed .dk-trace { stroke: var(--dk-on-hot); }
+.dk-tile.is-pressed .dk-blip { background: var(--dk-on-hot); }
+.dk-tile.is-pressed .dk-strip-none { color: var(--dk-on-hot); }
+
 @media (max-width: 600px) {
   .dk-tile { padding: 6% 3% 7%; }
   .dk-name { font-size: 10px; margin-top: 4px; letter-spacing: -.02em; }   /* clears the 3% working bob */
@@ -266,7 +281,11 @@ html.ao-full-active { background-color: #0B0E11 !important; }
   .dk-root .dk-sprite.is-work { animation: none !important; }
   .dk-root .dk-eyes-shut { animation: none !important; opacity: 0; }
   .dk-root .dk-eyes-open { animation: none !important; opacity: 1; }
+  .dk-root .dk-trace-run, .dk-root .dk-blip { animation: none !important; }   /* static trace, no blip */
 }
+
+/* tab hidden: pause every animation (reused by later features); the .dk-root gets is-hidden from Deck() */
+.dk-root.is-hidden *, .dk-root.is-hidden *::before, .dk-root.is-hidden *::after { animation-play-state: paused !important; }
 
 @media (forced-colors: active) {
   .dk-root .dk-meter { border: 1px solid CanvasText; }
