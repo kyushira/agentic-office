@@ -260,3 +260,34 @@ export function walkLabel(w, names) {
   const short = subj.length > SUBJ_MAX ? subj.slice(0, SUBJ_MAX - 1).trimEnd() + '…' : subj;
   return `${head} · ${short}`;
 }
+
+// Tool-mix ring (idea 4). Shade per rank: the largest tool is full strength, the rest fade.
+const RING_SHADES = [1, 0.7, 0.5, 0.36, 0.26, 0.18];
+
+/**
+ * Donut model for an agent's top tools today: {segments, total, active, aria}.
+ * Each segment: {name, label, count, frac (share of total), offset (where it starts, 0..1), shade, active}.
+ * Zero, negative or non-numeric counts are dropped. `active` is set only while status is 'working' and the
+ * first part of activity (before ' · ') equals a tool label: that tool is running now. `active` on the model is
+ * that label, or null. No tools gives no segments and aria 'Tools today: no data'.
+ */
+export function toolRing(tools, activity, status) {
+  const list = (Array.isArray(tools) ? tools : [])
+    .map(t => ({ name: String((t && t.name) || ''), label: String((t && (t.label || t.name)) || ''), count: +(t && t.count) }))
+    .filter(t => t.name && Number.isFinite(t.count) && t.count > 0);
+  const total = list.reduce((n, t) => n + t.count, 0);
+  const step = status === 'working' ? String(activity || '').split(' · ')[0].trim() : '';
+  const activeIdx = step ? list.findIndex(t => t.label === step) : -1;
+  let start = 0;
+  const segments = list.map((t, i) => {
+    const frac = t.count / total;
+    const seg = { name: t.name, label: t.label, count: t.count, frac, offset: start,
+      shade: RING_SHADES[Math.min(i, RING_SHADES.length - 1)], active: i === activeIdx };
+    start += frac;
+    return seg;
+  });
+  const aria = segments.length
+    ? 'Tools today: ' + segments.map(s => `${s.label} ${s.count}`).join(', ')
+    : 'Tools today: no data';
+  return { segments, total, active: activeIdx >= 0 ? list[activeIdx].label : null, aria };
+}

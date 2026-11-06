@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { buildItems, headerCounts, durationText, modelText, modelParts, usageText, meterLevel, activeTokens, currentSessionId, eventLabel, detailRows, traceModel, newToolCalls, countStep, todayParts, newWalks, walkLabel } from '../src/deck-model.js';
+import { buildItems, headerCounts, durationText, modelText, modelParts, usageText, meterLevel, activeTokens, currentSessionId, eventLabel, detailRows, traceModel, newToolCalls, countStep, todayParts, newWalks, walkLabel, toolRing } from '../src/deck-model.js';
 
 const now = 1_800_000_000;
 const state = {
@@ -347,4 +347,67 @@ test('walkLabel: from, to, kind name and subject; long subject truncated to ~40 
 
 test('walkLabel: unknown names and kinds fall back to the raw id and kind', () => {
   assert.equal(walkLabel({ from: 'nova', to: 'dev', kind: 'poke' }, { dev: 'Dev' }), 'nova → Dev · poke');
+});
+
+test('toolRing: no tools, null tools or all-zero counts give no segments and "no data"', () => {
+  for (const tools of [[], null, undefined, [{ name: 'read_file', label: 'reading files', count: 0 }]]) {
+    const r = toolRing(tools, 'reading files · x', 'working');
+    assert.deepEqual(r.segments, []);
+    assert.equal(r.total, 0);
+    assert.equal(r.active, null);
+    assert.equal(r.aria, 'Tools today: no data');
+  }
+});
+
+test('toolRing: segments are shares of the total, in the order given, starting where the last one ended', () => {
+  const tools = [{ name: 'read_file', label: 'reading files', count: 12 }, { name: 'patch', label: 'editing', count: 6 },
+    { name: 'terminal', label: 'running commands', count: 2 }];
+  const r = toolRing(tools, 'idle · last: x', 'idle');
+  assert.equal(r.total, 20);
+  assert.deepEqual(r.segments.map(s => s.name), ['read_file', 'patch', 'terminal']);
+  assert.equal(r.segments[0].frac, 0.6);
+  assert.equal(r.segments[1].offset, 0.6);
+  assert.ok(Math.abs(r.segments[2].offset - 0.9) < 1e-9);
+  assert.ok(Math.abs(r.segments.reduce((n, s) => n + s.frac, 0) - 1) < 1e-9);
+  assert.equal(r.segments[0].shade, 1);
+  assert.ok(r.segments[1].shade < 1);
+});
+
+test('toolRing: a single tool is a full ring; bad counts are dropped, not summed', () => {
+  const r = toolRing([{ name: 'a', label: 'a', count: 5 }, { name: 'b', label: 'b', count: 'x' },
+    { name: 'c', label: 'c', count: -3 }, { name: 'd', label: 'd', count: NaN }], '', 'idle');
+  assert.deepEqual(r.segments.map(s => s.name), ['a']);
+  assert.equal(r.segments[0].frac, 1);
+  assert.equal(r.total, 5);
+});
+
+test('toolRing: the tool named by activity is active only while working', () => {
+  const tools = [{ name: 'read_file', label: 'reading files', count: 12 }, { name: 'patch', label: 'editing', count: 5 }];
+  const working = toolRing(tools, 'reading files · notes.md', 'working');
+  assert.equal(working.active, 'reading files');
+  assert.deepEqual(working.segments.map(s => s.active), [true, false]);
+  const idle = toolRing(tools, 'reading files · notes.md', 'idle');
+  assert.equal(idle.active, null);
+  assert.ok(idle.segments.every(s => !s.active));
+});
+
+test('toolRing: no match when the activity names no tool, or the activity is a delegation', () => {
+  const tools = [{ name: 'read_file', label: 'reading files', count: 3 }];
+  assert.equal(toolRing(tools, 'delegating · 2 helpers', 'working').active, null);
+  assert.equal(toolRing(tools, 'thinking', 'working').active, null);
+  assert.equal(toolRing(tools, '', 'working').active, null);
+  assert.equal(toolRing(tools, 'reading files', 'working').active, 'reading files');
+});
+
+test('toolRing: aria lists the labels and counts', () => {
+  const r = toolRing([{ name: 'read_file', label: 'reading files', count: 12 }, { name: 'patch', label: 'editing', count: 5 }], '', 'idle');
+  assert.equal(r.aria, 'Tools today: reading files 12, editing 5');
+});
+
+test('toolRing: more than six tools still get shades (the last one takes the faintest)', () => {
+  const tools = Array.from({ length: 8 }, (_, i) => ({ name: 't' + i, label: 't' + i, count: 8 - i }));
+  const r = toolRing(tools, '', 'idle');
+  assert.equal(r.segments.length, 8);
+  assert.equal(r.segments[7].shade, r.segments[6].shade);
+  assert.ok(r.segments.every(s => s.shade > 0 && s.shade <= 1));
 });

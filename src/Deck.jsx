@@ -1,7 +1,7 @@
 import { React, useState, useEffect, useRef, fetchJSON, API, USAGE_API, SESSION_API } from './sdk.js';
 import { ago, compact } from './format.js';
 import { portrait } from './portrait.js';
-import { buildItems, headerCounts, durationText, modelText, modelParts, usageText, meterLevel, activeTokens, currentSessionId, eventLabel, detailRows, traceModel, newToolCalls, countStep, todayParts, COUNT_MS, newWalks, walkLabel } from './deck-model.js';
+import { buildItems, headerCounts, durationText, modelText, modelParts, usageText, meterLevel, activeTokens, currentSessionId, eventLabel, detailRows, traceModel, newToolCalls, countStep, todayParts, COUNT_MS, newWalks, walkLabel, toolRing } from './deck-model.js';
 import { isStandalone, wantsFull, withFullParam, requestNativeFullscreen, exitNativeFullscreen, markFullPath } from './fullscreen.js';
 
 const POLL_MS = 5000, POLL_LITE_MS = 15000, DETAIL_MS = 5000;
@@ -63,6 +63,48 @@ function ActivityStrip({ spark, working, blip }) {
   );
 }
 
+/**
+ * Tool-mix donut from toolRing(): one stroke circle per tool, sized with pathLength="100" so a
+ * segment's share is a percentage. Segments start at 12 o'clock. Draw-in replays only when the set of
+ * tools changes (the key on the wrapper). Only the running tool gets the pulse and the orbit marker.
+ * Decorative beyond the role=img label; the sheet repeats the counts in a legend.
+ */
+const RING_R = 15.9155;   // circumference 100 with pathLength="100"
+function ToolRing({ model, big }) {
+  const { segments, aria } = model;
+  const setKey = segments.map(s => s.name).join('|');
+  const runs = segments.find(s => s.active);
+  return (
+    <svg className={'dk-ring' + (big ? ' is-big' : '')} viewBox="0 0 42 42" role="img" aria-label={aria} focusable="false">
+      <circle className="dk-ring-track" cx="21" cy="21" r={RING_R} pathLength="100" />
+      <g key={setKey} transform="rotate(-90 21 21)">
+        {segments.map((s, i) => (
+          <g key={s.name} className="dk-ring-seg" style={{ animationDelay: `${i * 90}ms` }}>
+            <circle className={'dk-ring-arc' + (s.active ? ' is-active' : '')} cx="21" cy="21" r={RING_R} pathLength="100"
+              strokeDasharray={`${s.frac * 100} ${100 - s.frac * 100}`} strokeDashoffset={-s.offset * 100} strokeOpacity={s.shade} />
+          </g>
+        ))}
+      </g>
+      {runs && <g className="dk-ring-orbit"><circle cx="21" cy="2.2" r="1.3" /></g>}
+    </svg>
+  );
+}
+
+/** Legend under the big ring in the sheet: swatch (rank shade), tool label, count. */
+function ToolLegend({ segments }) {
+  return (
+    <ul className="dk-legend">
+      {segments.map(s => (
+        <li key={s.name} className={s.active ? 'is-active' : undefined}>
+          <span className="dk-lsw" style={{ opacity: s.shade }} aria-hidden="true" />
+          <span className="dk-wrap">{s.label}{s.active && <em> · running</em>}</span>
+          <b>{s.count}</b>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 const reducedMotion = () => !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
 
 /**
@@ -104,6 +146,7 @@ function TodayLine({ a, still }) {
 
 function AgentTile({ it, pressed, onPick, blip, still, setRef }) {
   const a = it.agent, working = it.working;
+  const ring = toolRing(a.tools, a.activity, a.status);
   return (
     <button ref={setRef} className={'dk-tile is-agent' + (working ? ' is-working' : ' is-rest') + (pressed ? ' is-pressed' : '') + (it.chip ? ' has-chip' : '') + (it.helperCount > 0 || it.ctxPct != null ? ' has-top' : '')} onClick={onPick}
       style={{ '--dk-c': it.color, gridColumnStart: it.rowStart ? 1 : undefined }} aria-label={`${a.name}, ${a.role}, ${it.status}`}>
@@ -111,7 +154,8 @@ function AgentTile({ it, pressed, onPick, blip, still, setRef }) {
       {working && <i className="dk-badge" />}
       {it.helperCount > 0 && <span className="dk-count-chip">{it.helperCount} helper{it.helperCount > 1 ? 's' : ''}</span>}
       {it.ctxPct != null && !it.helperCount && <span className="dk-ctx">{it.ctxPct}% ctx</span>}
-      <span className="dk-art"><Sprite who={a.id} working={working} />{!working && <em className="dk-zz">zz</em>}</span>
+      <span className="dk-art"><Sprite who={a.id} working={working} />{!working && <em className="dk-zz">zz</em>}
+        {ring.segments.length > 0 && <span className="dk-ring-wrap"><ToolRing model={ring} /></span>}</span>
       <b className="dk-name">{a.name}</b>
       <span className="dk-role">{a.role}</span>
       {a.remit && <span className="dk-remit" title={a.remit}>{a.remit}</span>}
@@ -206,6 +250,7 @@ function AgentSheet({ it, sessions, now, det, detErr }) {
   const a = it.agent;
   const s = open && sessions.find(x => x.id === open);
   if (s) return <SessionDetail s={s} now={now} onBack={() => setOpen(null)} />;
+  const ring = toolRing(a.tools, a.activity, a.status);
   return (
     <>
       <NowBlock det={det} err={detErr} now={now} />
@@ -217,6 +262,11 @@ function AgentSheet({ it, sessions, now, det, detErr }) {
         <dt>Model id</dt><dd>{a.modelId || '—'}</dd>
         <dt>Helpers</dt><dd>{(a.helperModels || []).join(', ') || '—'}</dd>
       </dl>
+      <section><h3>Tools today</h3>
+        {ring.segments.length > 0
+          ? <div className="dk-ring-row" style={{ '--dk-c': it.color }}><ToolRing model={ring} big /><ToolLegend segments={ring.segments} /></div>
+          : <p className="dk-note">no data</p>}
+      </section>
       {it.walks.length > 0 && <section><h3>Hand-offs</h3>
         {it.walks.map(w => <div key={w.id} className="dk-row-mini"><span>{w.label}</span><small>{ago(w.at, now)}</small></div>)}</section>}
       <section><h3>Sessions · {sessions.length}</h3>
