@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { buildItems, headerCounts, durationText, modelText, modelParts, usageText, meterLevel, activeTokens, currentSessionId, eventLabel, detailRows, traceModel, newToolCalls, countStep, todayParts, newWalks, walkLabel, toolRing, newBrainTrips, brainCounts, brainText, brainNotes, helperChanges, swarmTip, needsYou, statusWord, greeting, shortDuration, rosterDuration, clockText, resetSoon } from '../src/deck-model.js';
+import { buildItems, headerCounts, durationText, modelText, modelParts, usageText, meterLevel, activeTokens, currentSessionId, eventLabel, detailRows, traceModel, newToolCalls, countStep, todayParts, newWalks, walkLabel, toolRing, newBrainTrips, brainCounts, brainText, brainNotes, helperChanges, swarmTip, needsYou, statusWord, greeting, shortDuration, rosterDuration, clockText, resetSoon, RIGHT_PANE_DEFAULT, livePolls, commsPolls, speechText } from '../src/deck-model.js';
 
 const now = 1_800_000_000;
 const state = {
@@ -572,4 +572,31 @@ test('resetSoon: true only for a reset 0 to 15 minutes away', () => {
   assert.equal(resetSoon(at(-60000), now * 1000), false);
   assert.equal(resetSoon(null, now * 1000), false);
   assert.equal(resetSoon(now + 300, now * 1000), true, 'unix seconds are accepted');
+});
+
+test('desktop right pane opens on Live; phone never shows it', () => {
+  assert.equal(RIGHT_PANE_DEFAULT, 'live');
+  assert.equal(livePolls({ desktop: true, rightPane: RIGHT_PANE_DEFAULT }), true);
+  assert.equal(livePolls({ desktop: false, rightPane: 'live' }), false, 'phone has no Live pane');
+  assert.equal(commsPolls({ desktop: false, pane: 'comms', rightPane: 'live' }), true);
+  assert.equal(commsPolls({ desktop: false, pane: 'office', rightPane: 'comms' }), false);
+});
+
+test('exactly one of Live and Comms polls on each layout (no double polling)', () => {
+  for (const desktop of [true, false])
+    for (const rightPane of ['live', 'comms'])
+      for (const pane of ['office', 'comms']) {
+        const n = (livePolls({ desktop, rightPane }) ? 1 : 0) + (commsPolls({ desktop, pane, rightPane }) ? 1 : 0);
+        assert.ok(n <= 1, `desktop=${desktop} rightPane=${rightPane} pane=${pane} polls ${n}`);
+      }
+  assert.equal(commsPolls({ desktop: true, pane: 'office', rightPane: 'live' }), false, 'Live selected: Comms idle');
+  assert.equal(livePolls({ desktop: true, rightPane: 'comms' }), false, 'Comms selected: Live idle');
+});
+
+test('speech notice drops the helper count the chip already shows', () => {
+  assert.equal(speechText('delegating · 3 helpers'), 'delegating');
+  assert.equal(speechText('delegating · 1 helper'), 'delegating');
+  assert.equal(speechText('running tests'), 'running tests');
+  assert.equal(speechText(''), '');
+  assert.equal(speechText(null), '');
 });

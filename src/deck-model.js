@@ -442,3 +442,26 @@ export function swarmTip(helpers) {
   return [head, ...hs.map(h => `${h.model || 'helper'} · ${String(h.task || '').trim() || 'task'}`)].join('\n');
 }
 
+
+/** Desktop right pane (Office sits beside it) opens on Live; Comms stays one click away. */
+export const RIGHT_PANE_DEFAULT = 'live';
+
+/**
+ * Which feed poller is mounted. Only one of Live and Comms is ever mounted, so only one polls.
+ * Desktop: the right pane shows `rightPane`. Phone: the Office | Comms switch shows `pane`, and the
+ * right pane is never shown, so Live never polls there.
+ */
+export function livePolls({ desktop, rightPane }) {
+  return !!desktop && rightPane === 'live';
+}
+export function commsPolls({ desktop, pane, rightPane }) {
+  return desktop ? rightPane === 'comms' : pane === 'comms';
+}
+
+/**
+ * Speech notice text for a working agent. The helper count is dropped because the count chip on the
+ * tile already says "N helpers"; repeating it made the phone notice truncate ("delegating · 3 helpers").
+ */
+export function speechText(activity) {
+  return String(activity || '').replace(/\s*·\s*\d+\s+helpers?$/, '');
+}

@@ -1,6 +1,6 @@
 import { React, useState, useEffect, useRef, fetchJSON, API, USAGE_API, SESSION_API } from './sdk.js';
 import { ago, compact, resetCountdown } from './format.js';
-import { buildItems, headerCounts, durationText, modelText, modelParts, usageText, meterLevel, activeTokens, currentSessionId, eventLabel, detailRows, traceModel, newToolCalls, countStep, todayParts, COUNT_MS, newWalks, walkLabel, toolRing, newBrainTrips, brainCounts, brainText, brainNotes, helperChanges, swarmTip, needsYou, greeting, resetSoon } from './deck-model.js';
+import { buildItems, headerCounts, durationText, modelText, modelParts, usageText, meterLevel, activeTokens, currentSessionId, eventLabel, detailRows, traceModel, newToolCalls, countStep, todayParts, COUNT_MS, newWalks, walkLabel, toolRing, newBrainTrips, brainCounts, brainText, brainNotes, helperChanges, swarmTip, needsYou, greeting, resetSoon, RIGHT_PANE_DEFAULT, livePolls, commsPolls, speechText } from './deck-model.js';
 import { isStandalone, wantsFull, withFullParam, requestNativeFullscreen, exitNativeFullscreen, markFullPath } from './fullscreen.js';
 import { ActivityPanel, Live } from './Mission.jsx';
 import MissionComms from './MissionComms.jsx';
@@ -196,7 +196,7 @@ function AgentTile({ it, pressed, onPick, blip, still, setRef, pulses, fx }) {
       {it.helperCount > 0 && <span className="dk-count-chip">{it.helperCount} helper{it.helperCount > 1 ? 's' : ''}</span>}
       {it.ctxPct != null && !it.helperCount && <span className="dk-ctx">{it.ctxPct}% ctx</span>}
       {working && a.activity && <span className="dk-say" aria-hidden="true">
-        <span className="dk-say-t">{a.activity}</span>
+        <span className="dk-say-t">{speechText(a.activity)}</span>
         {a.status === 'working' && <span className="dk-typing"><i /><i /><i /></span>}
       </span>}
       <span className="dk-art"><Sprite who={a.id} working={working} />{!working && <em className="dk-zz">zz</em>}
@@ -407,6 +407,7 @@ export default function Deck() {
   const [actOpen, setActOpen] = useState(false);     // disclosures: collapsed by default, not persisted
   const [projOpen, setProjOpen] = useState(false);
   const [pane, setPane] = useState('office');                          // phone only: Office | Comms
+  const [rightPane, setRightPane] = useState(RIGHT_PANE_DEFAULT);      // desktop only: right pane is Live (default) or Comms
   const desktop = useMedia('(min-width: 900px)');                      // side by side from 900px
   const [updatedAt, setUpdatedAt] = useState(null);                    // ms of the last good /state poll
   const [standalone] = useState(() => isStandalone(window));
@@ -639,8 +640,18 @@ export default function Deck() {
       </section>
       <section id="dk-pane-comms" role="tabpanel" aria-labelledby="dk-pane-tab-comms" className="dk-pane dk-pane-comms"
         hidden={!desktop && pane !== 'comms'}>
-        <h2 className="dk-pane-h">Comms</h2>
-        {(desktop || pane === 'comms') && <MissionComms agents={(state && state.agents) || []} agentKey="" lite={lite} />}
+        <div className="dk-pane-hd">
+          <h2 className="dk-pane-h">{desktop && rightPane === 'live' ? 'Live' : 'Comms'}</h2>
+          {desktop && <div className="dk-rseg" role="group" aria-label="Right pane: Live or Comms">
+            {[['live', 'Live'], ['comms', 'Comms']].map(([id, label]) => (
+              <button key={id} type="button" className={'dk-rseg-btn' + (rightPane === id ? ' is-on' : '')}
+                aria-pressed={rightPane === id} onClick={() => setRightPane(id)}>{label}</button>
+            ))}
+          </div>}
+        </div>
+        {/* Only the mounted feed polls: Live on desktop when selected, Comms on desktop or phone when selected */}
+        {livePolls({ desktop, rightPane }) && <Live agentKey="" agents={(state && state.agents) || []} lite={lite} />}
+        {commsPolls({ desktop, pane, rightPane }) && <MissionComms agents={(state && state.agents) || []} agentKey="" lite={lite} />}
       </section>
       </div>
         <div className="dk-more">

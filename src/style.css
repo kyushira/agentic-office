@@ -249,11 +249,12 @@ html.ao-full-active { background-color: #0B0E11 !important; }
 .dk-top .dk-dot.on { box-shadow: none; }
 .dk-top, .dk-top * { text-shadow: none !important; filter: none !important; backdrop-filter: none !important; }
 
-.dk-usage { font-size: 12px; font-weight: 600; color: var(--dk-ink); white-space: nowrap; }
+/* usage is a .dk-pill like the others (border, background, padding, size from .dk-pill); only the colour varies */
+.dk-usage { color: var(--dk-ink); white-space: nowrap; }
 .dk-usage.is-warn { color: var(--dk-warn); }
 .dk-usage.is-hot { color: var(--dk-red); }
 .dk-usage.is-na { color: var(--dk-mut); }
-.dk-root .dk-usage-btn { background: none; border: 0; padding: 0; cursor: pointer; font-family: inherit; display: inline-flex; align-items: center; gap: 10px;
+.dk-root .dk-usage-btn { cursor: pointer; font-family: inherit; display: inline-flex; align-items: center; gap: 10px;
   transition: border-color var(--dk-t) var(--dk-ease), background-color var(--dk-t) var(--dk-ease), box-shadow var(--dk-t) var(--dk-ease); }
 
 /* usage and context meters: real data only; the track is --dk-line-2 so an empty meter stays visible */
@@ -555,6 +556,13 @@ html.ao-full-active { background-color: #0B0E11 !important; }
 .dk-root .dk-rcard.is-idle .dk-rstat { color: var(--dk-mut); }
 .dk-root .dk-rcard.is-offline .dk-rstat { color: var(--dk-faint); }
 @media (min-width: 900px) { .dk-root .dk-roster { flex-wrap: wrap; overflow: visible; } }
+/* phone: the strip fades out at its right edge so a partly visible card reads as "scroll for more".
+   The right padding keeps the last card clear of the fade once scrolled to the end. */
+@media (max-width: 899px) {
+  .dk-root .dk-roster { padding-right: 28px;
+    -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent);
+    mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent); }
+}
 
 /* needs-you lane: only rendered when something needs the user; amber for approvals, red chips for questions */
 .dk-root .dk-needs { flex: none; margin: 6px 8px 0; padding: 8px 10px; border-radius: 10px; box-sizing: border-box;
@@ -590,6 +598,12 @@ html.ao-full-active { background-color: #0B0E11 !important; }
   .dk-root .dk-pane-comms { padding: 0; position: sticky; top: 0; max-height: 70vh; overflow-y: auto; overscroll-behavior: contain;
     border: 1px solid var(--dk-line); border-radius: 12px; background: var(--dk-sheet); }
   .dk-root .dk-pane-comms .dk-mc-comms { padding: 8px; }
+  /* right pane header: title left, Live | Comms toggle right (desktop only; phone keeps Office | Comms) */
+  .dk-root .dk-pane-hd { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 28px; margin: 8px 2px 4px; }
+  .dk-root .dk-pane-hd .dk-pane-h { margin: 0; }
+  .dk-root .dk-rseg { display: inline-flex; gap: 2px; padding: 2px; border-radius: 999px; border: 1px solid var(--dk-line-2); background: var(--dk-raise); }
+  .dk-root .dk-rseg-btn { min-height: 26px; padding: 0 10px; border: 0; border-radius: 999px; background: transparent; color: var(--dk-mut); font: inherit; font-size: 11px; font-weight: 600; cursor: pointer; }
+  .dk-root .dk-rseg-btn.is-on { background: var(--dk-tile); color: var(--dk-hot); box-shadow: inset 0 0 0 1px var(--dk-dim); }
 }
 
 /* office rooms: rounded cards, floor tinted with the agent colour, sprite art left alone by the nameplate */
