@@ -447,15 +447,33 @@ export function swarmTip(helpers) {
 export const RIGHT_PANE_DEFAULT = 'live';
 
 /**
- * Which feed poller is mounted. Only one of Live and Comms is ever mounted, so only one polls.
- * Desktop: the right pane shows `rightPane`. Phone: the Office | Comms switch shows `pane`, and the
- * right pane is never shown, so Live never polls there.
+ * Whether the Live feed is mounted (and so polls). Desktop: the right pane shows `rightPane`. Phone:
+ * the Office | Live | Comms switch shows `pane`, and Live is mounted only while `pane` is 'live'.
+ * The caller mounts it in one place per layout, so it is never mounted in both at once.
  */
-export function livePolls({ desktop, rightPane }) {
-  return !!desktop && rightPane === 'live';
+export function livePolls({ desktop, rightPane, pane }) {
+  return desktop ? rightPane === 'live' : pane === 'live';
 }
 export function commsPolls({ desktop, pane, rightPane }) {
   return desktop ? rightPane === 'comms' : pane === 'comms';
+}
+
+/** Live feed interval: 5s normally, 15s in Lite (same as the deck's own refresh). */
+export const LIVE_POLL_MS = 5000, LIVE_POLL_LITE_MS = 15000;
+export function liveFeedMs(lite) {
+  return lite ? LIVE_POLL_LITE_MS : LIVE_POLL_MS;
+}
+
+/**
+ * Phone Office | Live | Comms switch: index after a key press in a tablist of `n` tabs, wrapping at
+ * the ends. Home and End jump to the first and last tab. Returns -1 for keys the switch ignores.
+ */
+export function paneTabNext(i, key, n) {
+  if (key === 'ArrowRight') return (i + 1) % n;
+  if (key === 'ArrowLeft') return (i - 1 + n) % n;
+  if (key === 'Home') return 0;
+  if (key === 'End') return n - 1;
+  return -1;
 }
 
 /**

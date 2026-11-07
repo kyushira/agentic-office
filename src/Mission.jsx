@@ -2,11 +2,12 @@ import { React, useState, useEffect, useRef, fetchJSON } from './sdk.js';
 import { agentColor, agentName, shortTime, callParts, thinkLabel, showThoughtsNote, THINK_API } from './mc-model.js';
 import { usePoll } from './mission-poll.js';
 import { cleanToolResult } from './format.js';
+import { liveFeedMs } from './deck-model.js';
 import { Typed } from './MissionBits.jsx';
 
 /** Live transcript for one agent, or all merged. Remounted per agent so its reveal and typing state reset. */
 export function Live({ agentKey, agents, lite = false }) {
-  const { rows, fresh, thinking, err } = usePoll('feed', agentKey, lite ? 15000 : 5000);
+  const { rows, fresh, thinking, err } = usePoll('feed', agentKey, liveFeedMs(lite));
   const [open, setOpen] = useState({});          // thinking row id -> revealed
   const [texts, setTexts] = useState({});        // thinking row id -> fetched text (component state only)
   const [thinkErr, setThinkErr] = useState({});

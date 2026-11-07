@@ -1,6 +1,6 @@
 import { React, useState, useEffect } from './sdk.js';
 import { Sprite } from './Sprite.jsx';
-import { statusWord, rosterDuration, clockText } from './deck-model.js';
+import { statusWord, rosterDuration, clockText, paneTabNext } from './deck-model.js';
 
 /** Live state of a media query (phone vs desktop layout). */
 export function useMedia(query) {
@@ -105,18 +105,18 @@ export function Roster({ agents, sessions, now, sel, onPick }) {
   );
 }
 
-/** Phone-only segmented control: Office | Comms, one page, one pane visible at a time. */
+/** Phone-only segmented control: Office | Live | Comms, one page, one pane visible at a time. */
 export function PaneTabs({ pane, setPane }) {
-  const tabs = [['office', 'Office'], ['comms', 'Comms']];
+  const tabs = [['office', 'Office'], ['live', 'Live'], ['comms', 'Comms']];
   const onKey = (e, i) => {
-    if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+    const next = paneTabNext(i, e.key, tabs.length);
+    if (next < 0) return;
     e.preventDefault();
-    const next = (i + (e.key === 'ArrowRight' ? 1 : tabs.length - 1)) % tabs.length;
     setPane(tabs[next][0]);
     e.currentTarget.parentElement.querySelectorAll('[role="tab"]')[next].focus();
   };
   return (
-    <div className="dk-seg" role="tablist" aria-label="Office or Comms">
+    <div className="dk-seg" role="tablist" aria-label="Deck pane">
       {tabs.map(([id, label], i) => {
         const on = pane === id;
         return (

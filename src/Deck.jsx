@@ -404,7 +404,7 @@ export default function Deck() {
   const [, setTick] = useState(0);
   const [usage, setUsage] = useState(null);
   const [showReason, setShowReason] = useState(false);
-  const [pane, setPane] = useState('office');                          // phone only: Office | Comms
+  const [pane, setPane] = useState('office');                          // phone only: Office | Live | Comms
   const [rightPane, setRightPane] = useState(RIGHT_PANE_DEFAULT);      // desktop only: right pane is Live (default) or Comms
   const desktop = useMedia('(min-width: 900px)');                      // side by side from 900px
   const [updatedAt, setUpdatedAt] = useState(null);                    // ms of the last good /state poll
@@ -638,6 +638,11 @@ export default function Deck() {
             </div>
           </main>}
       </section>
+      {/* phone only (hidden on desktop, where Live is the right pane below): the same all-agents feed, mounted only while shown */}
+      <section id="dk-pane-live" role="tabpanel" aria-labelledby="dk-pane-tab-live" className="dk-pane dk-pane-live"
+        hidden={desktop || pane !== 'live'}>
+        {!desktop && livePolls({ desktop, rightPane, pane }) && <Live agentKey="" agents={(state && state.agents) || []} lite={lite} />}
+      </section>
       <section id="dk-pane-comms" role="tabpanel" aria-labelledby="dk-pane-tab-comms" className="dk-pane dk-pane-comms"
         hidden={!desktop && pane !== 'comms'}>
         <div className="dk-pane-hd">
@@ -649,8 +654,8 @@ export default function Deck() {
             ))}
           </div>}
         </div>
-        {/* Only the mounted feed polls: Live on desktop when selected, Comms on desktop or phone when selected */}
-        {livePolls({ desktop, rightPane }) && <Live agentKey="" agents={(state && state.agents) || []} lite={lite} />}
+        {/* Only the mounted feed polls: Live on desktop when selected (phone Live is the section above), Comms on desktop or phone when selected */}
+        {desktop && livePolls({ desktop, rightPane, pane }) && <Live agentKey="" agents={(state && state.agents) || []} lite={lite} />}
         {commsPolls({ desktop, pane, rightPane }) && <MissionComms agents={(state && state.agents) || []} agentKey="" lite={lite} />}
       </section>
       </div>
