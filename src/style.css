@@ -657,6 +657,9 @@ html.ao-full-active { background-color: var(--bg) !important; }
 .dk-root .dk-uring-li.is-empty .dk-uring { background: none; }
 .dk-root .dk-uring-li.is-empty .dk-uring-wrap::before { content: ''; position: absolute; inset: 4px; border-radius: 50%; border: 1px dashed var(--border-strong); }
 .dk-root .dk-uring-li.is-demo .dk-uring-in { color: var(--text-3); }
+/* token estimates: the value on the first line, its unit ("tok est.") under it */
+.dk-root .dk-uring-in { flex-direction: column; gap: 3px; text-align: center; }
+.dk-root .dk-uring-unit { font: 500 11px/1 var(--font-sans); letter-spacing: 0; color: var(--text-3); }
 .dk-root .dk-uring-name { font-size: 12px; font-weight: 600; color: var(--text-1); }
 .dk-root .dk-uring-sub { font-size: 11px; color: var(--text-3); min-height: 14px; text-align: center; }
 .dk-root .dk-ubar-wrap { display: flex; flex-direction: column; gap: 4px; width: 100%; }
