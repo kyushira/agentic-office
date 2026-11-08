@@ -6,7 +6,7 @@ import { Live } from './Mission.jsx';
 import MissionComms from './MissionComms.jsx';
 import { useDialogFocus } from './dialog-focus.js';
 import { Sprite } from './Sprite.jsx';
-import { useMedia, UpdatedAgo, LiveClock, Bell, NeedsYou, PaneTabs } from './DeckRevamp.jsx';
+import { useMedia, UpdatedAgo, LiveClock, Bell, NeedsYou, PaneTabs, VoiceOrb } from './DeckRevamp.jsx';
 import { MemoryPane } from './Memory.jsx';
 import { AgentCards } from './AgentCards.jsx';
 import { UsageRings } from './UsageRings.jsx';
@@ -601,6 +601,7 @@ export default function Deck() {
           <Bell count={needs.length} onPick={() => needs.length && setSel('a:' + needs[0].id)} />
         </div>
         <div className="dk-acts">
+          <VoiceOrb />
           {!full && <button className="dk-btn" onClick={enterFull} aria-label="Open fullscreen deck">Fullscreen</button>}
           {full && !standalone && <button className="dk-btn ao-fs-exit" onClick={exitFull} aria-label="Exit fullscreen deck">Exit</button>}
           <button className={'dk-btn' + (lite ? ' on' : '')} aria-pressed={lite} onClick={() => setLite(!lite)} title="Low-power: no animation, refresh every 15s">Lite</button>

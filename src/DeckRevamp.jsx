@@ -54,6 +54,16 @@ export function Bell({ count, onPick }) {
   );
 }
 
+/** Voice orb in the header (spec 3.6). UI only: no microphone, no permission prompt, no recording yet.
+ *  Static gradient core and halo; it does not animate while idle. The button is 44px (40px orb, 2px inset). */
+export function VoiceOrb() {
+  return (
+    <button type="button" className="dk-orb" aria-label="Voice (coming soon)" title="Voice: coming soon">
+      <span className="dk-orb-core" aria-hidden="true" />
+    </button>
+  );
+}
+
 /** Needs-you lane: red chip for a pending question, amber for an approval. Shown only when non-empty. */
 export function NeedsYou({ items, onPick }) {
   if (!items.length) return null;

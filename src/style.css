@@ -756,3 +756,12 @@ html.ao-full-active { background-color: var(--bg) !important; }
 
 /* usage ring strokes: drop-shadow on the wrapper (spec 3.5), hue = ring colour. Bar mode and empty rings keep no glow. */
 .dk-root .dk-uring-wrap { filter: drop-shadow(0 0 8px rgba(var(--c-rgb), .55)); }
+
+/* voice orb (spec 3.6, UI only): 44px hit target around a 40px orb. Static halo at opacity .6; no animation at all. */
+.dk-root .dk-orb { position: relative; isolation: isolate; flex: none; width: 44px; height: 44px; min-width: 44px; margin: 0; padding: 0; border: 0;
+  border-radius: 50%; background: transparent; display: inline-grid; place-items: center; cursor: pointer; }
+.dk-root .dk-orb::before { content: ""; position: absolute; inset: -8px; border-radius: 50%; z-index: -1; pointer-events: none; opacity: .6;
+  background: radial-gradient(circle, #8B5CF6 0%, #EC4899 45%, transparent 70%); }
+.dk-root .dk-orb-core { display: block; width: 40px; height: 40px; border-radius: 50%;
+  background: radial-gradient(circle at 40% 35%, #FFFFFF22, transparent 45%), radial-gradient(circle, #8B5CF6 0%, #EC4899 55%, #22D3EE 100%);
+  box-shadow: 0 0 0 1px rgba(139, 92, 246, .6), 0 0 36px rgba(139, 92, 246, .38), 0 0 72px rgba(139, 92, 246, .18); }
