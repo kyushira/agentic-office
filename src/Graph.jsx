@@ -2,8 +2,8 @@ import { React, useState, useEffect, useRef, useMemo, fetchJSON } from './sdk.js
 import { PROJECTS_API } from './ProjectsList.jsx';
 import {
   buildGraph, graphAria, detailRows, syncSim, simStep, isSettled, settle, reheat, setMode, setLinkDist, linkDistFor,
-  makeView, fitView, toWorld, toScreen, zoomAt, panBy, hitNode, isTap, pinchOf,
-  GRAPH_HIT_PX, GRAPH_DPR_CAP,
+  makeView, fitView, toWorld, toScreen, zoomAt, panBy, hitNode, isTap, pinchOf, drawRadius, repulseFor,
+  labelCandidates, placeLabels, GRAPH_HIT_PX, GRAPH_DPR_CAP,
 } from './graph-model.js';
 
 /**
@@ -29,6 +29,8 @@ export function NodeGraph({ agents, sessions, brain, lite }) {
   const lastTapRef = useRef(null);
   const selRef = useRef(null);
   const kbRef = useRef(null);
+  const hoverRef = useRef(null);
+  const labelsRef = useRef([]);
   const [sel, setSel] = useState(null);
   const [kbOpen, setKbOpen] = useState(false);
   const [ann, setAnn] = useState('');
@@ -77,7 +79,7 @@ export function NodeGraph({ agents, sessions, brain, lite }) {
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, w, h);
     cv.dataset.frames = String(frameRef.current);
-    if (!sim) return;
+    if (!sim) { labelsRef.current = []; return; }
     ctx.setTransform(dpr * v.k, 0, 0, dpr * v.k, dpr * v.x, dpr * v.y);
     ctx.lineWidth = 1 / v.k;
     ctx.strokeStyle = 'rgba(232, 230, 240, 0.22)';
@@ -89,13 +91,14 @@ export function NodeGraph({ agents, sessions, brain, lite }) {
     for (const n of sorted) {
       const info = n.info;
       const dim = n.type === 'session';
+      const rr = drawRadius(n.r, v.k);
       ctx.save();
       ctx.shadowColor = info.color;
       ctx.shadowBlur = (dim ? 6 : 14) * dpr;
       ctx.globalAlpha = dim ? 0.75 : 1;
       ctx.fillStyle = info.color;
       ctx.beginPath();
-      ctx.arc(n.x, n.y, n.r, 0, Math.PI * 2);
+      ctx.arc(n.x, n.y, rr, 0, Math.PI * 2);
       ctx.fill();
       ctx.restore();
       const focused = n.id === selRef.current || n.id === kbRef.current;
@@ -103,17 +106,32 @@ export function NodeGraph({ agents, sessions, brain, lite }) {
         ctx.lineWidth = 2 / v.k;
         ctx.strokeStyle = '#F2F1F6';
         ctx.beginPath();
-        ctx.arc(n.x, n.y, n.r + 4 / v.k, 0, Math.PI * 2);
+        ctx.arc(n.x, n.y, rr + 4 / v.k, 0, Math.PI * 2);
         ctx.stroke();
-      }
-      if (!dim || v.k >= 1.5) {
-        ctx.font = `${11 / v.k}px system-ui, sans-serif`;
-        ctx.fillStyle = dim ? 'rgba(179, 176, 191, 0.85)' : '#B3B0BF';
-        ctx.textBaseline = 'top';
-        ctx.fillText(info.label, n.x + (n.r + 4) , n.y - 6 / v.k);
       }
     }
     ctx.globalAlpha = 1;
+    // Labels are drawn in screen px (11px, unaffected by zoom) and placed greedily so no two boxes overlap.
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.font = '11px system-ui, sans-serif';
+    ctx.textBaseline = 'top';
+    const boxes = placeLabels(labelCandidates(sim.nodes, v, focusIds()), s => ctx.measureText(s).width);
+    labelsRef.current = boxes;
+    for (const b of boxes) {
+      ctx.fillStyle = b.dim ? 'rgba(179, 176, 191, 0.85)' : '#B3B0BF';
+      ctx.fillText(b.text, b.x, b.y);
+    }
+  };
+
+  // Nodes that get a label whatever the zoom: selected, keyboard focus, hovered, held.
+  const focusIds = () => {
+    const s = new Set();
+    if (selRef.current != null) s.add(selRef.current);
+    if (kbRef.current != null) s.add(kbRef.current);
+    if (hoverRef.current != null) s.add(hoverRef.current);
+    const g = gestureRef.current;
+    if (g && g.kind === 'node' && g.node) s.add(g.node.id);
+    return s;
   };
 
   const cancelLoop = () => {
@@ -212,16 +230,22 @@ export function NodeGraph({ agents, sessions, brain, lite }) {
         if (!sim || !v) return [];
         return sim.nodes.map(n => {
           const s = toScreen(v, n.x, n.y);
-          return { id: n.id, type: n.type, x: n.x, y: n.y, screenX: s.x, screenY: s.y };
+          return { id: n.id, type: n.type, x: n.x, y: n.y, screenX: s.x, screenY: s.y, r: n.r };
         });
       },
+      // Label boxes placed by the last draw (screen CSS px, canvas-relative).
+      labels: () => labelsRef.current.map(b => ({ id: b.id, text: b.text, x: b.x, y: b.y, w: b.w, h: b.h })),
+      zoom: () => (viewRef.current ? viewRef.current.k : null),
+      canvas: () => ({ ...sizeRef.current }),
     };
     return () => { delete window.__deckGraph; };
   }, []);
 
   // ----- sim follows the graph. Same nodes and edges (a /state poll): no reheat.
   useEffect(() => {
-    const r = syncSim(simRef.current, graph, { mode: modeRef.current, linkDist: linkDistFor(linkRef.current) });
+    const r = syncSim(simRef.current, graph, {
+      mode: modeRef.current, linkDist: linkDistFor(linkRef.current), repulse: repulseFor(graph.nodes.length, sizeRef.current.w),
+    });
     simRef.current = r.sim;
     if (r.changed) {
       if (stillRef.current) settleNow();
@@ -274,7 +298,16 @@ export function NodeGraph({ agents, sessions, brain, lite }) {
   };
 
   const onPointerMove = e => {
-    if (!ptrRef.current.has(e.pointerId)) return;
+    if (!ptrRef.current.has(e.pointerId)) {
+      // mouse hover (no button down): label the node under the pointer
+      if (e.pointerType === 'mouse' && simRef.current && viewRef.current) {
+        const q = local(e), w = toWorld(viewRef.current, q.x, q.y);
+        const hit = hitNode(simRef.current.nodes, w.x, w.y, GRAPH_HIT_PX / viewRef.current.k);
+        const id = hit ? hit.id : null;
+        if (id !== hoverRef.current) { hoverRef.current = id; draw(); }
+      }
+      return;
+    }
     const p = local(e);
     ptrRef.current.set(e.pointerId, p);
     const g = gestureRef.current;
@@ -350,6 +383,10 @@ export function NodeGraph({ agents, sessions, brain, lite }) {
     }
   };
 
+  const onPointerLeave = () => {
+    if (hoverRef.current != null) { hoverRef.current = null; draw(); }
+  };
+
   const onDoubleClick = e => {
     const sim = simRef.current, v = viewRef.current;
     if (!sim || !v) return;
@@ -417,13 +454,16 @@ export function NodeGraph({ agents, sessions, brain, lite }) {
           <span>Links</span>
           <input type="range" min="0" max="100" step="1" value={linkVal} aria-valuetext={linkDist + ' px'}
             onChange={e => setLinkVal(Number(e.target.value))} />
+          <output className="dk-gr-val" aria-hidden="true">{linkVal}%</output>
         </label>
+        <button type="button" className="dk-gr-reset" onClick={resetView}>Reset view</button>
       </div>
       <div className="dk-gr-wrap" ref={wrapRef} onKeyDown={onKey}>
         <canvas ref={canvasRef} className="dk-gr-cv" role="img" aria-label={aria} tabIndex={0}
           data-nodes={graph.nodes.length} data-edges={graph.edges.length} data-mode={mode} data-frames="0"
           onPointerDown={onPointerDown} onPointerMove={onPointerMove}
-          onPointerUp={onPointerUp} onPointerCancel={onPointerUp} onDoubleClick={onDoubleClick} />
+          onPointerUp={onPointerUp} onPointerCancel={onPointerUp} onPointerLeave={onPointerLeave}
+          onDoubleClick={onDoubleClick} />
         {picked && (
           <div className="dk-gr-sheet" role="dialog" aria-labelledby="dk-gr-sh-t" ref={sheetRef}>
             <div className="dk-gr-sh-h">

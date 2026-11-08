@@ -738,7 +738,10 @@ html.ao-full-active { background-color: var(--bg) !important; }
 .dk-root .dk-gr-btn.is-on { background: var(--dk-tile); color: var(--dk-ink); box-shadow: inset 0 0 0 1px var(--c-accent); }
 .dk-root .dk-gr-btn:focus-visible, .dk-root .dk-gr-links input:focus-visible, .dk-root .dk-gr-cv:focus-visible, .dk-root .dk-gr-close:focus-visible { outline: 2px solid var(--c-accent); outline-offset: 2px; }
 .dk-root .dk-gr-links { display: flex; align-items: center; gap: 8px; min-height: 44px; font-size: 12px; color: var(--dk-mut); }
-.dk-root .dk-gr-links input { width: 150px; min-height: 44px; margin: 0; accent-color: var(--c-accent); touch-action: pan-x; }
+.dk-root .dk-gr-links input { width: 120px; min-height: 44px; margin: 0; accent-color: var(--c-accent); touch-action: pan-x; }
+.dk-root .dk-gr-val { min-width: 36px; font-family: var(--font-mono); font-variant-numeric: tabular-nums; color: var(--dk-ink); }
+.dk-root .dk-gr-reset { min-height: 44px; min-width: 44px; padding: 0 14px; border: 1px solid var(--dk-line-2); border-radius: 999px; background: var(--dk-tile); color: var(--dk-ink); font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; }
+.dk-root .dk-gr-reset:focus-visible { outline: 2px solid var(--c-accent); outline-offset: 2px; }
 .dk-root .dk-gr-wrap { position: relative; border: 1px solid var(--dk-line-2); border-radius: var(--radius-card); background: var(--dk-tile); overflow: hidden; }
 .dk-root .dk-gr-cv { display: block; width: 100%; height: 320px; touch-action: none; cursor: grab; user-select: none; -webkit-user-select: none; }
 .dk-root .dk-gr-empty { position: absolute; inset: 0; margin: 0; display: grid; place-items: center; font-size: 13px; color: var(--dk-soft); }

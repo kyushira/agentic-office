@@ -4,7 +4,8 @@ import assert from 'node:assert/strict';
 import {
   GRAPH_MAX_NODES, GRAPH_SETTLE_TICKS, buildGraph, safeLabel, graphAria, detailRows, syncSim, simStep, settle,
   isSettled, reheat, setMode, linkDistFor, fitView, makeView, toWorld, toScreen, zoomAt, panBy, hitNode, isTap,
-  pinchOf,
+  pinchOf, truncLabel, drawRadius, repulseFor, labelCandidates, placeLabels, boxesOverlap, GRAPH_FIT_PAD,
+  GRAPH_DRAW_MIN_PX,
 } from '../src/graph-model.js';
 
 const AGENTS = ['default', 'dev', 'nova', 'pixel', 'prism', 'red', 'sentinel'].map((id, i) => ({
@@ -248,5 +249,60 @@ describe('viewport and hit testing', () => {
     const p = pinchOf({ x: 0, y: 0 }, { x: 30, y: 40 });
     assert.equal(p.dist, 50);
     assert.deepEqual([p.x, p.y], [15, 20]);
+  });
+});
+
+describe('graph labels, fit and draw radius (Deck OS p2 item1b)', () => {
+  test('truncLabel keeps 18 characters with an ellipsis', () => {
+    assert.equal(truncLabel('short'), 'short');
+    const t = truncLabel('a very long session title that goes on');
+    assert.equal(t.length, 18);
+    assert.ok(t.endsWith('…'));
+  });
+  test('drawRadius keeps a screen minimum when zoomed out', () => {
+    assert.equal(drawRadius(10, 1), 10);
+    assert.equal(drawRadius(10, 0.5), 12);
+    assert.equal(drawRadius(4, 0.5), GRAPH_DRAW_MIN_PX / 0.5);
+  });
+  test('fitView keeps circles and agent/memory/project labels inside the box with padding', () => {
+    const sim = syncSim(null, buildGraph(fixture({ perAgent: 12, projects: 8 })), {}).sim;
+    settle(sim);
+    const W = 360, H = 320;
+    const v = fitView(sim.nodes, W, H);
+    assert.equal(GRAPH_FIT_PAD, 16);
+    for (const n of sim.nodes) {
+      const s = toScreen(v, n.x, n.y);
+      const r = drawRadius(n.r, v.k) * v.k;
+      assert.ok(s.x - r >= GRAPH_FIT_PAD - 0.01 && s.x + r <= W - GRAPH_FIT_PAD + 0.01, `circle ${n.id} x inside`);
+      assert.ok(s.y - r >= GRAPH_FIT_PAD - 0.01 && s.y + r <= H - GRAPH_FIT_PAD + 0.01, `circle ${n.id} y inside`);
+      if (n.type !== 'session') {
+        const lw = truncLabel(n.info.label).length * 6.4;
+        assert.ok(s.x + r + 4 + lw <= W - GRAPH_FIT_PAD + 0.5 || v.k <= 0.4 + 1e-9, `label ${n.id} inside right edge`);
+      }
+    }
+  });
+  test('labelCandidates: sessions only at zoom 1.6 or when focused; agents always', () => {
+    const nodes = [{ id: 'a:1', type: 'agent', x: 0, y: 0, r: 10, info: { label: 'Ash' } },
+      { id: 's:1', type: 'session', x: 40, y: 0, r: 6, info: { label: 'chat' } }];
+    assert.deepEqual(labelCandidates(nodes, { x: 0, y: 0, k: 1 }).map(c => c.id), ['a:1']);
+    assert.deepEqual(labelCandidates(nodes, { x: 0, y: 0, k: 1.6 }).map(c => c.id).sort(), ['a:1', 's:1']);
+    assert.ok(labelCandidates(nodes, { x: 0, y: 0, k: 1 }, new Set(['s:1'])).some(c => c.id === 's:1'));
+  });
+  test('placeLabels: no two placed boxes overlap (agents excepted) and agents are always placed', () => {
+    const nodes = [];
+    for (let i = 0; i < 40; i++) nodes.push({ id: 'p:' + i, type: 'project', x: (i % 8) * 10, y: Math.floor(i / 8) * 8, r: 8, info: { label: 'project number ' + i } });
+    nodes.push({ id: 'a:1', type: 'agent', x: 5, y: 5, r: 10, info: { label: 'Agent' } });
+    const boxes = placeLabels(labelCandidates(nodes, { x: 100, y: 100, k: 1 }), s => s.length * 6.4);
+    assert.ok(boxes.some(b => b.id === 'a:1'), 'agent placed');
+    for (let i = 0; i < boxes.length; i++) for (let j = i + 1; j < boxes.length; j++) {
+      if (boxes[i].type === 'agent' && boxes[j].type === 'agent') continue;
+      assert.equal(boxesOverlap(boxes[i], boxes[j], 2), false, `${boxes[i].id} vs ${boxes[j].id}`);
+    }
+    assert.ok(boxes.length < 41, 'crowded projects are skipped');
+  });
+  test('repulseFor grows with node count and on narrow canvases, capped', () => {
+    assert.ok(repulseFor(60, 360) > repulseFor(10, 360));
+    assert.ok(repulseFor(30, 360) > repulseFor(30, 1000));
+    assert.ok(repulseFor(10000, 360) <= 2400 * 2.2 * 1.25 + 1e-6);
   });
 });
