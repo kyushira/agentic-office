@@ -1,5 +1,5 @@
 import { React } from './sdk.js';
-import { usageRingModel, clipReason } from './usage-model.js';
+import { usageRingModel, reasonText } from './usage-model.js';
 import { resetCountdown } from './format.js';
 
 const { useState } = React;
@@ -60,7 +60,7 @@ export function UsageRings({ usage, now }) {
       </ul>
       {!m.available
         ? <p className="dk-note dk-uavail" role="status" title={m.reason || undefined}>
-            {`Claude usage unavailable: ${clipReason(m.reason)}`}</p>
+            {`Claude usage unavailable: ${reasonText(m.reason)}`}</p>
         : <p className="dk-note dk-uscope">Claude values are estimated (Pro weekly % has no public API). Account-wide, not per agent.</p>}
     </div>);
 }
