@@ -6,12 +6,15 @@ open tabs cost one scan.
 """
 import asyncio
 import importlib.util
+import json
 import threading
 import time
 from pathlib import Path
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Query, Request
 from fastapi.responses import JSONResponse
+from starlette.datastructures import UploadFile
+from starlette.requests import Request as StarletteRequest
 
 _spec = importlib.util.spec_from_file_location("agent_office_collect", Path(__file__).with_name("collect.py"))
 collect = importlib.util.module_from_spec(_spec)
@@ -32,6 +35,10 @@ _pspec.loader.exec_module(projects)
 _mspec = importlib.util.spec_from_file_location("agent_office_memory", Path(__file__).with_name("memory.py"))
 memory = importlib.util.module_from_spec(_mspec)
 _mspec.loader.exec_module(memory)
+
+_ispec = importlib.util.spec_from_file_location("agent_office_inbox", Path(__file__).with_name("inbox.py"))
+inbox = importlib.util.module_from_spec(_ispec)
+_ispec.loader.exec_module(inbox)
 
 router = APIRouter()
 NO_STORE = {"Cache-Control": "no-store", "Pragma": "no-cache"}
@@ -110,10 +117,120 @@ async def comms_endpoint(since: float | None = None, limit: int = 100):
 
 @router.get("/memory")
 async def memory_endpoint(q: str = Query("", max_length=200), agent: str | None = None, limit: int = 20):
-    """Read-only full-text search over assistant and tool messages in every state.db (see memory.py).
-    limit is clamped to 1..50; an unknown agent -> 404."""
+    """Read-only full-text search over assistant and tool messages in every state.db (see memory.py), plus the
+    drop-box text notes (agent 'inbox'). limit is clamped to 1..50; an unknown agent -> 404."""
     lim = max(1, min(limit, memory.MAX_LIMIT))
-    result = await asyncio.to_thread(memory.search, q, agent, lim, None)
+    result = await asyncio.to_thread(memory.search, q, agent, lim, None, inbox_dir=inbox.inbox_dir())
     if result["unknown_agent"]:
         return JSONResponse({"error": "unknown agent"}, status_code=404, headers=NO_STORE)
     return JSONResponse(result, headers=NO_STORE)
+
+
+# ---- Memory drop box (inbox.py): POST saves, GET lists names, DELETE removes one generated name. -----------------
+# Writes need the X-Requested-With header and a same-origin Origin/Sec-Fetch-Site (inbox.check_write_request).
+# Refusals carry the status from inbox.InboxError; the body is {"error": ..., "detail"?} with no paths or contents.
+
+def _forbidden(reason: str) -> JSONResponse:
+    return JSONResponse({"error": "forbidden", "detail": reason}, status_code=403, headers=NO_STORE)
+
+
+def _refused(e) -> JSONResponse:
+    return JSONResponse({"error": e.message}, status_code=e.status, headers=NO_STORE)
+
+
+async def _read_capped(request: Request) -> bytes:
+    """Whole request body, refused with 413 past inbox.MAX_BODY_BYTES (checked on Content-Length and while reading)."""
+    cl = request.headers.get("content-length", "")
+    if cl.isdigit() and int(cl) > inbox.MAX_BODY_BYTES:
+        raise inbox.InboxError(413, "request too large")
+    chunks, total = [], 0
+    async for chunk in request.stream():
+        total += len(chunk)
+        if total > inbox.MAX_BODY_BYTES:
+            raise inbox.InboxError(413, "request too large")
+        chunks.append(chunk)
+    return b"".join(chunks)
+
+
+def _replay(body: bytes):
+    """A receive callable that yields an already-read body once, so Starlette can parse multipart from it."""
+    sent = False
+
+    async def receive():
+        nonlocal sent
+        if sent:
+            return {"type": "http.disconnect"}
+        sent = True
+        return {"type": "http.request", "body": body, "more_body": False}
+
+    return receive
+
+
+async def _parse_save(request: Request):
+    """Returns a zero-argument callable that performs the save (run in a worker thread). Raises InboxError on bad
+    input, before anything is written."""
+    body = await _read_capped(request)
+    ctype = request.headers.get("content-type", "").split(";")[0].strip().lower()
+    if ctype == "multipart/form-data":
+        form = await StarletteRequest(request.scope, receive=_replay(body)).form()
+        try:
+            up = form.get("file")
+            if not isinstance(up, UploadFile):
+                raise inbox.InboxError(422, "missing file field")
+            data = await up.read()
+            filename = up.filename
+            title = form.get("title")
+        finally:
+            await form.close()
+        return lambda: inbox.save_file(filename, data, title if isinstance(title, str) else None)
+    if ctype == "application/json":
+        try:
+            payload = json.loads(body or b"{}")
+        except ValueError:
+            raise inbox.InboxError(422, "body is not valid JSON")
+        if not isinstance(payload, dict):
+            raise inbox.InboxError(422, "body must be a JSON object")
+        title = payload.get("title")
+        kind = payload.get("kind")
+        if kind == "text":
+            return lambda: inbox.save_text(payload.get("text"), title)
+        if kind == "url":
+            return lambda: inbox.save_url(payload.get("text"), title)
+        if kind == "file":
+            return lambda: inbox.save_b64(payload.get("name"), payload.get("content_b64"), title)
+        raise inbox.InboxError(422, "kind must be text, url or file")
+    raise inbox.InboxError(415, "send application/json or multipart/form-data")
+
+
+@router.post("/inbox")
+async def inbox_save(request: Request):
+    reason = inbox.check_write_request(request.headers)
+    if reason:
+        return _forbidden(reason)
+    try:
+        saver = await _parse_save(request)
+        meta = await asyncio.to_thread(saver)
+    except inbox.InboxError as e:
+        return _refused(e)
+    except OSError:
+        return JSONResponse({"error": "save failed"}, status_code=500, headers=NO_STORE)
+    return JSONResponse(meta, status_code=201, headers=NO_STORE)
+
+
+@router.get("/inbox")
+async def inbox_list():
+    """Saved drop-box items, newest first, max 100: name, size, kind, mtime. No contents."""
+    items = await asyncio.to_thread(inbox.list_items)
+    return JSONResponse({"items": items}, headers=NO_STORE)
+
+
+@router.delete("/inbox/{name}")
+async def inbox_delete(name: str, request: Request):
+    reason = inbox.check_write_request(request.headers)
+    if reason:
+        return _forbidden(reason)
+    try:
+        await asyncio.to_thread(inbox.delete_item, name)
+    except inbox.InboxError as e:
+        return _refused(e)
+    return JSONResponse({"deleted": name}, headers=NO_STORE)

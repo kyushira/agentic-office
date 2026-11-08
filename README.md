@@ -28,6 +28,28 @@ the last 5000 rows per DB when that index is missing (the response says which mo
 searched or returned. Snippets are redacted: secrets, e-mail addresses, and absolute paths outside
 `/opt/data/projects`. `limit` is clamped to 1-50 and `q` is capped at 200 characters. Code:
 `plugin/agent-office/dashboard/memory.py`; tests: `test/test_memory.py`.
+Drop-box text notes (`.txt`, `.md`) in the inbox folder are searched too, as results with `agent: "inbox"`
+(newest 100 notes, substring match on the first 8 KiB, no PDFs).
+
+### Memory drop box
+
+Notes saved to the inbox folder (`/opt/data/memory/inbox`, or `$AGENT_DECK_INBOX_DIR`; created 0700).
+
+- `POST /api/plugins/agent-office/inbox`. Send `Content-Type: application/json` as `{"kind":"text","text":"...","title"?}`
+  or `{"kind":"url","text":"https://...","title"?}` (saved as a `.md` note holding the URL; never fetched), or
+  `{"kind":"file","name":"x.pdf","content_b64":"..."}`. Multipart `multipart/form-data` with a `file` field (and
+  optional `title`) also works. Answers 201 with `{name, size, kind}`.
+- Allowed: `.txt`, `.md`, `.pdf` (PDFs must start with `%PDF-`; text must be UTF-8 without NUL). Other types are 415.
+  Each item is capped at 2 MiB (413), pasted text at 256 KiB, the request body at 3 MiB.
+- Names are generated: `<UTC stamp>-<slug>.<ext>`, slug `[a-z0-9-]` up to 40 characters, `-N` on collision. Client
+  file names with `/`, `\`, `..`, `%` or NUL are refused (422). Files are 0600 and never overwritten.
+- `GET /api/plugins/agent-office/inbox` returns `{items: [{name, size, kind, mtime}]}`, newest first, max 100. No contents.
+- `DELETE /api/plugins/agent-office/inbox/{name}` removes one item. The name must match the generated pattern and be a
+  regular file in the folder; otherwise 400 (malformed) or 404 (missing).
+- Writes (POST, DELETE) need `X-Requested-With: agent-deck`. A present `Origin` must match the `Host` header, and
+  `Sec-Fetch-Site` must be `same-origin` or `none`; otherwise 403. The dashboard's own auth runs first.
+- Code: `plugin/agent-office/dashboard/inbox.py` (pure functions) and the routes in `plugin_api.py`; tests:
+  `test/test_inbox.py`.
 
 ## Develop
 

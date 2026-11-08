@@ -279,6 +279,8 @@ class EndpointTests(unittest.TestCase):
         make_home(Path(self._tmp.name), "default", [("s1", "assistant", "deck note", None)])
         self._env = os.environ.get("AGENT_OFFICE_ROOT")
         os.environ["AGENT_OFFICE_ROOT"] = self._tmp.name
+        self._inbox_env = os.environ.get("AGENT_DECK_INBOX_DIR")
+        os.environ["AGENT_DECK_INBOX_DIR"] = str(Path(self._tmp.name) / "no-inbox")  # never the real drop box
         spec = importlib.util.spec_from_file_location("plugin_api_under_test", _DASH / "plugin_api.py")
         self.api = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(self.api)
@@ -288,6 +290,10 @@ class EndpointTests(unittest.TestCase):
             os.environ.pop("AGENT_OFFICE_ROOT", None)
         else:
             os.environ["AGENT_OFFICE_ROOT"] = self._env
+        if self._inbox_env is None:
+            os.environ.pop("AGENT_DECK_INBOX_DIR", None)
+        else:
+            os.environ["AGENT_DECK_INBOX_DIR"] = self._inbox_env
         self._tmp.cleanup()
 
     def call(self, **kw):

@@ -16,6 +16,7 @@ redact.redact_memory before they leave: secrets, e-mail addresses, absolute path
 from __future__ import annotations
 
 import importlib.util
+import os
 import re
 import sqlite3
 import time
@@ -31,8 +32,10 @@ def _load(name: str):
 
 collect = _load("collect")
 redact = _load("redact")
+inbox = _load("inbox")
 
 DEFAULT_LIMIT, MAX_LIMIT = 20, 50
+INBOX_AGENT = "inbox"  # result label for drop-box notes; not a profile name, and agent=inbox is not a filter
 Q_CAP, TERM_CAP = 200, 8
 SCAN_ROWS = 5000  # LIKE fallback: last N assistant/tool rows per DB
 HEAD_CAP = 8192  # text read per message (same cap as the messages_fts index for tool rows)
@@ -167,19 +170,45 @@ def _row(name: str, r: tuple, mode: str, ts: list[str]) -> tuple[dict, tuple]:
     return out, key
 
 
+def _inbox_hits(d: Path, ts: list[str]) -> tuple[int, list[tuple[tuple, dict]]]:
+    """(notes scanned, [(sort key, row)]). Scans the newest inbox.LIST_MAX items, text (.txt) and markdown (.md) only:
+    PDFs are never searched. A note matches when every term appears (case-insensitive) in its first HEAD_CAP bytes,
+    the same text the snippet is cut from. O_NOFOLLOW: a symlink is never opened."""
+    notes = [r for r in inbox.list_items(base=d) if r["kind"] in ("text", "markdown")]
+    hits = []
+    for r in notes:
+        try:
+            fd = os.open(d / r["name"], os.O_RDONLY | os.O_NOFOLLOW)
+            with os.fdopen(fd, "rb") as f:
+                text = f.read(HEAD_CAP).decode("utf-8", errors="replace")
+        except OSError:
+            continue
+        low = text.lower()
+        if not all(t.lower() in low for t in ts):
+            continue
+        snippet = _snippet(text, ts)
+        row = {"agent": INBOX_AGENT, "session_id": r["name"], "role": "note", "ts": float(r["mtime"]),
+               "snippet": snippet, "redacted": snippet.count(redact.MARK) + snippet.count(redact.ENV_MARK)}
+        hits.append(((1, 0.0, -float(r["mtime"])), row))
+    return len(notes), hits
+
+
 def _empty(query: str) -> dict:
     return {"query": query, "results": [], "redacted_total": 0, "fts5": False, "mode": "none", "searched": [],
-            "errors": [], "unknown_agent": False}
+            "errors": [], "unknown_agent": False, "inbox_scanned": 0}
 
 
-def search(q, agent: str | None = None, limit=DEFAULT_LIMIT, base=None) -> dict:
+def search(q, agent: str | None = None, limit=DEFAULT_LIMIT, base=None, inbox_dir: Path | None = None) -> dict:
     """Search assistant and tool messages across the agents' state.db files.
 
     Returns {query, results: [{agent, session_id, session_title?, role, ts, snippet, redacted}], redacted_total,
     fts5 (every searched DB used messages_fts), mode ('fts5' | 'like' | 'mixed' | 'none'), searched: [agents],
     errors: [str], unknown_agent (bool)}. An unknown agent gives an error and no results; a missing DB is skipped and
     listed in errors. `redacted` counts the markers in one snippet and session title; redacted_total sums them over
-    the returned rows. An empty or punctuation-only query returns no results and opens no DB."""
+    the returned rows. An empty or punctuation-only query returns no results and opens no DB.
+
+    inbox_dir (None = no inbox scan) adds drop-box notes as results with agent 'inbox' when agent is None;
+    inbox_scanned counts the text notes that were checked."""
     query = q[:Q_CAP] if isinstance(q, str) else ""
     out = _empty(query)
     ts = terms(query)
@@ -222,6 +251,9 @@ def search(q, agent: str | None = None, limit=DEFAULT_LIMIT, base=None) -> dict:
         for r in rows:
             row, key = _row(name, r, mode, ts)
             cands.append((key, row))
+    if inbox_dir is not None and agent is None:
+        out["inbox_scanned"], inbox_cands = _inbox_hits(inbox_dir, ts)
+        cands.extend(inbox_cands)
     cands.sort(key=lambda x: x[0])
     out["results"] = [row for _, row in cands[:lim]]
     out["redacted_total"] = sum(r["redacted"] for r in out["results"])
