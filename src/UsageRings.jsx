@@ -32,7 +32,8 @@ export function UsageRings({ usage, now }) {
           const empty = r.pct == null;
           const centre = empty ? '—' : r.label;
           return (
-            <li key={r.id} className={'dk-uring-li' + (r.demo ? ' is-demo' : '') + (empty ? ' is-empty' : '')}>
+            <li key={r.id} className={'dk-uring-li' + (r.demo ? ' is-demo' : '') + (empty ? ' is-empty' : '')}
+              data-provider={r.provider}>
               {mode === 'ring' ? (
                 <div className="dk-uring-wrap" style={{ '--c-rgb': rgb }} role="img" aria-label={aria}
                   data-provider={r.provider}>

@@ -512,6 +512,30 @@ export function cardState(a) {
 }
 export function cardWord(state) { return CARD_WORDS[state] || 'Idle'; }
 
+/** Provider of an agent's main model: claude (copper), deepseek (cyan), codex (sapphire), or null (other). */
+export function providerKey(a) {
+  const s = `${(a && a.modelId) || ''} ${(a && a.model) || ''}`.toLowerCase();
+  if (/claude|sonnet|opus|haiku/.test(s)) return 'claude';
+  if (/deepseek/.test(s)) return 'deepseek';
+  if (/codex|gpt|\bo[1-9]\b/.test(s)) return 'codex';
+  return null;
+}
+
+const PROVIDER_RGB = { claude: 'var(--c-claude-rgb)', deepseek: 'var(--c-deepseek-rgb)', codex: 'var(--c-codex-rgb)' };
+const STATE_GLOW_RGB = { running: 'var(--c-live-rgb)', waiting: 'var(--c-gold-rgb)', error: 'var(--c-danger-rgb)' };
+const OFFLINE_RGB = '138, 134, 151';   // --text-3: offline has no hue
+
+/**
+ * Edge and wash colour for one agent card (CSS value for --c-rgb). Running teal, waiting gold, error red;
+ * idle keys to the provider colour (copper for Claude, cyan for DeepSeek) so idle cards are not grey;
+ * offline stays neutral grey; anything else falls back to the accent violet.
+ */
+export function cardRgb(a, state) {
+  if (STATE_GLOW_RGB[state]) return STATE_GLOW_RGB[state];
+  if (state === 'offline') return OFFLINE_RGB;
+  return PROVIDER_RGB[providerKey(a)] || 'var(--c-accent-rgb)';
+}
+
 /** Running pulse cap: the ids of the first `max` running agents in list order. Only these pulse (max 3 on screen). */
 export const PULSE_MAX = 3;
 export function pulseIds(agents, max = PULSE_MAX) {

@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { cardState, cardWord, cardMeta, pulseIds, PULSE_MAX } from '../src/deck-model.js';
+import { cardState, cardWord, cardMeta, pulseIds, PULSE_MAX, providerKey, cardRgb } from '../src/deck-model.js';
 
 test('cardState: working is running, waiting is waiting, idle and unknown are idle', () => {
   assert.equal(cardState({ status: 'working' }), 'running');
@@ -69,4 +69,19 @@ test('cardMeta: running without a duration keeps the time; a duration on a non-r
   const now = 1_800_000_000;
   assert.deepEqual(cardMeta({ lastActive: now - 720 }, 'running', null, now), { word: 'Running', time: '12m ago', dur: null });
   assert.deepEqual(cardMeta({ lastActive: now - 720 }, 'error', '5m', now), { word: 'Error', time: '12m ago', dur: null });
+});
+
+test('cardRgb: state hue for running, waiting and error; idle keys to provider; offline grey', () => {
+  const claude = { modelId: 'claude-sonnet-5-5[1m]', model: 'Sonnet 5.5' };
+  const deep = { model: 'DeepSeek V4 Flash' };
+  assert.equal(providerKey(claude), 'claude');
+  assert.equal(providerKey(deep), 'deepseek');
+  assert.equal(providerKey({ model: 'Gemini 3.6 Flash' }), null);
+  assert.equal(cardRgb(claude, 'running'), 'var(--c-live-rgb)');
+  assert.equal(cardRgb(claude, 'waiting'), 'var(--c-gold-rgb)');
+  assert.equal(cardRgb(claude, 'error'), 'var(--c-danger-rgb)');
+  assert.equal(cardRgb(claude, 'idle'), 'var(--c-claude-rgb)');
+  assert.equal(cardRgb(deep, 'idle'), 'var(--c-deepseek-rgb)');
+  assert.equal(cardRgb({ model: 'Gemini' }, 'idle'), 'var(--c-accent-rgb)');
+  assert.equal(cardRgb(claude, 'offline'), '138, 134, 151');
 });

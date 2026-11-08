@@ -1,8 +1,5 @@
 import { React } from './sdk.js';
-import { cardState, cardMeta, pulseIds, rosterDuration } from './deck-model.js';
-
-// Glow hue per state (design 3.7): running teal, waiting gold, error red. Idle and offline have no glow.
-const STATE_RGB = { running: 'var(--c-live-rgb)', waiting: 'var(--c-gold-rgb)', error: 'var(--c-danger-rgb)' };
+import { cardState, cardMeta, cardRgb, pulseIds, rosterDuration } from './deck-model.js';
 
 /**
  * One status card per agent (design 3.7 and 6). Row A: status dot, name, model chip. Row B: the current task,
@@ -21,11 +18,10 @@ export function AgentCards({ agents, sessions, now, sel, onPick }) {
           const meta = cardMeta(a, st, rosterDuration(a, (sessions || {})[a.id], now), now);
           const task = String(a.activity || '').trim() || 'no current task';
           const pressed = sel === 'a:' + a.id;
-          const rgb = STATE_RGB[st];
           return (
             <li key={a.id} className="dk-acard-li">
               <button type="button" className={'dk-acard is-' + st + (pressed ? ' is-pressed' : '')}
-                style={{ '--dk-c': a.color || '#8a8a8a', ...(rgb ? { '--c-rgb': rgb } : {}) }} onClick={() => onPick(a.id)}
+                style={{ '--dk-c': a.color || '#8a8a8a', '--c-rgb': cardRgb(a, st) }} onClick={() => onPick(a.id)}
                 aria-label={`${a.name || a.id}, ${meta.word}, ${task}${meta.dur ? `, ${meta.dur}` : ''}. Open panel`}>
                 <span className="dk-acard-a">
                   <i className={'dk-acard-dot' + (pulse.has(a.id) ? ' is-pulse' : '')} aria-hidden="true" />
