@@ -20,6 +20,15 @@ It's read-only, and its data endpoint sits behind the dashboard login.
 - Every string is redacted server-side. A missing file gives "No projects.json registry" on the tab; a malformed file is reported as an error and never crashes the API.
 - The file lives outside the repo and is not committed.
 
+## Memory
+
+`GET /api/plugins/agent-office/memory?q=&agent=&limit=` is a read-only full-text search over assistant and tool
+messages in every Hermes `state.db`. It uses the existing `messages_fts` FTS5 index and falls back to a LIKE scan of
+the last 5000 rows per DB when that index is missing (the response says which mode ran). User messages are never
+searched or returned. Snippets are redacted: secrets, e-mail addresses, and absolute paths outside
+`/opt/data/projects`. `limit` is clamped to 1-50 and `q` is capped at 200 characters. Code:
+`plugin/agent-office/dashboard/memory.py`; tests: `test/test_memory.py`.
+
 ## Develop
 
     export PATH=/opt/hermes/tools/node-26.12.1-linux-x64/bin:$PATH

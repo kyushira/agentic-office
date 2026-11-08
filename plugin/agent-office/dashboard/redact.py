@@ -103,6 +103,25 @@ def redact(text, limit=None) -> str:
     return cap(_scrub(text if isinstance(text, str) else str(text)), limit)
 
 
+# Memory search only (memory.py). Kept out of _scrub so /feed and /comms output does not change.
+# Absolute paths are redacted unless they sit under /opt/data/projects; the lookbehinds stop matches inside words,
+# URLs (':' or '/' before the slash) and relative paths, and each repeat needs a '/', so the regexes stay linear.
+_EMAIL = re.compile(r"(?<![A-Za-z0-9._%+\-])[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}")
+_ABS_PATH = re.compile(r"(?<![\w/.:~\-])/(?!opt/data/projects/)[\w.\-@+~]+(?:/[\w.\-@+~]+)+")
+_HOME_PATH = re.compile(r"(?<![\w/.:~\-])~/[\w.\-@+~]+(?:/[\w.\-@+~]+)*")
+
+
+def redact_memory(text, limit=None) -> str:
+    """redact() plus e-mail addresses and absolute paths outside /opt/data/projects (memory search snippets)."""
+    if text is None:
+        return ""
+    s = _scrub(text if isinstance(text, str) else str(text))
+    s = _EMAIL.sub(MARK, s)
+    s = _ABS_PATH.sub(MARK, s)
+    s = _HOME_PATH.sub(MARK, s)
+    return cap(s, limit)
+
+
 # Hermes wraps web_*/browser_*/mcp_* tool output (agent/tool_dispatch_helpers.py):
 #   <untrusted_tool_result source="NAME">\n<NOTICE>\n\n<content>\n</untrusted_tool_result>
 # The notice is boilerplate for the model. Display-only: callers must redact the full text before stripping.

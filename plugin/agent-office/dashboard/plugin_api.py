@@ -10,7 +10,7 @@ import threading
 import time
 from pathlib import Path
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Query
 from fastapi.responses import JSONResponse
 
 _spec = importlib.util.spec_from_file_location("agent_office_collect", Path(__file__).with_name("collect.py"))
@@ -28,6 +28,10 @@ _fspec.loader.exec_module(feed)
 _pspec = importlib.util.spec_from_file_location("agent_office_projects", Path(__file__).with_name("projects.py"))
 projects = importlib.util.module_from_spec(_pspec)
 _pspec.loader.exec_module(projects)
+
+_mspec = importlib.util.spec_from_file_location("agent_office_memory", Path(__file__).with_name("memory.py"))
+memory = importlib.util.module_from_spec(_mspec)
+_mspec.loader.exec_module(memory)
 
 router = APIRouter()
 NO_STORE = {"Cache-Control": "no-store", "Pragma": "no-cache"}
@@ -102,3 +106,14 @@ async def comms_endpoint(since: float | None = None, limit: int = 100):
     """Redacted agent-to-agent messages and delegations, newest first."""
     result = await asyncio.to_thread(feed.comms, since, max(1, min(limit, 300)), None)
     return JSONResponse(result, headers={"Cache-Control": "no-store"})
+
+
+@router.get("/memory")
+async def memory_endpoint(q: str = Query("", max_length=200), agent: str | None = None, limit: int = 20):
+    """Read-only full-text search over assistant and tool messages in every state.db (see memory.py).
+    limit is clamped to 1..50; an unknown agent -> 404."""
+    lim = max(1, min(limit, memory.MAX_LIMIT))
+    result = await asyncio.to_thread(memory.search, q, agent, lim, None)
+    if result["unknown_agent"]:
+        return JSONResponse({"error": "unknown agent"}, status_code=404, headers=NO_STORE)
+    return JSONResponse(result, headers=NO_STORE)
