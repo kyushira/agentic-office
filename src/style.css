@@ -10,7 +10,7 @@
   --dk-glow: rgba(var(--c-live-rgb), .35); --dk-glow-soft: rgba(var(--c-live-rgb), .14); --dk-on-hot: #04110F;
   --dk-red: var(--c-danger); --dk-warn: var(--c-gold);
   /* texture and motion */
-  --dk-ease: cubic-bezier(.2, .7, .3, 1); --dk-t-fast: 120ms; --dk-t: 180ms; --dk-t-slow: 320ms; --dk-pulse: 2.4s;
+  --dk-ease: cubic-bezier(.2, .7, .3, 1); --dk-t-fast: 120ms; --dk-t: 180ms; --dk-t-slow: 320ms;
   --dk-mono: var(--font-mono); --dk-sans: var(--font-sans);
   position: relative; display: flex; flex-direction: column; overflow: hidden; border-radius: 10px;
   background: radial-gradient(120% 80% at 0% 0%, rgba(139, 92, 246, .14), transparent 60%), var(--bg); color: var(--dk-ink); font: 14px/1.35 var(--dk-sans);
@@ -28,7 +28,6 @@
 .dk-acts { display: flex; gap: 6px; flex: none; align-items: center; }
 .dk-dot { width: 7px; height: 7px; background: var(--dk-line-2); display: inline-block; }
 .dk-dot.on { background: var(--dk-hot); box-shadow: 0 0 6px var(--dk-glow); }
-.dk-root:not(.is-lite) .dk-top .dk-dot.on { animation: dk-pulse var(--dk-pulse) var(--dk-ease) infinite; }
 .dk-btn { background: var(--dk-tile); border: 1px solid var(--dk-line-2); border-radius: 6px; min-width: 44px; height: 32px; padding: 0 12px; font-size: 12px; line-height: 1; box-sizing: border-box; display: inline-flex; align-items: center; justify-content: center; white-space: nowrap; opacity: 1; color: var(--dk-soft); box-shadow: none; text-shadow: none;
   transition: border-color var(--dk-t) var(--dk-ease), ; }
 .dk-btn.on { color: var(--dk-hot); border-color: var(--dk-dim); box-shadow: 0 0 0 1px var(--dk-glow-soft), 0 0 10px var(--dk-glow-soft); }
@@ -66,7 +65,6 @@
 .dk-tile.is-ghost { opacity: .4; }
 
 .dk-badge { position: absolute; top: 6px; left: 6px; width: 7px; height: 7px; background: var(--dk-red); box-shadow: 0 0 5px color-mix(in srgb, var(--dk-red) 60%, transparent); }
-@keyframes dk-pulse { 50% { opacity: .45; } }
 
 /* sprite area: same size and position on every tile (text below never moves it) */
 .dk-art { position: relative; flex: none; width: 64%; aspect-ratio: 1 / 1; align-self: center; display: flex; align-items: center; justify-content: center; }
@@ -202,9 +200,6 @@
 
 /* portraits: blink every few seconds; working = small typing bob; Lite = still */
 .dk-eyes-shut { opacity: 0; }
-@keyframes dk-blink-shut { 0%, 95% { opacity: 0; } 96%, 100% { opacity: 1; } }
-@keyframes dk-blink-open { 0%, 95% { opacity: 1; } 96%, 100% { opacity: 0; } }
-@keyframes dk-bob { from { transform: translateY(0); } to { transform: translateY(3%); } }
 .dk-tile.is-pressed .dk-sprite { filter: none; }
 
 /* fullscreen deck mode */
@@ -303,7 +298,6 @@ html.ao-full-active { background-color: var(--bg) !important; }
 @keyframes dk-ring-in { from { opacity: 0; transform: scale(.85); } }
 .dk-ring-orbit { transform-box: view-box; transform-origin: 21px 21px; }
 .dk-ring-orbit circle { fill: var(--dk-hot); }
-@keyframes dk-orbit { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
 .dk-tile.is-pressed .dk-ring-track { stroke: color-mix(in srgb, var(--dk-on-hot) 25%, transparent); }
 .dk-tile.is-pressed .dk-ring-arc { stroke: var(--dk-on-hot); }
 .dk-tile.is-pressed .dk-ring-orbit circle { fill: var(--dk-on-hot); }
