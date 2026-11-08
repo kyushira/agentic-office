@@ -1,6 +1,7 @@
 import { React, useState, useEffect } from './sdk.js';
 import { Sprite } from './Sprite.jsx';
 import { clockText, paneTabNext } from './deck-model.js';
+import { visibleInterval } from './visible-timer.js';
 
 /** Live state of a media query (phone vs desktop layout). */
 export function useMedia(query) {
@@ -20,7 +21,7 @@ export function useMedia(query) {
 /** 'Updated 4s ago' from the last good poll. Ticks itself each second so the whole deck does not re-render. */
 export function UpdatedAgo({ at, error }) {
   const [, tick] = useState(0);
-  useEffect(() => { const id = setInterval(() => tick(x => x + 1), 1000); return () => clearInterval(id); }, []);
+  useEffect(() => visibleInterval(() => tick(x => x + 1), 1000), []);
   if (error) return <span className="dk-pill is-err">Connection lost · retrying</span>;
   if (!at) return <span className="dk-pill">Updating…</span>;
   const s = Math.max(0, Math.round((Date.now() - at) / 1000));
@@ -30,7 +31,7 @@ export function UpdatedAgo({ at, error }) {
 /** Local clock, HH:MM, refreshed every 15 seconds. */
 export function LiveClock() {
   const [now, setNow] = useState(() => new Date());
-  useEffect(() => { const id = setInterval(() => setNow(new Date()), 15000); return () => clearInterval(id); }, []);
+  useEffect(() => visibleInterval(() => setNow(new Date()), 15000), []);
   return <time className="dk-pill dk-clock" dateTime={now.toISOString()}>{clockText(now)}</time>;
 }
 

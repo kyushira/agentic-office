@@ -636,3 +636,32 @@ html.ao-full-active { background-color: var(--bg) !important; }
 .dk-root .dk-rail-me { display: grid; place-items: center; width: 32px; height: 32px; margin-top: 4px; box-sizing: border-box; border-radius: 50%;
   border: 1px solid var(--dk-dim); background: color-mix(in srgb, var(--dk-hot) 14%, var(--dk-tile)); color: var(--dk-hot); font-size: 13px; font-weight: 700; }
 @media (prefers-reduced-motion: reduce) { .dk-root .dk-rail-btn, .dk-root .dk-rail-tip { transition: none; } }
+
+/* usage rings (design 3.5): pure CSS conic ring; --p animates on mount only; the glow is a static drop-shadow on the wrapper */
+@property --p { syntax: '<number>'; inherits: true; initial-value: 0; }
+.dk-root .dk-usage-rings { display: flex; flex-direction: column; gap: 12px; padding: 12px; }
+.dk-root .dk-urings-seg { display: flex; align-self: flex-end; margin: 0; }
+.dk-root .dk-urings { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.dk-root .dk-uring-li { display: flex; flex-direction: column; align-items: center; gap: 6px; min-width: 0; }
+.dk-root .dk-uring-wrap { filter: drop-shadow(0 0 10px rgba(var(--c-rgb), .3)); }
+.dk-root .dk-uring { --c: rgb(var(--c-rgb)); position: relative; width: 84px; height: 84px; border-radius: 50%;
+  background: conic-gradient(var(--c) calc(var(--p) * 1%), var(--ring-track) 0);
+  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 9px), #000 calc(100% - 8px));
+          mask: radial-gradient(farthest-side, transparent calc(100% - 9px), #000 calc(100% - 8px)); }
+.dk-root .dk-uring-in { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+  font: 600 13px/1 var(--font-mono); font-variant-numeric: tabular-nums; color: var(--text-1); }
+.dk-root .dk-uring-li.is-demo .dk-uring { background: var(--border); }
+.dk-root .dk-uring-li.is-demo .dk-uring-in { color: var(--text-3); }
+.dk-root .dk-uring-name { font-size: 12px; font-weight: 600; color: var(--text-1); }
+.dk-root .dk-uring-sub { font-size: 11px; color: var(--text-3); min-height: 14px; text-align: center; }
+.dk-root .dk-ubar-wrap { display: flex; flex-direction: column; gap: 4px; width: 100%; }
+.dk-root .dk-ubar { position: relative; height: 8px; border-radius: 4px; background: var(--ring-track); overflow: hidden; }
+.dk-root .dk-ubar i { position: absolute; left: 0; top: 0; bottom: 0; width: calc(var(--p) * 1%); background: rgb(var(--c-rgb)); border-radius: 4px; }
+.dk-root .dk-ubar-v { font: 600 12px/1 var(--font-mono); font-variant-numeric: tabular-nums; color: var(--text-1); }
+.dk-root .dk-urings.is-bar .dk-uring-li { align-items: stretch; }
+.dk-root .dk-urings.is-bar .dk-uring-name, .dk-root .dk-urings.is-bar .dk-uring-sub { text-align: left; align-self: flex-start; }
+.dk-root .dk-urings.is-bar .dk-uring-sub { align-self: stretch; }
+@media (max-width: 359px) { .dk-root .dk-urings { grid-template-columns: minmax(0, 1fr); } }
+@media (prefers-reduced-motion: reduce) { .dk-root .dk-uring { transition: none; } }
+.dk-root.is-lite .dk-uring { transition: none; }
+.dk-root .dk-uring { transition: --p 600ms ease-out; }

@@ -8,6 +8,8 @@ import { useDialogFocus } from './dialog-focus.js';
 import { Sprite } from './Sprite.jsx';
 import { useMedia, UpdatedAgo, LiveClock, Bell, NeedsYou, PaneTabs } from './DeckRevamp.jsx';
 import { AgentCards } from './AgentCards.jsx';
+import { UsageRings } from './UsageRings.jsx';
+import { visibleInterval } from './visible-timer.js';
 import Rail from './Rail.jsx';
 
 
@@ -443,7 +445,7 @@ export default function Deck() {
     size(); window.addEventListener('resize', size);
     return () => window.removeEventListener('resize', size);
   }, []);
-  useEffect(() => { const id = setInterval(() => setTick(x => x + 1), 15000); return () => clearInterval(id); }, []);
+  useEffect(() => visibleInterval(() => setTick(x => x + 1), 15000), []);
   useEffect(() => {
     const onVis = () => setHidden(document.visibilityState === 'hidden');
     document.addEventListener('visibilitychange', onVis);
@@ -517,9 +519,8 @@ export default function Deck() {
   useEffect(() => {
     let live = true;
     const pull = () => fetchJSON(USAGE_API).catch(() => ({ available: false })).then(u => { if (live) setUsage(u); });
-    pull();
-    const id = setInterval(pull, 60000);
-    return () => { live = false; clearInterval(id); };
+    const stop = visibleInterval(pull, 60000);
+    return () => { live = false; stop(); };
   }, []);
 
   const enterFull = () => {
@@ -564,8 +565,8 @@ export default function Deck() {
       .then(d => { if (live) setDetail({ sid: detailId, data: d, err: false }); })
       .catch(() => { if (live) setDetail({ sid: detailId, data: null, err: true }); });
     pull();
-    const id = setInterval(pull, DETAIL_MS);
-    return () => { live = false; clearInterval(id); };
+    const stop = visibleInterval(pull, DETAIL_MS);
+    return () => { live = false; stop(); };
   }, [detailId]);
   const detOk = detail && detail.sid === detailId ? detail : null;
 
@@ -606,18 +607,7 @@ export default function Deck() {
       </header>
       {showReason && (ut.reason
         ? <div className="dk-reason">Plan usage unavailable: {ut.reason}</div>
-        : <div className="dk-uplan" role="group" aria-label="Claude plan usage">
-            {ut.windows.map(w => (
-              <div key={w.key} className="dk-urow">
-                <span className="dk-ulabel">{w.label}</span>
-                <Meter pct={w.pct} label={`${w.label}: ${pctStr(w.pct)}`} />
-                <span className="dk-upct">{pctStr(w.pct)}</span>
-                {w.resets === 'n/a' || w.resets === 'reset time not reported'
-                  ? <span className="dk-ures">reset time not reported</span>
-                  : <span className="dk-ures">resets {w.resets}</span>}
-              </div>))}
-            <p className="dk-note dk-uscope">Claude plan usage, account-wide (not per agent).</p>
-          </div>)}
+        : <div className="dk-uplan"><UsageRings usage={usage} now={Date.now()} /></div>)}
       {error && <div className="dk-err">Can't reach the deck data ({error}). Retrying…</div>}
       <div className="dk-scroll">
       <NeedsYou items={needs} onPick={id => setSel('a:' + id)} />
