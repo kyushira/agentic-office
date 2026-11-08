@@ -1,6 +1,6 @@
 import { React, useState, useEffect } from './sdk.js';
 import { Sprite } from './Sprite.jsx';
-import { statusWord, rosterDuration, clockText, paneTabNext } from './deck-model.js';
+import { clockText, paneTabNext } from './deck-model.js';
 
 /** Live state of a media query (phone vs desktop layout). */
 export function useMedia(query) {
@@ -69,37 +69,6 @@ export function NeedsYou({ items, onPick }) {
             </button>
           </li>
         ))}
-      </ul>
-    </section>
-  );
-}
-
-const STATUS_CLS = { working: 'is-working', waiting: 'is-waiting', idle: 'is-idle', offline: 'is-offline' };
-
-/** One card per agent: sprite, status dot, duration tag, name, status word. Tap opens the agent sheet. */
-export function Roster({ agents, sessions, now, sel, onPick }) {
-  if (!agents.length) return null;
-  return (
-    <section id="dk-roster" className="dk-roster-wrap" aria-label="Agent roster">
-      <ul className="dk-roster">
-        {agents.map(a => {
-          const word = statusWord(a.status);
-          const dur = rosterDuration(a, (sessions || {})[a.id], now);
-          const cls = STATUS_CLS[a.status] || 'is-idle';
-          return (
-            <li key={a.id} className="dk-rcard-li">
-              <button type="button" className={'dk-rcard ' + cls + (sel === 'a:' + a.id ? ' is-pressed' : '')}
-                style={{ '--dk-c': a.color || '#8a8a8a' }} onClick={() => onPick(a.id)}
-                aria-label={`${a.name}, ${word}${dur ? `, ${dur}` : ''}. Open panel`}>
-                <span className="dk-rcard-art"><Sprite who={a.id} small working={a.status === 'working'} /></span>
-                <span className="dk-rcard-txt">
-                  <span className="dk-rcard-name">{a.name}{dur && <span className="dk-rtag" title={`${word} for ${dur}`}>{dur}</span>}</span>
-                  <span className="dk-rstat"><i className="dk-rdot" aria-hidden="true" />{word}</span>
-                </span>
-              </button>
-            </li>
-          );
-        })}
       </ul>
     </section>
   );

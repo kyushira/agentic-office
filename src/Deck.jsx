@@ -6,7 +6,8 @@ import { Live } from './Mission.jsx';
 import MissionComms from './MissionComms.jsx';
 import { useDialogFocus } from './dialog-focus.js';
 import { Sprite } from './Sprite.jsx';
-import { useMedia, UpdatedAgo, LiveClock, Bell, NeedsYou, Roster, PaneTabs } from './DeckRevamp.jsx';
+import { useMedia, UpdatedAgo, LiveClock, Bell, NeedsYou, PaneTabs } from './DeckRevamp.jsx';
+import { AgentCards } from './AgentCards.jsx';
 import Rail from './Rail.jsx';
 
 
@@ -191,7 +192,6 @@ function AgentTile({ it, pressed, onPick, blip, still, setRef, pulses, fx }) {
       aria-label={`${a.name}, ${a.role}, ${it.status}` + (hs.length ? `, ${hs.length} helper${hs.length === 1 ? '' : 's'} running` : '')}
       title={swarmTip(hs) || undefined}>
       {(hs.length > 0 || (fx || []).some(x => x.kind === 'out')) && <Swarm live={hs} fx={fx || []} still={still} />}
-      {working && <i className="dk-sweep" aria-hidden="true" />}
       {working && <i className="dk-badge" />}
       {it.helperCount > 0 && <span className="dk-count-chip">{it.helperCount} helper{it.helperCount > 1 ? 's' : ''}</span>}
       {it.ctxPct != null && !it.helperCount && <span className="dk-ctx">{it.ctxPct}% ctx</span>}
@@ -621,7 +621,7 @@ export default function Deck() {
       {error && <div className="dk-err">Can't reach the deck data ({error}). Retrying…</div>}
       <div className="dk-scroll">
       <NeedsYou items={needs} onPick={id => setSel('a:' + id)} />
-      <Roster agents={(state && state.agents) || []} sessions={state && state.sessions} now={now} sel={sel} onPick={id => setSel('a:' + id)} />
+      <AgentCards agents={(state && state.agents) || []} sessions={state && state.sessions} now={now} sel={sel} onPick={id => setSel('a:' + id)} />
       {!desktop && <PaneTabs pane={pane} setPane={setPane} />}
       <div className="dk-panes">
       <section id="dk-pane-office" role="tabpanel" aria-labelledby="dk-pane-tab-office" className="dk-pane dk-pane-office"

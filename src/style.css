@@ -61,18 +61,11 @@
 .dk-tile.is-working::before { width: 62%; }
 .dk-tile.is-working::after { height: 62%; }
 .dk-tile.is-working { border-color: var(--dk-dim); box-shadow: 0 0 0 1px var(--dk-glow-soft), 0 0 14px -4px var(--dk-glow); }
-/* edge-sweep: a slow, faint cyan band that travels along the top edge of a working agent tile.
-   Its own element (the ::before/::after are the L-brackets). Starts off-tile; only transform animates. */
-.dk-sweep { position: absolute; left: 0; top: 0; height: 2px; width: 40%; z-index: 0; pointer-events: none; opacity: .45; transform: translateX(-100%);
-  background: linear-gradient(90deg, transparent, var(--dk-hot), transparent); }
-@keyframes dk-sweep { from { transform: translateX(-100%); } to { transform: translateX(250%); } }   /* 40% band, 250% of it = across the tile */
-.dk-tile.is-pressed .dk-sweep, .dk-root.is-lite .dk-sweep { display: none; }
 .dk-tile:active, .dk-tile.is-pressed { background: var(--dk-hot); border-color: var(--dk-hot); }
 .dk-tile.is-pressed .dk-name, .dk-tile.is-pressed .dk-status, .dk-tile.is-pressed .dk-zz { color: var(--dk-on-hot); }
 .dk-tile.is-ghost { opacity: .4; }
 
 .dk-badge { position: absolute; top: 6px; left: 6px; width: 7px; height: 7px; background: var(--dk-red); box-shadow: 0 0 5px color-mix(in srgb, var(--dk-red) 60%, transparent); }
-.dk-root:not(.is-lite) .is-working .dk-badge { animation: dk-pulse var(--dk-pulse) var(--dk-ease) infinite; }
 @keyframes dk-pulse { 50% { opacity: .45; } }
 
 /* sprite area: same size and position on every tile (text below never moves it) */
@@ -211,7 +204,6 @@
 .dk-eyes-shut { opacity: 0; }
 @keyframes dk-blink-shut { 0%, 95% { opacity: 0; } 96%, 100% { opacity: 1; } }
 @keyframes dk-blink-open { 0%, 95% { opacity: 1; } 96%, 100% { opacity: 0; } }
-.dk-root:not(.is-lite) .dk-sprite.is-work { animation: dk-bob .5s steps(2, jump-none) infinite alternate; }
 @keyframes dk-bob { from { transform: translateY(0); } to { transform: translateY(3%); } }
 .dk-tile.is-pressed .dk-sprite { filter: none; }
 
@@ -309,7 +301,6 @@ html.ao-full-active { background-color: var(--bg) !important; }
 .dk-ring-seg { transform-box: view-box; transform-origin: 21px 21px; }
 .dk-root:not(.is-lite) .dk-ring-seg { animation: dk-ring-in 600ms var(--dk-ease) both; }   /* segments draw in, once per tool set */
 @keyframes dk-ring-in { from { opacity: 0; transform: scale(.85); } }
-.dk-root:not(.is-lite) .dk-ring-arc.is-active { animation: dk-pulse var(--dk-pulse) var(--dk-ease) infinite; }   /* running tool breathes */
 .dk-ring-orbit { transform-box: view-box; transform-origin: 21px 21px; }
 .dk-ring-orbit circle { fill: var(--dk-hot); }
 @keyframes dk-orbit { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
@@ -374,7 +365,6 @@ html.ao-full-active { background-color: var(--bg) !important; }
   .dk-root .dk-eyes-shut { animation: none !important; opacity: 0; }
   .dk-root .dk-eyes-open { animation: none !important; opacity: 1; }
   .dk-root .dk-trace-run, .dk-root .dk-blip { animation: none !important; }   /* static trace, no blip */
-  .dk-root .dk-sweep { display: none !important; }                             /* no edge-sweep */
   .dk-root .dk-meter > i { transition: none !important; }                      /* gauges jump to their value */
   .dk-root .dk-ring-seg, .dk-root .dk-ring-arc.is-active { animation: none !important; }   /* ring is static; running tool keeps full opacity */
   .dk-root .dk-ring-orbit { animation: none !important; }                       /* marker stays put at 12 o'clock */
@@ -490,35 +480,49 @@ html.ao-full-active { background-color: var(--bg) !important; }
 .dk-root .dk-bell-n { min-width: 16px; height: 16px; padding: 0 4px; border-radius: 999px; background: var(--dk-red); color: var(--dk-on-hot);
   font-size: 10px; line-height: 16px; font-weight: 700; text-align: center; }
 
-/* roster strip: one card per agent; horizontal scroll with snap on phone, wraps on desktop */
+/* agent status cards (design 3.7, 6): one per agent, state from cardState(). Phone: vertical list of rows (76px);
+   desktop: two columns (120px). Glow only on running (teal), waiting (gold) and error (red), static. Running gets a
+   2px hairline; offline is a hollow dot with a dashed border. Each state has a text word, so colour is never alone. */
 .dk-root .dk-roster-wrap { flex: none; padding: 8px 8px 0; }
-.dk-root .dk-roster { list-style: none; margin: 0; padding: 2px 2px 6px; display: flex; gap: 8px; overflow-x: auto; overscroll-behavior-x: contain;
-  scroll-snap-type: x proximity; scrollbar-width: none; }
-.dk-root .dk-roster::-webkit-scrollbar { display: none; }
-.dk-root .dk-rcard-li { flex: 0 0 auto; scroll-snap-align: start; }
-.dk-root .dk-rcard { display: flex; align-items: center; gap: 8px; min-width: 132px; min-height: 44px; padding: 5px 10px 5px 6px; box-sizing: border-box;
-  background: var(--dk-tile); border: 1px solid var(--dk-line); border-left: 3px solid var(--dk-c); border-radius: 10px; color: var(--dk-ink); text-align: left; }
-.dk-root .dk-rcard.is-pressed { border-color: var(--dk-dim); box-shadow: 0 0 0 1px var(--dk-glow-soft); }
-.dk-root .dk-rcard.is-offline { opacity: .6; }
-.dk-root .dk-rcard-art { flex: none; width: 32px; height: 32px; display: block; }
-.dk-root .dk-rcard-art .dk-sprite { width: 100%; height: 100%; }
-.dk-root .dk-rcard-txt { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-.dk-root .dk-rcard-name { display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 700; white-space: nowrap; }
-.dk-root .dk-rtag { font-size: 9px; font-weight: 600; padding: 1px 5px; border-radius: 999px; border: 1px solid var(--dk-line-2); color: var(--dk-mut); }
-.dk-root .dk-rstat { display: flex; align-items: center; gap: 5px; font-size: 10px; color: var(--dk-mut); }
-.dk-root .dk-rdot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; flex: none; }
-.dk-root .dk-rcard.is-working .dk-rstat { color: var(--dk-hot); }
-.dk-root .dk-rcard.is-waiting .dk-rstat { color: var(--dk-warn); }
-.dk-root .dk-rcard.is-idle .dk-rstat { color: var(--dk-mut); }
-.dk-root .dk-rcard.is-offline .dk-rstat { color: var(--dk-faint); }
-@media (min-width: 900px) { .dk-root .dk-roster { flex-wrap: wrap; overflow: visible; } }
-/* phone: the strip fades out at its right edge so a partly visible card reads as "scroll for more".
-   The right padding keeps the last card clear of the fade once scrolled to the end. */
-@media (max-width: 899px) {
-  .dk-root .dk-roster { padding-right: 28px;
-    -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent);
-    mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent); }
+.dk-root .dk-acards { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; }
+.dk-root .dk-acard-li { min-width: 0; }
+.dk-root .dk-acard { position: relative; display: flex; flex-direction: column; justify-content: center; gap: 3px; width: 100%; min-height: 76px;
+  padding: 10px 12px 12px; box-sizing: border-box; overflow: hidden; border-radius: var(--radius-card); color: var(--text-1); text-align: left;
+  background: linear-gradient(180deg, rgba(255, 255, 255, .04), rgba(255, 255, 255, 0)), var(--surface-1);
+  border: 1px solid var(--border); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .06); }
+.dk-root .dk-acard.is-pressed { border-color: var(--border-strong); }
+.dk-root .dk-acard.is-running, .dk-root .dk-acard.is-waiting, .dk-root .dk-acard.is-error {
+  box-shadow: 0 0 0 1px rgba(var(--c-rgb), .35), 0 0 12px rgba(var(--c-rgb), .16), inset 0 1px 0 rgba(255, 255, 255, .06); }
+.dk-root .dk-acard.is-running { border-color: rgba(var(--c-rgb), .45); }
+.dk-root .dk-acard.is-waiting { border-left: 3px solid var(--c-gold); }
+.dk-root .dk-acard.is-error { border-color: var(--c-danger); }
+.dk-root .dk-acard.is-offline { border-style: dashed; border-color: var(--border-strong); }
+.dk-root .dk-acard.is-idle { color: var(--text-1); }
+.dk-root .dk-acard-a { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.dk-root .dk-acard-dot { flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--text-3); }
+.dk-root .dk-acard.is-running .dk-acard-dot { background: var(--c-live); }
+.dk-root .dk-acard.is-waiting .dk-acard-dot { background: var(--c-gold); }
+.dk-root .dk-acard.is-error .dk-acard-dot { background: var(--c-danger); }
+.dk-root .dk-acard.is-offline .dk-acard-dot { background: transparent; box-shadow: inset 0 0 0 1.5px var(--text-3); }
+.dk-root .dk-acard-dot.is-pulse { animation: dk-card-pulse 1.6s ease-in-out infinite; }   /* the only loop; capped at three running agents */
+@keyframes dk-card-pulse { 0%, 100% { opacity: 1; } 50% { opacity: .4; } }
+.dk-root .dk-acard-name { min-width: 0; font-size: 15px; font-weight: 600; line-height: 20px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dk-root .dk-acard-chip { margin-left: auto; flex: none; max-width: 46%; padding: 2px 7px; border-radius: 999px; border: 1px solid var(--border-strong);
+  font-family: var(--font-mono); font-size: 11px; line-height: 16px; color: var(--text-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dk-root .dk-acard-task { display: block; min-width: 0; font-size: 13px; line-height: 18px; color: var(--text-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dk-root .dk-acard-c { display: flex; align-items: center; gap: 6px; min-width: 0; font-family: var(--font-mono); font-size: 11px; line-height: 14px; color: var(--text-3); white-space: nowrap; overflow: hidden; }
+.dk-root .dk-acard-state { font-family: var(--font-sans); font-weight: 600; }
+.dk-root .dk-acard.is-running .dk-acard-state { color: var(--c-live); }
+.dk-root .dk-acard.is-waiting .dk-acard-state { color: var(--c-gold); }
+.dk-root .dk-acard.is-error .dk-acard-state { color: var(--c-danger); }
+.dk-root .dk-acard-hair { position: absolute; left: 0; right: 0; bottom: 0; height: 2px; background: var(--c-live); }
+.dk-root .dk-acard.is-pressed .dk-acard-task { color: var(--text-1); }
+@media (min-width: 900px) {
+  .dk-root .dk-acards { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .dk-root .dk-acard { min-height: 120px; }
 }
+@media (prefers-reduced-motion: reduce) { .dk-root .dk-acard-dot.is-pulse { animation: none; } }
+.dk-root.is-lite .dk-acard-dot.is-pulse { animation: none; }
 
 /* needs-you lane: only rendered when something needs the user; amber for approvals, red chips for questions */
 .dk-root .dk-needs { flex: none; margin: 6px 8px 0; padding: 8px 10px; border-radius: 10px; box-sizing: border-box;
@@ -581,11 +585,8 @@ html.ao-full-active { background-color: var(--bg) !important; }
 /* typing indicator: three dots, animated only when not Lite (reduced motion: static) */
 .dk-root .dk-typing { display: inline-flex; gap: 2px; align-items: center; flex: none; }
 .dk-root .dk-typing i { width: 3px; height: 3px; border-radius: 50%; background: var(--dk-hot); opacity: .35; }
-.dk-root:not(.is-lite) .dk-typing i { animation: dk-type 1.2s ease-in-out infinite; }
-.dk-root:not(.is-lite) .dk-typing i:nth-child(2) { animation-delay: .15s; }
-.dk-root:not(.is-lite) .dk-typing i:nth-child(3) { animation-delay: .3s; }
 @keyframes dk-type { 0%, 60%, 100% { opacity: .25; transform: translateY(0); } 30% { opacity: 1; transform: translateY(-2px); } }
-@media (prefers-reduced-motion: reduce) { .dk-root .dk-typing i { animation: none !important; } }
+
 
 /* Comms bubbles: sender colour on the left edge (set per row in MissionComms), rounded */
 .dk-root .dk-mc-bubble { border-left: 3px solid var(--dk-c, var(--dk-line-2)); border-radius: 12px; }

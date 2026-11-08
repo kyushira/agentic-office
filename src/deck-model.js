@@ -483,3 +483,30 @@ export function paneTabNext(i, key, n) {
 export function speechText(activity) {
   return String(activity || '').replace(/\s*·\s*\d+\s+helpers?$/, '');
 }
+
+/**
+ * Agent status card state (design direction 3.7). Five states, each with a text word so colour is never the
+ * only signal. `error` is the backend's error field (the collector sets it when an agent's data could not be
+ * read); `offline` is an agent with no data; `waiting` is waiting for the user; `running` is working.
+ */
+export const CARD_WORDS = { running: 'Running', idle: 'Idle', waiting: 'Waiting for you', error: 'Error', offline: 'Offline' };
+export function cardState(a) {
+  if (!a || typeof a !== 'object') return 'offline';
+  if (a.error) return 'error';
+  if (a.status === 'offline') return 'offline';
+  if (a.status === 'working') return 'running';
+  if (a.status === 'waiting') return 'waiting';
+  return 'idle';
+}
+export function cardWord(state) { return CARD_WORDS[state] || 'Idle'; }
+
+/** Running pulse cap: the ids of the first `max` running agents in list order. Only these pulse (max 3 on screen). */
+export const PULSE_MAX = 3;
+export function pulseIds(agents, max = PULSE_MAX) {
+  const out = new Set();
+  for (const a of Array.isArray(agents) ? agents : []) {
+    if (out.size >= max) break;
+    if (a && cardState(a) === 'running') out.add(a.id);
+  }
+  return out;
+}
