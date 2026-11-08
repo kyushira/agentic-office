@@ -111,5 +111,13 @@ export function usageRingModel(usage) {
     : { id: 'deepseek', name: 'DeepSeek', provider: 'deepseek', pct: null, label: 'n/a', centre: 'n/a', unit: null,
       sub: 'no data yet', estimated: false, demo: !(tokens && tokens.deepseek), resetsAt: null, source: 'none' };
   const rings = [claude('five_hour', 'Session 5h', 'fiveHour'), claude('seven_day', 'Week 7d', 'sevenDay'), deepseek];
-  return { available: live, reason, rings };
+  // Motion budget: only the FIRST n/a ring breathes (opacity loop); the other n/a rings stay static and faint.
+  const firstNa = rings.find(r => r.source === 'none');
+  for (const r of rings) r.breathe = r === firstNa;
+  return { available: live, reason, rings, breathing: !!firstNa };
+}
+
+/** True when a usage ring is breathing on screen (uses one of the three animation slots). */
+export function ringsBreathe(usage) {
+  return usageRingModel(usage).breathing;
 }

@@ -4,11 +4,11 @@ import { cardState, cardMeta, cardRgb, pulseIds, rosterDuration } from './deck-m
 /**
  * One status card per agent (design 3.7 and 6). Row A: status dot, name, model chip. Row B: the current task,
  * one line. Row C: state word, last-active time, and a 2px hairline when running. Tapping a card opens the
- * agent sheet. Phone: a vertical list; desktop: two columns (CSS). Only the first three running agents pulse.
+ * agent sheet. Phone: a vertical list; desktop: two columns (CSS). Only the first running agents pulse, up to pulseMax (3, or 2 while a usage ring breathes).
  */
-export function AgentCards({ agents, sessions, now, sel, onPick }) {
+export function AgentCards({ agents, sessions, now, sel, onPick, pulseMax }) {
   if (!agents.length) return null;
-  const pulse = pulseIds(agents);
+  const pulse = pulseIds(agents, pulseMax);
   return (
     <section id="dk-roster" className="dk-roster-wrap" aria-label="Agent status">
       <ul className="dk-acards">

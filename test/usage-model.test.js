@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { clampPct, pctLabel, usageRingModel, clipReason, compactTokens, tokenFigures } from '../src/usage-model.js';
+import { clampPct, pctLabel, usageRingModel, clipReason, compactTokens, tokenFigures, ringsBreathe } from '../src/usage-model.js';
 
 test('clampPct: clamps to 0..100 and never invents a value', () => {
   assert.equal(clampPct(42), 42);
@@ -164,4 +164,27 @@ test('usageRingModel: DeepSeek keeps DEMO only when usage.tokens has no deepseek
   assert.equal(withEntry.rings[2].source, 'none');
   const noEntry = usageRingModel({ available: false, tokens: { claude: {} } });
   assert.equal(noEntry.rings[2].demo, true);
+});
+
+test('usageRingModel: the first n/a ring is the only one that breathes', () => {
+  const m = usageRingModel({ available: false, reason: 'no login' });
+  assert.deepEqual(m.rings.map(r => r.source), ['none', 'none', 'none']);
+  assert.deepEqual(m.rings.map(r => r.breathe), [true, false, false]);
+  assert.equal(m.breathing, true);
+  assert.equal(ringsBreathe(null), true);
+});
+
+test('usageRingModel: no n/a ring means nothing breathes', () => {
+  const usage = { available: true, five_hour: { pct: 10 }, seven_day: { pct: 20 },
+    tokens: { deepseek: { five_hour: 0, seven_day: 5, prev_seven_day: 5 } } };
+  const m = usageRingModel(usage);
+  assert.deepEqual(m.rings.map(r => r.breathe), [false, false, false]);
+  assert.equal(m.breathing, false);
+  assert.equal(ringsBreathe(usage), false);
+});
+
+test('usageRingModel: an n/a ring says it has no data yet', () => {
+  const m = usageRingModel(null);
+  assert.equal(m.rings[0].sub, 'no data yet');
+  assert.equal(m.rings[0].centre, 'n/a');
 });

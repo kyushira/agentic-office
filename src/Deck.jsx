@@ -1,6 +1,6 @@
 import { React, useState, useEffect, useRef, fetchJSON, API, USAGE_API, SESSION_API } from './sdk.js';
 import { ago, compact, resetCountdown } from './format.js';
-import { buildItems, headerCounts, durationText, modelText, modelParts, usageText, meterLevel, activeTokens, currentSessionId, eventLabel, detailRows, traceModel, newToolCalls, countStep, todayParts, COUNT_MS, newWalks, walkLabel, toolRing, newBrainTrips, brainCounts, brainText, brainNotes, helperChanges, swarmTip, needsYou, greeting, resetSoon, RIGHT_PANE_DEFAULT, livePolls, commsPolls, speechText } from './deck-model.js';
+import { buildItems, headerCounts, durationText, modelText, modelParts, usageText, meterLevel, activeTokens, currentSessionId, eventLabel, detailRows, traceModel, newToolCalls, countStep, todayParts, COUNT_MS, newWalks, walkLabel, toolRing, newBrainTrips, brainCounts, brainText, brainNotes, helperChanges, swarmTip, needsYou, greeting, resetSoon, RIGHT_PANE_DEFAULT, livePolls, commsPolls, speechText, pulseCap } from './deck-model.js';
 import { isStandalone, wantsFull, withFullParam, requestNativeFullscreen, exitNativeFullscreen, markFullPath } from './fullscreen.js';
 import { Live } from './Mission.jsx';
 import MissionComms from './MissionComms.jsx';
@@ -10,6 +10,7 @@ import { useMedia, UpdatedAgo, LiveClock, Bell, NeedsYou, PaneTabs, VoiceOrb } f
 import { MemoryPane } from './Memory.jsx';
 import { AgentCards } from './AgentCards.jsx';
 import { UsageRings } from './UsageRings.jsx';
+import { ringsBreathe } from './usage-model.js';
 import { ProjectsList } from './ProjectsList.jsx';
 import { visibleInterval } from './visible-timer.js';
 import Rail from './Rail.jsx';
@@ -615,7 +616,8 @@ export default function Deck() {
         <UsageRings usage={usage} now={Date.now()} />
       </section>
       <NeedsYou items={needs} onPick={id => setSel('a:' + id)} />
-      <AgentCards agents={(state && state.agents) || []} sessions={state && state.sessions} now={now} sel={sel} onPick={id => setSel('a:' + id)} />
+      <AgentCards agents={(state && state.agents) || []} sessions={state && state.sessions} now={now} sel={sel} onPick={id => setSel('a:' + id)}
+        pulseMax={pulseCap(ringsBreathe(usage))} />
       <ProjectsList now={now} />
       {!desktop && <PaneTabs pane={pane} setPane={setPane} />}
       <div className="dk-panes">

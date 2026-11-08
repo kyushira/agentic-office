@@ -27,11 +27,11 @@ export function UsageRings({ usage, now }) {
         {m.rings.map(r => {
           const left = r.resetsAt ? resetCountdown(r.resetsAt, now) : null;
           const rgb = PROVIDER_RGB[r.provider] || 'var(--c-local-rgb)';
-          const aria = `${r.name}: ${r.label}${r.estimated ? ', estimated' : ''}${r.demo ? ', demo, no data source' : ''}`;
-          // No value: no glow, and a static dashed track (CSS .is-empty).
+          const aria = `${r.name}: ${r.label}${r.estimated ? ', estimated' : ''}${r.demo ? ', demo, no data source' : ''}${r.source === 'none' ? ', no data yet' : ''}`;
+          // No value: no glow, a faint full-sweep track in the provider colour (CSS .is-empty). Only the first one breathes.
           const empty = r.pct == null;
           return (
-            <li key={r.id} className={'dk-uring-li' + (r.demo ? ' is-demo' : '') + (empty ? ' is-empty' : '')}
+            <li key={r.id} className={'dk-uring-li' + (r.demo ? ' is-demo' : '') + (empty ? ' is-empty' : '') + (r.breathe ? ' is-breathe' : '')}
               data-provider={r.provider}>
               {mode === 'ring' ? (
                 <div className="dk-uring-wrap" style={{ '--c-rgb': rgb }} role="img" aria-label={aria}

@@ -538,6 +538,12 @@ export function cardRgb(a, state) {
 
 /** Running pulse cap: the ids of the first `max` running agents in list order. Only these pulse (max 3 on screen). */
 export const PULSE_MAX = 3;
+/** Motion budget: at most three infinite animations on screen. A breathing usage ring takes one slot, so the dot
+ *  cap drops to 2 while a ring breathes (dots <= 2, ring <= 1, total <= 3). */
+export const PULSE_MAX_WITH_BREATHING = 2;
+export function pulseCap(breathing) {
+  return breathing ? PULSE_MAX_WITH_BREATHING : PULSE_MAX;
+}
 export function pulseIds(agents, max = PULSE_MAX) {
   const out = new Set();
   for (const a of Array.isArray(agents) ? agents : []) {

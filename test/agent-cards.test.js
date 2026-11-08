@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { cardState, cardWord, cardMeta, pulseIds, PULSE_MAX, providerKey, cardRgb } from '../src/deck-model.js';
+import { cardState, cardWord, cardMeta, pulseIds, PULSE_MAX, pulseCap, providerKey, cardRgb } from '../src/deck-model.js';
+import { ringsBreathe } from '../src/usage-model.js';
 
 test('cardState: working is running, waiting is waiting, idle and unknown are idle', () => {
   assert.equal(cardState({ status: 'working' }), 'running');
@@ -84,4 +85,20 @@ test('cardRgb: state hue for running, waiting and error; idle keys to provider; 
   assert.equal(cardRgb(deep, 'idle'), 'var(--c-deepseek-rgb)');
   assert.equal(cardRgb({ model: 'Gemini' }, 'idle'), 'var(--c-accent-rgb)');
   assert.equal(cardRgb(claude, 'offline'), '138, 134, 151');
+});
+
+test('pulseCap: three running dots normally, two while a usage ring breathes', () => {
+  assert.equal(pulseCap(false), PULSE_MAX);
+  assert.equal(pulseCap(false), 3);
+  assert.equal(pulseCap(true), 2);
+});
+
+test('motion budget: running dots plus breathing rings never exceed three infinite animations', () => {
+  const agents = [1, 2, 3, 4, 5].map(i => ({ id: 'a' + i, status: 'working' }));
+  for (const usage of [null, { available: true, five_hour: { pct: 5 }, seven_day: { pct: 5 } }]) {
+    const breathing = ringsBreathe(usage) ? 1 : 0;
+    const dots = pulseIds(agents, pulseCap(!!breathing)).size;
+    assert.ok(dots + breathing <= 3, 'dots ' + dots + ' + ring ' + breathing);
+  }
+  assert.equal(pulseIds([1, 2, 3, 4].map(i => ({ id: 'b' + i, status: 'working' })), pulseCap(true)).size, 2);
 });

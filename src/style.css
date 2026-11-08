@@ -501,7 +501,7 @@ html.ao-full-active { background-color: var(--bg) !important; }
 .dk-root .dk-acard.is-waiting .dk-acard-dot { background: var(--c-gold); }
 .dk-root .dk-acard.is-error .dk-acard-dot { background: var(--c-danger); }
 .dk-root .dk-acard.is-offline .dk-acard-dot { background: transparent; box-shadow: inset 0 0 0 1.5px var(--text-3); }
-.dk-root .dk-acard-dot.is-pulse { animation: dk-card-pulse 1.6s ease-in-out infinite; }   /* the only loop; capped at three running agents */
+.dk-root .dk-acard-dot.is-pulse { animation: dk-card-pulse 1.6s ease-in-out infinite; }   /* loop 1 of the budget: running dots, capped by pulseCap() (3, or 2 while a ring breathes) */
 @keyframes dk-card-pulse { 0%, 100% { opacity: 1; } 50% { opacity: .4; } }
 .dk-root .dk-acard-name { min-width: 0; font-size: 15px; font-weight: 600; line-height: 20px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .dk-root .dk-acard-chip { margin-left: auto; flex: none; max-width: 46%; padding: 2px 7px; border-radius: 999px; border: 1px solid var(--border-strong);
@@ -655,7 +655,16 @@ html.ao-full-active { background-color: var(--bg) !important; }
 /* no value (pct null, incl. DEMO): no glow, and a static dashed track instead of a conic arc */
 .dk-root .dk-uring-li.is-empty .dk-uring-wrap { filter: none; position: relative; }
 .dk-root .dk-uring-li.is-empty .dk-uring { background: none; }
-.dk-root .dk-uring-li.is-empty .dk-uring-wrap::before { content: ''; position: absolute; inset: 4px; border-radius: 50%; border: 1px dashed var(--border-strong); }
+/* never-dead n/a ring: a faint full-sweep track in the provider colour (the mask cuts it to the ring shape). Opacity only;
+   the first n/a ring breathes (.is-breathe, 2.4s), the rest stay static at .4. Reduced motion and Lite hold it at .4. */
+.dk-root .dk-uring-li.is-empty .dk-uring-wrap::before { content: ''; position: absolute; inset: 0; border-radius: 50%;
+  background: rgb(var(--c-rgb)); opacity: .4;
+  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 9px), #000 calc(100% - 8px));
+          mask: radial-gradient(farthest-side, transparent calc(100% - 9px), #000 calc(100% - 8px)); }
+.dk-root .dk-uring-li.is-empty.is-breathe .dk-uring-wrap::before { animation: dk-ring-breathe 2.4s ease-in-out infinite; }
+@keyframes dk-ring-breathe { 0%, 100% { opacity: .25; } 50% { opacity: .5; } }
+@media (prefers-reduced-motion: reduce) { .dk-root .dk-uring-li.is-breathe .dk-uring-wrap::before { animation: none; } }
+.dk-root.is-lite .dk-uring-li.is-breathe .dk-uring-wrap::before { animation: none; }
 .dk-root .dk-uring-li.is-demo .dk-uring-in { color: var(--text-3); }
 /* token estimates: the value on the first line, its unit ("tok est.") under it */
 .dk-root .dk-uring-in { flex-direction: column; gap: 3px; text-align: center; }
