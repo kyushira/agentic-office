@@ -161,6 +161,7 @@ export function syncSim(prev, graph, opts = {}) {
   const key = graphKey(graph);
   if (prev && prev.key === key) {
     for (const n of graph.nodes) { const s = prev.index.get(n.id); if (s) s.info = n; }
+    prev.repulse = repulse;   // a canvas resize changes repulsion without changing the graph; no reheat
     return { sim: prev, changed: false };
   }
   const old = prev ? prev.index : new Map();

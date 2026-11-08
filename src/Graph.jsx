@@ -193,6 +193,7 @@ export function NodeGraph({ agents, sessions, brain, lite }) {
       cv.width = Math.round(w * dpr);
       cv.height = Math.round(h * dpr);
       sizeRef.current = { w, h, dpr };
+      if (simRef.current) simRef.current.repulse = repulseFor(simRef.current.nodes.length, w);
       if (!viewRef.current) viewRef.current = makeView(w, h);
       draw();
     };

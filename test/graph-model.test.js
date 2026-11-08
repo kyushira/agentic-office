@@ -124,6 +124,14 @@ describe('simulation', () => {
     assert.equal(again.sim, first);
     assert.deepEqual(first.nodes.map(n => [n.x, n.y]), before);
   });
+  test('same graph with a new repulse updates the sim without reheating', () => {
+    const g = buildGraph(fixture({ perAgent: 2, projects: 2 }));
+    const sim = syncSim(null, g, { mode: 'orbit', repulse: 2400 }).sim;
+    settle(sim);
+    const r = syncSim(sim, buildGraph(fixture({ perAgent: 2, projects: 2 })), { mode: 'orbit', repulse: 5000 });
+    assert.equal(r.changed, false);
+    assert.equal(r.sim.repulse, 5000);
+  });
   test('a new session keeps old positions and reheats', () => {
     const f = fixture({ perAgent: 2, projects: 2 });
     const sim = syncSim(null, buildGraph(f), { mode: 'orbit' }).sim;
