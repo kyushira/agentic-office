@@ -37,7 +37,7 @@
 .dk-grid { flex: none; position: relative; padding: 0 8px 10px; display: grid; gap: 6px;
   grid-template-columns: repeat(auto-fill, minmax(148px, 1fr)); align-content: start; scrollbar-width: none; }
 .dk-grid::-webkit-scrollbar { display: none; }
-.dk-scroll { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+.dk-scroll { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding-bottom: max(12px, env(safe-area-inset-bottom)); }   /* last card clears the home indicator */
 .dk-root .dk-mc-log, .dk-root .dk-mc-think, .dk-root .dk-mc-comms { user-select: text; -webkit-user-select: text; }
 .dk-reset { font-family: var(--dk-mono); font-size: 11px; color: var(--dk-mut); white-space: nowrap; font-variant-numeric: tabular-nums; flex: none; }
 .dk-root :focus-visible { outline: 2px solid var(--dk-hot); outline-offset: 2px; }
