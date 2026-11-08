@@ -683,3 +683,38 @@ html.ao-full-active { background-color: var(--bg) !important; }
 .dk-root .dk-ptime { grid-column: 4; grid-row: 1; font-family: var(--font-mono); font-size: 11px; color: var(--text-3); white-space: nowrap; }
 .dk-root .dk-psubj { grid-column: 3 / span 2; grid-row: 2; min-width: 0; font-size: 12px; color: var(--text-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .dk-root .dk-projects .dk-note { margin: 4px; }
+
+/* Memory search pane (src/Memory.jsx). Plain text only; hits are spans. No animation: the loading state is a static skeleton. */
+.dk-root .dk-pane-memory { padding: 0 8px 10px; }
+.dk-root .dk-mem-form { margin: 8px 4px 0; }
+.dk-root .dk-mem-lbl { display: block; margin: 0 0 6px; font: 600 11px/14px var(--font-sans); letter-spacing: .08em; text-transform: uppercase; color: var(--dk-mut); }
+.dk-root .dk-mem-controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: stretch; }
+.dk-root .dk-mem-q, .dk-root .dk-mem-sel { min-height: 44px; box-sizing: border-box; border-radius: 10px; border: 1px solid var(--dk-line-2);
+  background: var(--dk-raise); color: var(--dk-ink); font: inherit; font-size: 14px; }
+.dk-root .dk-mem-q { flex: 1 1 200px; min-width: 0; padding: 0 12px; }
+.dk-root .dk-mem-q::placeholder { color: var(--dk-faint); }
+.dk-root .dk-mem-agent { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--dk-mut); }
+.dk-root .dk-mem-sel { padding: 0 8px; }
+.dk-root .dk-mem-q:focus-visible, .dk-root .dk-mem-sel:focus-visible { outline: 2px solid var(--c-accent); outline-offset: 2px; }
+.dk-root .dk-mem-status { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; min-height: 22px; margin: 8px 4px 4px; font-size: 12px; color: var(--dk-soft); }
+.dk-root .dk-mem-mode { padding: 1px 6px; border-radius: 6px; border: 1px solid var(--dk-line-2); color: var(--dk-mut); }
+.dk-root .dk-mem-red { font-family: var(--font-mono); color: var(--dk-warn); font-variant-numeric: tabular-nums; }
+.dk-root .dk-mem-count { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+.dk-root .dk-mem-list { list-style: none; margin: 0; padding: 0; }
+.dk-root .dk-mem-row { padding: 10px 4px; border-bottom: 1px solid var(--dk-line); min-width: 0; }
+.dk-root .dk-mem-meta { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; font-size: 12px; }
+.dk-root .dk-mem-who { font-weight: 700; }
+.dk-root .dk-mem-when { font-family: var(--font-mono); color: var(--dk-faint); font-variant-numeric: tabular-nums; }
+.dk-root .dk-mem-role { padding: 0 6px; border-radius: 6px; border: 1px solid var(--dk-line-2); color: var(--dk-mut); font-size: 11px; }
+.dk-root .dk-mem-title { margin-top: 2px; font-size: 12px; color: var(--dk-mut); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dk-root .dk-mem-snip { margin: 4px 0 0; font-size: 13px; line-height: 18px; color: var(--dk-ink); white-space: pre-wrap; overflow-wrap: anywhere; }
+.dk-root .dk-mem-hit { background: color-mix(in srgb, var(--dk-hot) 28%, transparent); color: var(--dk-ink); font-weight: 600; border-radius: 3px; }
+.dk-root .dk-mem-hint-t { color: var(--dk-soft); }
+.dk-root .dk-mem-skel { margin: 10px 4px; display: grid; gap: 10px; }
+.dk-root .dk-mem-skel-row { height: 48px; border-radius: 8px; background: var(--dk-raise); }
+@media (min-width: 900px) {
+  .dk-root .dk-pane-memory { padding: 0; margin-top: 10px; border: 1px solid var(--dk-line); border-radius: 12px; background: var(--dk-sheet); }
+  .dk-root .dk-pane-memory .dk-pane-h { margin: 10px 12px 0; }
+  .dk-root .dk-mem-form, .dk-root .dk-mem-status, .dk-root .dk-mem-list, .dk-root .dk-mem-skel, .dk-root .dk-pane-memory > .dk-note { margin-left: 12px; margin-right: 12px; }
+  .dk-root .dk-mem-q { flex: 1 1 320px; }
+}

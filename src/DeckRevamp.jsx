@@ -75,9 +75,9 @@ export function NeedsYou({ items, onPick }) {
   );
 }
 
-/** Phone-only segmented control: Office | Live | Comms, one page, one pane visible at a time. */
+/** Phone-only segmented control: Office | Live | Comms | Memory, one page, one pane visible at a time. */
 export function PaneTabs({ pane, setPane }) {
-  const tabs = [['office', 'Office'], ['live', 'Live'], ['comms', 'Comms']];
+  const tabs = [['office', 'Office'], ['live', 'Live'], ['comms', 'Comms'], ['memory', 'Memory']];
   const onKey = (e, i) => {
     const next = paneTabNext(i, e.key, tabs.length);
     if (next < 0) return;

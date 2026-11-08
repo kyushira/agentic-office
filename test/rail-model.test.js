@@ -6,8 +6,8 @@ import { RAIL_SECTIONS, RAIL_LINE, isAtBottom, pickActive } from '../src/rail-mo
 const item = (id, top, visible = true) => ({ id, top, visible });
 
 describe('RAIL_SECTIONS', () => {
-  test('four buttons in the agreed order, with unique ids and targets', () => {
-    assert.deepEqual(RAIL_SECTIONS.map(s => s.id), ['office', 'needs', 'live', 'usage']);
+  test('five buttons in the agreed order, with unique ids and targets', () => {
+    assert.deepEqual(RAIL_SECTIONS.map(s => s.id), ['office', 'needs', 'live', 'memory', 'usage']);
     assert.equal(new Set(RAIL_SECTIONS.map(s => s.id)).size, RAIL_SECTIONS.length);
     assert.equal(new Set(RAIL_SECTIONS.map(s => s.target)).size, RAIL_SECTIONS.length);
   });

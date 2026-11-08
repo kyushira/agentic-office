@@ -19,6 +19,7 @@ const ICONS = {
     <rect x="3.5" y="13.5" width="7" height="7" rx="1.5" /><rect x="13.5" y="13.5" width="7" height="7" rx="1.5" /></>),
   needs: svg(<><circle cx="12" cy="12" r="8.5" /><path d="M12 7.5v5.5M12 16v.5" /></>),
   live: svg(<path d="M4 5h16v10.5H9.5L5 19.5V15H4z" />),
+  memory: svg(<><circle cx="11" cy="11" r="6.5" /><path d="M16 16l4.5 4.5" /></>),
   usage: svg(<><path d="M4.5 16a7.5 7.5 0 1 1 15 0" /><path d="M12 16l3.5-4" /></>),
   full: svg(<path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" />),
   lite: svg(<path d="M13 3L5.5 13.5H12L11 21l7.5-10.5H12z" />),

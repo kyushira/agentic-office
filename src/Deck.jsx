@@ -7,6 +7,7 @@ import MissionComms from './MissionComms.jsx';
 import { useDialogFocus } from './dialog-focus.js';
 import { Sprite } from './Sprite.jsx';
 import { useMedia, UpdatedAgo, LiveClock, Bell, NeedsYou, PaneTabs } from './DeckRevamp.jsx';
+import { MemoryPane } from './Memory.jsx';
 import { AgentCards } from './AgentCards.jsx';
 import { UsageRings } from './UsageRings.jsx';
 import { ProjectsList } from './ProjectsList.jsx';
@@ -407,7 +408,7 @@ export default function Deck() {
   const [, setTick] = useState(0);
   const [usage, setUsage] = useState(null);
   const [showReason, setShowReason] = useState(false);
-  const [pane, setPane] = useState('office');                          // phone only: Office | Live | Comms
+  const [pane, setPane] = useState('office');                          // phone only: Office | Live | Comms | Memory
   const [rightPane, setRightPane] = useState(RIGHT_PANE_DEFAULT);      // desktop only: right pane is Live (default) or Comms
   const desktop = useMedia('(min-width: 900px)');                      // side by side from 900px
   const [updatedAt, setUpdatedAt] = useState(null);                    // ms of the last good /state poll
@@ -651,6 +652,8 @@ export default function Deck() {
         {commsPolls({ desktop, pane, rightPane }) && <MissionComms agents={(state && state.agents) || []} agentKey="" lite={lite} />}
       </section>
       </div>
+      {/* Memory: phone tab (hidden unless selected), full width below Office and Live/Comms on desktop. Fetches only on search. */}
+      <MemoryPane agents={(state && state.agents) || []} hidden={!desktop && pane !== 'memory'} />
       </div>
       {picked && <Sheet onClose={() => setSel(null)} getReturn={sel && sel.startsWith('a:') ? () => tileRefs.current.get(sel.slice(2)) : null}>
         {picked.type === 'agent'

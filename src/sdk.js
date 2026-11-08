@@ -3,7 +3,7 @@
 const SDK = window.__HERMES_PLUGIN_SDK__;
 export const React = SDK.React;
 export const { useState, useEffect, useRef, useCallback, useMemo } = React;
-export const fetchJSON = SDK.fetchJSON || (url => fetch(url, { credentials: 'same-origin' }).then(r => { if (!r.ok) throw new Error(r.status); return r.json(); }));
+export const fetchJSON = SDK.fetchJSON || ((url, init) => fetch(url, { credentials: 'same-origin', ...init }).then(r => { if (!r.ok) throw new Error(r.status); return r.json(); }));
 export const API = '/api/plugins/agent-office/state';
 export const USAGE_API = '/api/plugins/agent-office/usage';
 export const SESSION_API = '/api/plugins/agent-office/session';
