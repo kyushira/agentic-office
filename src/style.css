@@ -484,7 +484,7 @@ html.ao-full-active { background-color: var(--bg) !important; }
 .dk-root .dk-acard { position: relative; display: flex; flex-direction: column; justify-content: center; gap: 3px; width: 100%; min-height: 76px;
   padding: 10px 12px 12px; box-sizing: border-box; overflow: hidden; border-radius: var(--radius-card); color: var(--text-1); text-align: left;
   /* glow pass 2: coloured top-edge light (2px inset) and a dim wash from the top, hue = --c-rgb set per card in AgentCards */
-  background: radial-gradient(120% 70% at 50% 0%, rgba(var(--c-rgb), .14), transparent 70%),
+  background: radial-gradient(120% 70% at 50% 0%, rgba(var(--c-rgb), .10), transparent 70%),
     linear-gradient(180deg, rgba(255, 255, 255, .04), rgba(255, 255, 255, 0)), var(--surface-1);
   border: 1px solid var(--border); box-shadow: inset 0 2px 0 rgba(var(--c-rgb), .75); }
 .dk-root .dk-acard.is-pressed { border-color: var(--border-strong); }
@@ -727,16 +727,16 @@ html.ao-full-active { background-color: var(--bg) !important; }
 /* glow pass 2: panels (usage, projects, memory) each carry a coloured top-edge light and a dim wash from the top.
    Hue set by the rule that owns the panel (--c-rgb). Static: no animation, no backdrop-filter. */
 .dk-root .dk-uplan { --c-rgb: var(--c-claude-rgb); margin: 8px 8px 0; padding: 4px 10px 10px; border: 1px solid var(--border); border-radius: 14px;
-  background: radial-gradient(120% 60% at 50% 0%, rgba(var(--c-rgb), .12), transparent 70%), var(--surface-1);
+  background: radial-gradient(120% 60% at 50% 0%, rgba(var(--c-rgb), .10), transparent 70%), var(--surface-1);
   box-shadow: inset 0 2px 0 rgba(var(--c-rgb), .75); }
 .dk-root .dk-uring-li[data-provider="deepseek"] { --c-rgb: var(--c-deepseek-rgb); padding: 8px 4px 6px; border-radius: 12px;
-  background: radial-gradient(120% 70% at 50% 0%, rgba(var(--c-rgb), .14), transparent 70%), var(--surface-1);
+  background: radial-gradient(120% 70% at 50% 0%, rgba(var(--c-rgb), .10), transparent 70%), var(--surface-1);
   box-shadow: inset 0 2px 0 rgba(var(--c-rgb), .75); }
 .dk-root .dk-projects { --c-rgb: var(--c-accent-rgb); margin: 8px 8px 0; padding: 8px; border: 1px solid var(--border); border-radius: 14px;
-  background: radial-gradient(120% 60% at 50% 0%, rgba(var(--c-rgb), .12), transparent 70%), var(--surface-1);
+  background: radial-gradient(120% 60% at 50% 0%, rgba(var(--c-rgb), .10), transparent 70%), var(--surface-1);
   box-shadow: inset 0 2px 0 rgba(var(--c-rgb), .75); }
 .dk-root .dk-pane-memory { --c-rgb: var(--c-accent-rgb); border: 1px solid var(--border); border-radius: 14px;
-  background: radial-gradient(120% 60% at 50% 0%, rgba(var(--c-rgb), .12), transparent 70%), var(--surface-1);
+  background: radial-gradient(120% 60% at 50% 0%, rgba(var(--c-rgb), .10), transparent 70%), var(--surface-1);
   box-shadow: inset 0 2px 0 rgba(var(--c-rgb), .75); }
 .dk-root .dk-pane-memory[hidden] { display: none; }
 
