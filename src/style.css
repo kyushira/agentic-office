@@ -642,7 +642,7 @@ html.ao-full-active { background-color: var(--bg) !important; }
 .dk-root .dk-urings-h { margin: 0; font: 600 11px/1 var(--font-sans); letter-spacing: .08em; text-transform: uppercase; color: var(--text-3); }
 .dk-root .dk-urings-seg { display: flex; margin: 0; }
 .dk-root .dk-urings-seg .dk-seg-btn { min-width: 44px; }   /* 44px minimum width for Ring | Bar */
-.dk-root .dk-uavail { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dk-root .dk-uavail { white-space: normal; overflow: visible; text-overflow: clip; display: block; min-width: 0; overflow-wrap: anywhere; }   /* wrap the whole note, no ellipsis */
 .dk-root .dk-urings { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
 .dk-root .dk-uring-li { display: flex; flex-direction: column; align-items: center; gap: 6px; min-width: 0; }
 .dk-root .dk-uring-wrap { filter: drop-shadow(0 0 10px rgba(var(--c-rgb), .3)); }
