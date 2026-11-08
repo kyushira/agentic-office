@@ -1,7 +1,7 @@
 import { React, useState, useEffect, useRef, fetchJSON } from './sdk.js';
 import { ago } from './format.js';
 import {
-  checkQuery, memoryUrl, highlightParts, searchMode, redactedNote, agentOptions, memoryView, MEMORY_DEBOUNCE_MS,
+  checkQuery, memoryUrl, highlightParts, searchMode, redactedNote, agentOptions, memoryView, cleanSnippet, MEMORY_DEBOUNCE_MS,
 } from './memory-model.js';
 
 const HINT = {
@@ -78,7 +78,7 @@ export function MemoryPane({ agents, hidden }) {
     <section id="dk-pane-memory" aria-labelledby="dk-mem-h" className="dk-pane dk-pane-memory" hidden={!!hidden}>
       <h2 id="dk-mem-h" className="dk-pane-h">Memory</h2>
       <form className="dk-mem-form" role="search" onSubmit={onSubmit}>
-        <label className="dk-mem-lbl" htmlFor="dk-mem-q">Search past output</label>
+        <label className="dk-mem-lbl" htmlFor="dk-mem-q">Search memory</label>
         <div className="dk-mem-controls">
           <input id="dk-mem-q" type="search" className="dk-mem-q" value={text} maxLength={200}
             onChange={e => setText(e.target.value)} enterKeyHint="search" autoComplete="off"
@@ -123,7 +123,7 @@ export function MemoryPane({ agents, hidden }) {
                 </div>
                 {r.session_title && <div className="dk-mem-title">{r.session_title}</div>}
                 <p className="dk-mem-snip">
-                  {highlightParts(r.snippet, req.q).map((p, j) => (
+                  {highlightParts(cleanSnippet(r.snippet), req.q).map((p, j) => (
                     <span key={j} className={p.hit ? 'dk-mem-hit' : undefined}>{p.text}</span>
                   ))}
                 </p>

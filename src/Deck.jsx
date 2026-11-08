@@ -15,7 +15,7 @@ import { visibleInterval } from './visible-timer.js';
 import Rail from './Rail.jsx';
 
 
-const POLL_MS = 5000, POLL_LITE_MS = 15000, DETAIL_MS = 5000;
+const POLL_MS = 15000, POLL_LITE_MS = 15000, DETAIL_MS = 5000;   // spec 5: 15s visible, Lite no slower; hidden is paused elsewhere
 
 const pctStr = p => (p == null ? 'n/a' : Math.round(p) + '%');
 
@@ -407,7 +407,7 @@ export default function Deck() {
   const [height, setHeight] = useState(600);
   const [, setTick] = useState(0);
   const [usage, setUsage] = useState(null);
-  const [showReason, setShowReason] = useState(false);
+  const usageRef = useRef(null);                                       // usage rings section; the header pill scrolls to it
   const [pane, setPane] = useState('office');                          // phone only: Office | Live | Comms | Memory
   const [rightPane, setRightPane] = useState(RIGHT_PANE_DEFAULT);      // desktop only: right pane is Live (default) or Comms
   const desktop = useMedia('(min-width: 900px)');                      // side by side from 900px
@@ -588,8 +588,8 @@ export default function Deck() {
         <div className="dk-sum">
           <UpdatedAgo at={updatedAt} error={!!error} />
           <span className="dk-pill dk-working-pill" title="Agents working now, of all agents">{counts ? `${counts.working} of ${counts.working + counts.idle} working` : 'loading…'}</span>
-          <button id="dk-sec-usage" className={'dk-pill dk-usage dk-usage-btn is-' + ut.level} title={ut.title} aria-label={ut.aria} aria-expanded={showReason}
-            onClick={() => setShowReason(!showReason)}>
+          <button id="dk-sec-usage" type="button" className={'dk-pill dk-usage dk-usage-btn is-' + ut.level} title={ut.title} aria-label={ut.aria}
+            onClick={() => { const el = usageRef.current; if (el) { el.scrollIntoView({ block: 'start' }); el.focus({ preventScroll: true }); } }}>
             {ut.level === 'na' && ut.reason ? <span className="dk-uw-na">usage n/a</span> : ut.windows.map(w => (
               <span key={w.key} className="dk-uw" aria-hidden="true">
                 <span className="dk-uw-l">{w.short}</span><Meter pct={w.pct} decorative /><span className="dk-uw-v">{pctStr(w.pct)}</span>
@@ -607,11 +607,12 @@ export default function Deck() {
           <button className="dk-btn" onClick={load} aria-label="Refresh">↻</button>
         </div>
       </header>
-      {showReason && (ut.reason
-        ? <div className="dk-reason">Plan usage unavailable: {ut.reason}</div>
-        : <div className="dk-uplan"><UsageRings usage={usage} now={Date.now()} /></div>)}
       {error && <div className="dk-err">Can't reach the deck data ({error}). Retrying…</div>}
       <div className="dk-scroll">
+      {/* spec 2: the usage rings row comes first and is always on the page (n/a rings plus the backend reason when unavailable) */}
+      <section id="dk-usage-rings" ref={usageRef} className="dk-uplan" tabIndex={-1} aria-label="Plan usage">
+        <UsageRings usage={usage} now={Date.now()} />
+      </section>
       <NeedsYou items={needs} onPick={id => setSel('a:' + id)} />
       <AgentCards agents={(state && state.agents) || []} sessions={state && state.sessions} now={now} sel={sel} onPick={id => setSel('a:' + id)} />
       <ProjectsList now={now} />

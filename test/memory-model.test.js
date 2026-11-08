@@ -3,8 +3,27 @@ import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   MEMORY_API, MEMORY_MIN_CHARS, MEMORY_DEBOUNCE_MS, queryTerms, checkQuery, memoryUrl, highlightParts,
-  searchMode, redactedNote, agentOptions, memoryView,
+  searchMode, redactedNote, agentOptions, memoryView, cleanSnippet,
 } from '../src/memory-model.js';
+
+describe('cleanSnippet', () => {
+  test('literal \\n and \\t escapes become single spaces', () => {
+    assert.equal(cleanSnippet('line one\\nline two\\tend'), 'line one line two end');
+    assert.equal(cleanSnippet('501|\\n502|def f():'), '501| 502|def f():');
+  });
+  test('real newlines, tabs and runs of whitespace collapse to one space', () => {
+    assert.equal(cleanSnippet('a\nb\r\n  c\t\td'), 'a b c d');
+    assert.equal(cleanSnippet('  \n\n  '), '');
+  });
+  test('does not touch ordinary words that contain n or t', () => {
+    assert.equal(cleanSnippet('netting tenant'), 'netting tenant');
+  });
+  test('null and undefined give an empty string, non-strings are stringified', () => {
+    assert.equal(cleanSnippet(null), '');
+    assert.equal(cleanSnippet(undefined), '');
+    assert.equal(cleanSnippet(42), '42');
+  });
+});
 
 describe('checkQuery', () => {
   test('needs at least two characters after trimming', () => {

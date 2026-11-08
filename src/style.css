@@ -13,7 +13,8 @@
   --dk-ease: cubic-bezier(.2, .7, .3, 1); --dk-t-fast: 120ms; --dk-t: 180ms; --dk-t-slow: 320ms;
   --dk-mono: var(--font-mono); --dk-sans: var(--font-sans);
   position: relative; display: flex; flex-direction: column; overflow: hidden; border-radius: 10px;
-  background: radial-gradient(120% 80% at 0% 0%, rgba(139, 92, 246, .14), transparent 60%), var(--bg); color: var(--dk-ink); font: 14px/1.35 var(--dk-sans);
+  /* spec 3.3 ambient violet wash on the plugin's own paint, so the host page colour never shows through */
+  background-color: var(--bg); background-image: radial-gradient(120% 80% at 0% 0%, rgba(139, 92, 246, .14), transparent 60%); color: var(--dk-ink); font: 14px/1.35 var(--dk-sans);
   -webkit-tap-highlight-color: transparent; user-select: none; -webkit-user-select: none;
 }
 .dk-root * { box-sizing: border-box; }
@@ -74,14 +75,14 @@
 .dk-sprite.is-done { filter: grayscale(1) brightness(.7); }
 
 /* "3 helpers" / ctx chip, top right; hand-off chip along the bottom edge */
-.dk-count-chip, .dk-ctx { position: absolute; top: 5px; right: 7px; font-size: 9px; padding: 1px 5px; border-radius: 3px; z-index: 1; }
+.dk-count-chip, .dk-ctx { position: absolute; top: 5px; right: 7px; font-size: 11px; padding: 1px 5px; border-radius: 3px; z-index: 1; }
 .dk-count-chip { background: var(--dk-hot); color: var(--dk-on-hot); font-weight: 700; }
 .dk-ctx { color: var(--dk-hot-2); }
 .dk-tile.has-chip { padding-bottom: calc(7% + 18px); }
 .dk-root.is-few .dk-tile.has-chip { padding-bottom: calc(7% + 22px); }
 .dk-tile.has-top { padding-top: 22px; }                     /* reserved strip for the ctx / helpers chip */
 .dk-root.is-few .dk-tile.has-top { padding-top: 26px; }
-.dk-handoff { position: absolute; left: 0; right: 0; bottom: 0; padding: 3px 8px; font-size: 9px; text-align: left; color: var(--bg); font-weight: 700;
+.dk-handoff { position: absolute; left: 0; right: 0; bottom: 0; padding: 3px 8px; font-size: 11px; text-align: left; color: var(--bg); font-weight: 700;
   background: var(--dk-from, #8A8697); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; animation: dk-chip 2s ease-out; z-index: 2; }
 @keyframes dk-chip { from { transform: translateY(100%); } 15% { transform: none; } }
 
@@ -90,22 +91,22 @@
 .dk-tile.is-helper::before, .dk-tile.is-helper::after { display: none; }
 .dk-tile.is-helper.is-working { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--dk-c) 35%, transparent); }
 .dk-tile.is-helper.is-done { opacity: .45; }
-.dk-parent { width: 100%; font-size: 10px; color: var(--dk-c); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: 700; }
+.dk-parent { width: 100%; font-size: 11px; color: var(--dk-c); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: 700; }
 .dk-check { color: var(--dk-faint); }
 .dk-zz { position: absolute; top: 4%; right: 14%; font-style: normal; font-size: 12px; font-weight: 700; color: var(--dk-soft); letter-spacing: -.05em; }
 
 .dk-name { width: 100%; font-size: 12px; font-weight: 700; color: var(--dk-ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 4px; }
-.dk-status { width: 100%; font-size: 10px; color: var(--dk-mut); overflow: hidden; margin-top: 2px; line-height: 1.25; word-break: break-word;
+.dk-status { width: 100%; font-size: 11px; color: var(--dk-mut); overflow: hidden; margin-top: 2px; line-height: 1.25; word-break: break-word;
   display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }   /* status may wrap to two lines */
 .is-working .dk-status { color: var(--dk-hot-2); }
 
 /* agent card identity: accent (--dk-c) on the edge and role; role, remit and models each one line (or two for models), ellipsis */
 .dk-tile.is-agent { border-left: 3px solid var(--dk-c); }
 .dk-tile.is-agent.is-rest::before, .dk-tile.is-agent.is-rest::after { background: var(--dk-c); }
-.dk-role { width: 100%; min-width: 0; max-width: 100%; font-size: 10px; font-weight: 700; color: var(--dk-c); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 1px; }
-.dk-remit { width: 100%; min-width: 0; max-width: 100%; font-size: 9px; color: var(--dk-mut); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 1px; }
+.dk-role { width: 100%; min-width: 0; max-width: 100%; font-size: 11px; font-weight: 700; color: var(--dk-c); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 1px; }
+.dk-remit { width: 100%; min-width: 0; max-width: 100%; font-size: 11px; color: var(--dk-mut); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 1px; }
 /* block, not -webkit-box: the model spans must stay inline (box children become rows). Two lines max. */
-.dk-models { font-family: var(--dk-mono); width: 100%; min-width: 0; max-width: 100%; font-size: 9px; color: var(--dk-soft); margin-top: 3px; overflow: hidden; word-break: break-word;
+.dk-models { font-family: var(--dk-mono); width: 100%; min-width: 0; max-width: 100%; font-size: 11px; color: var(--dk-soft); margin-top: 3px; overflow: hidden; word-break: break-word;
   display: block; max-height: 2.5em; }
 .dk-root.is-few .dk-role, .dk-root.is-few .dk-remit, .dk-root.is-few .dk-models { font-size: 11px; }
 .dk-tile.is-pressed .dk-role, .dk-tile.is-pressed .dk-remit, .dk-tile.is-pressed .dk-models { color: var(--dk-on-hot); }
@@ -118,7 +119,7 @@
 .dk-strip { position: relative; display: block; width: 100%; height: 16px; margin-top: 3px; overflow: hidden; }
 .dk-strip svg { display: block; width: 100%; height: 100%; }
 .dk-trace { fill: none; stroke: var(--dk-c); stroke-width: 1.25; stroke-linejoin: round; stroke-linecap: round; }
-.dk-strip-none { display: block; width: 100%; height: 16px; margin-top: 3px; font-size: 9px; line-height: 16px; color: var(--dk-faint); white-space: nowrap; overflow: hidden; }
+.dk-strip-none { display: block; width: 100%; height: 16px; margin-top: 3px; font-size: 11px; line-height: 16px; color: var(--dk-faint); white-space: nowrap; overflow: hidden; }
 .dk-blip { position: absolute; right: 0; top: 50%; width: 5px; height: 5px; margin-top: -2.5px; border-radius: 50%; background: var(--dk-c); opacity: 0; }
 .dk-root:not(.is-lite) .dk-blip { animation: dk-blip 900ms var(--dk-ease) both; }
 @keyframes dk-blip { from { opacity: 1; transform: scale(1); } to { opacity: 0; transform: scale(2.6); } }
@@ -126,25 +127,25 @@
 .dk-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .dk-tile.is-pressed .dk-trace { stroke: var(--dk-on-hot); }
 /* today's totals: one faint mono line under the strip; fits on desktop, ellipsis on a phone (full text in title) */
-.dk-today { font-family: var(--dk-mono); display: block; width: 100%; min-width: 0; margin-top: 2px; font-size: 9px; line-height: 1.25; color: var(--dk-faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-variant-numeric: tabular-nums; }
+.dk-today { font-family: var(--dk-mono); display: block; width: 100%; min-width: 0; margin-top: 2px; font-size: 11px; line-height: 1.25; color: var(--dk-faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-variant-numeric: tabular-nums; }
 .dk-tile.is-pressed .dk-today { color: var(--dk-on-hot); }
 .dk-tile.is-pressed .dk-blip { background: var(--dk-on-hot); }
 .dk-tile.is-pressed .dk-strip-none { color: var(--dk-on-hot); }
 
 @media (max-width: 600px) {
   .dk-tile { padding: 6% 3% 7%; }
-  .dk-name { font-size: 10px; margin-top: 4px; letter-spacing: -.02em; }   /* clears the 3% working bob */
-  .dk-status { font-size: 8px; letter-spacing: -.05em; line-height: 1.2; }
+  .dk-name { font-size: 11px; margin-top: 4px; letter-spacing: -.02em; }   /* clears the 3% working bob */
+  .dk-status { font-size: 11px; letter-spacing: -.05em; line-height: 1.2; }
   /* role and models wrap to at most two lines; the remit is only in the detail sheet */
-  .dk-role { font-size: 8px; letter-spacing: -.04em; margin-top: 0; white-space: normal; word-break: normal; line-height: 1.2;
+  .dk-role { font-size: 11px; letter-spacing: -.04em; margin-top: 0; white-space: normal; word-break: normal; line-height: 1.2;
     display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
   .dk-remit { display: none; }
-  .dk-models { font-size: 7px; letter-spacing: -.04em; margin-top: 2px; word-break: normal; line-height: 1.2; max-height: 2.4em; }
+  .dk-models { font-size: 11px; letter-spacing: -.04em; margin-top: 2px; word-break: normal; line-height: 1.2; max-height: 2.4em; }
   .dk-m1 { display: block; }                                  /* line 1: "Opus 5.5" */
   .dk-sep { font-size: 0; }                                   /* hides " · helpers " ... */
-  .dk-sep::before { content: '+ '; font-size: 7px; }          /* ... line 2: "+ Haiku" */
-  .dk-zz { font-size: 8px; }
-  .dk-today { font-size: 7px; letter-spacing: -.04em; }
+  .dk-sep::before { content: '+ '; font-size: 11px; }          /* ... line 2: "+ Haiku" */
+  .dk-zz { font-size: 11px; }
+  .dk-today { font-size: 11px; letter-spacing: -.04em; }
   .dk-badge { top: 4px; left: 4px; width: 5px; height: 5px; }
 }
 
@@ -176,8 +177,8 @@
 .dk-srow.is-working { border-color: var(--dk-dim); box-shadow: inset 2px 0 0 var(--dk-hot); }
 .dk-srow.is-done { opacity: .6; }
 .dk-stitle { display: block; font-size: 12.5px; font-weight: 700; line-height: 1.3; }
-.dk-smeta { display: flex; flex-wrap: wrap; gap: 4px 10px; margin-top: 5px; font-size: 10.5px; color: var(--dk-mut); align-items: center; }
-.dk-pill { font-size: 10px; padding: 1px 6px; border-radius: 3px; background: var(--dk-raise); color: var(--dk-soft); }
+.dk-smeta { display: flex; flex-wrap: wrap; gap: 4px 10px; margin-top: 5px; font-size: 11px; color: var(--dk-mut); align-items: center; }
+.dk-pill { font-size: 11px; padding: 1px 6px; border-radius: 3px; background: var(--dk-raise); color: var(--dk-soft); }
 .dk-pill.is-working { background: var(--dk-hot); color: var(--dk-on-hot); font-weight: 700; }
 .dk-pill.is-done { background: transparent; color: var(--dk-faint); border: 1px solid var(--dk-line-2); }
 .dk-row-mini { display: flex; justify-content: space-between; gap: 8px; font-size: 12px; padding: 5px 0; border-bottom: 1px solid var(--dk-rule); }
@@ -196,7 +197,7 @@
 .dk-help { position: relative; padding: 7px 0 7px 14px; font-size: 12px; border-top: 1px solid var(--dk-rule); display: flex; gap: 8px; }
 .dk-help .dk-badge { top: 12px; left: 0; width: 5px; height: 5px; }
 .dk-help small { margin-left: auto; }
-.dk-note { color: var(--dk-faint); font-size: 10px; margin: 16px 0 0; }
+.dk-note { color: var(--dk-faint); font-size: 11px; margin: 16px 0 0; }
 
 /* portraits: blink every few seconds; working = small typing bob; Lite = still */
 .dk-eyes-shut { opacity: 0; }
@@ -240,16 +241,16 @@ html.ao-full-active { background-color: var(--bg) !important; }
 .dk-root .dk-srow .dk-meter { display: block; width: 100%; height: 3px; margin-top: 7px; }
 .dk-root .dk-sheet dd .dk-meter { display: block; width: 120px; margin: 5px 0 0 auto; }
 .dk-root .dk-uw { display: inline-flex; align-items: center; gap: 5px; }
-.dk-root .dk-uw-l { color: var(--dk-mut); font-size: 10px; text-transform: uppercase; letter-spacing: .08em; }
+.dk-root .dk-uw-l { color: var(--dk-mut); font-size: 11px; text-transform: uppercase; letter-spacing: .08em; }
 .dk-root .dk-uw .dk-meter { width: 36px; }
 .dk-root .dk-uw-v { font-family: var(--dk-mono); font-variant-numeric: tabular-nums; }
 .dk-root .dk-uw-na { color: var(--dk-mut); }
-.dk-root .dk-tok-lbl { color: var(--dk-mut); font-size: 10px; text-transform: uppercase; letter-spacing: .06em; font-weight: 500; }
+.dk-root .dk-tok-lbl { color: var(--dk-mut); font-size: 11px; text-transform: uppercase; letter-spacing: .06em; font-weight: 500; }
 
 /* usage panel: one grid row per window (label, meter, percent, reset) */
 .dk-root .dk-uplan { padding: 2px 10px 8px; border-bottom: 1px solid var(--dk-line); }
 .dk-root .dk-urow { display: grid; grid-template-columns: 7.5em 1fr 3.2em auto; align-items: center; gap: 4px 10px; font-size: 11px; padding: 3px 0; }
-.dk-root .dk-ulabel { color: var(--dk-mut); text-transform: uppercase; letter-spacing: .08em; font-size: 10px; }
+.dk-root .dk-ulabel { color: var(--dk-mut); text-transform: uppercase; letter-spacing: .08em; font-size: 11px; }
 .dk-root .dk-urow .dk-meter { width: 100%; max-width: 220px; }
 .dk-root .dk-upct { font-family: var(--dk-mono); text-align: right; font-variant-numeric: tabular-nums; color: var(--dk-ink); }
 .dk-root .dk-ures { color: var(--dk-mut); white-space: nowrap; }
@@ -281,7 +282,7 @@ html.ao-full-active { background-color: var(--bg) !important; }
 @keyframes dk-flight-dot { 0% { opacity: 0; transform: translate(-50%, -50%); } 10%, 85% { opacity: 1; }
   100% { opacity: 0; transform: translate(calc(-50% + var(--dx)), calc(-50% + var(--dy))); } }
 .dk-flight-label { position: absolute; transform: translate(-50%, -50%); max-width: 180px; padding: 2px 6px; border: 1px solid var(--dk-hot);
-  border-radius: 4px; background: var(--dk-raise); color: var(--dk-ink); font: 500 9.5px/1.25 var(--dk-mono);
+  border-radius: 4px; background: var(--dk-raise); color: var(--dk-ink); font: 500 11px/1.25 var(--dk-mono);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis; box-shadow: 0 0 8px var(--dk-glow-soft); }
 .dk-root:not(.is-lite) .dk-flight-label.is-anim { animation: dk-flight-label 2600ms ease-out both; }
 @keyframes dk-flight-label { 0% { opacity: 0; } 15%, 75% { opacity: 1; } 100% { opacity: 0; } }
@@ -307,7 +308,7 @@ html.ao-full-active { background-color: var(--bg) !important; }
 .dk-legend li.is-active { color: var(--dk-hot-2); }
 .dk-legend .dk-wrap { flex: 1; min-width: 0; }
 .dk-legend b { font-family: var(--dk-mono); font-variant-numeric: tabular-nums; font-weight: 600; }
-.dk-legend em { font-style: normal; font-size: 10px; color: var(--dk-hot); }
+.dk-legend em { font-style: normal; font-size: 11px; color: var(--dk-hot); }
 .dk-lsw { flex: none; width: 10px; height: 10px; border-radius: 2px; background: var(--dk-c); }
 
 /* brain node: bottom-right of the sprite box, 30% of it. Ring cyan after a memory or vault read; core filled after a write.
@@ -387,7 +388,7 @@ html.ao-full-active { background-color: var(--bg) !important; }
   backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); color: var(--dk-soft); transition: border-color var(--dk-t) var(--dk-ease); }
 .dk-root .dk-mc-chip.is-on { border-color: var(--dk-dim); box-shadow: 0 0 0 1px var(--dk-glow-soft), 0 0 12px var(--dk-glow-soft); color: var(--dk-ink); }
 .dk-root .dk-mc-cname { font-weight: 600; font-size: 12px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.dk-root .dk-mc-pill { font-size: 10px; color: var(--dk-mut); max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dk-root .dk-mc-pill { font-size: 11px; color: var(--dk-mut); max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .dk-root .dk-mc-tabs { display: flex; gap: 6px; padding: 0 10px 8px; flex: none; }
 .dk-root .dk-mc-tab { flex: 1; min-height: 40px; background: color-mix(in srgb, var(--dk-tile) 72%, transparent); border: 1px solid var(--dk-line-2); border-radius: 6px; color: var(--dk-soft); font-size: 12px; backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
 .dk-root .dk-mc-tab.is-on { color: var(--dk-hot); border-color: var(--dk-dim); box-shadow: 0 0 0 1px var(--dk-glow-soft), 0 0 10px var(--dk-glow-soft); }
@@ -472,7 +473,7 @@ html.ao-full-active { background-color: var(--bg) !important; }
 .dk-root .dk-bell:disabled { cursor: default; opacity: .6; }
 .dk-root .dk-bell.has-badge { color: var(--dk-ink); border-color: var(--dk-dim); }
 .dk-root .dk-bell-n { min-width: 16px; height: 16px; padding: 0 4px; border-radius: 999px; background: var(--dk-red); color: var(--dk-on-hot);
-  font-size: 10px; line-height: 16px; font-weight: 700; text-align: center; }
+  font-size: 11px; line-height: 16px; font-weight: 700; text-align: center; }
 
 /* agent status cards (design 3.7, 6): one per agent, state from cardState(). Phone: vertical list of rows (76px);
    desktop: two columns (120px). Glow only on running (teal), waiting (gold) and error (red), static. Running gets a
@@ -549,7 +550,7 @@ html.ao-full-active { background-color: var(--bg) !important; }
 @media (min-width: 900px) {
   .dk-root .dk-seg { display: none; }
   .dk-root .dk-panes { display: grid; grid-template-columns: minmax(0, 63fr) minmax(0, 37fr); gap: 10px; align-items: start; padding: 0 8px; }
-  .dk-root .dk-pane-h { display: block; margin: 8px 2px 4px; font-size: 10px; font-weight: 600; letter-spacing: .1em; text-transform: uppercase; color: var(--dk-mut); }
+  .dk-root .dk-pane-h { display: block; margin: 8px 2px 4px; font-size: 11px; font-weight: 600; letter-spacing: .1em; text-transform: uppercase; color: var(--dk-mut); }
   .dk-root .dk-panes .dk-grid { padding: 0; }
   .dk-root .dk-pane-comms { padding: 0; position: sticky; top: 0; max-height: 70vh; overflow-y: auto; overscroll-behavior: contain;
     border: 1px solid var(--dk-line); border-radius: 12px; background: var(--dk-sheet); }
@@ -571,7 +572,7 @@ html.ao-full-active { background-color: var(--bg) !important; }
 /* speech-style notice above the sprite: current activity of a working agent */
 .dk-root .dk-say { position: absolute; top: 4px; left: 50%; transform: translateX(-50%); z-index: 2; pointer-events: none;
   max-width: 92%; display: inline-flex; align-items: center; gap: 5px; padding: 2px 7px; box-sizing: border-box; border-radius: 8px;
-  background: var(--dk-raise); border: 1px solid var(--dk-line-2); color: var(--dk-ink); font-size: 9px; line-height: 1.3; }
+  background: var(--dk-raise); border: 1px solid var(--dk-line-2); color: var(--dk-ink); font-size: 11px; line-height: 1.3; }
 .dk-root .dk-say::after { content: ''; position: absolute; left: 50%; bottom: -5px; width: 8px; height: 8px; margin-left: -4px; transform: rotate(45deg);
   background: var(--dk-raise); border-right: 1px solid var(--dk-line-2); border-bottom: 1px solid var(--dk-line-2); }
 .dk-root .dk-say-t { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -593,12 +594,13 @@ html.ao-full-active { background-color: var(--bg) !important; }
 
 /* phone (< 600px): every control that is a button is at least 40px tall, icon buttons 40px wide; pills that are not buttons stay small */
 @media (max-width: 599px) {
-  .dk-root .dk-btn, .dk-root button.dk-pill, .dk-root button.dk-chip, .dk-root .dk-seg-btn { min-height: 40px; }
-  .dk-root .dk-btn { min-width: 40px; }
-  .dk-root .dk-bell { min-width: 40px; min-height: 40px; }
-  /* usage pill: keep the header pill height (28px) so it matches the span pills; the 40px tap target is an invisible hit area */
+  /* 44px minimum tap targets: header buttons, bell, pane tabs (.dk-seg-btn) */
+  .dk-root .dk-btn, .dk-root button.dk-pill, .dk-root button.dk-chip, .dk-root .dk-seg-btn { min-height: 44px; }
+  .dk-root .dk-btn { min-width: 44px; }
+  .dk-root .dk-bell { min-width: 44px; min-height: 44px; }
+  /* usage pill: keep the 28px visual so it matches the span pills; a transparent 8px ring around it makes the 44px hit area */
   .dk-root .dk-usage-btn.dk-pill { min-height: 28px; position: relative; }
-  .dk-root .dk-usage-btn.dk-pill::before { content: ''; position: absolute; inset: -6px; }
+  .dk-root .dk-usage-btn.dk-pill::before { content: ''; position: absolute; inset: -8px; }
 }
 
 /* desktop left icon rail (>= 900px only; Rail.jsx renders it only there). Fixed, full height, inside .dk-root so it
@@ -638,7 +640,7 @@ html.ao-full-active { background-color: var(--bg) !important; }
 .dk-root .dk-urings { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
 .dk-root .dk-uring-li { display: flex; flex-direction: column; align-items: center; gap: 6px; min-width: 0; }
 .dk-root .dk-uring-wrap { filter: drop-shadow(0 0 10px rgba(var(--c-rgb), .3)); }
-.dk-root .dk-uring { --c: rgb(var(--c-rgb)); position: relative; width: 84px; height: 84px; border-radius: 50%;
+.dk-root .dk-uring { --c: rgb(var(--c-rgb)); position: relative; width: 96px; height: 96px; border-radius: 50%;   /* spec 3.5: 96px */
   background: conic-gradient(var(--c) calc(var(--p) * 1%), var(--ring-track) 0);
   -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 9px), #000 calc(100% - 8px));
           mask: radial-gradient(farthest-side, transparent calc(100% - 9px), #000 calc(100% - 8px)); }

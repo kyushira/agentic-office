@@ -49,7 +49,7 @@ export function UsageRings({ usage, now }) {
             </li>);
         })}
       </ul>
-      {!m.available && m.reason && <p className="dk-note">Plan usage unavailable: {m.reason}</p>}
+      {!m.available && <p className="dk-note" role="status">Plan usage unavailable: {m.reason || 'the source did not say why'}</p>}
       <p className="dk-note dk-uscope">Claude values are estimated (Pro weekly % has no public API). Account-wide, not per agent.</p>
     </div>);
 }

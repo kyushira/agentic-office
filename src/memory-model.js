@@ -34,6 +34,16 @@ export function memoryUrl(q, agent = '', limit = MEMORY_LIMIT) {
   return `${MEMORY_API}?${p.toString()}`;
 }
 
+/**
+ * A snippet as one line of plain text for the result card. Literal backslash-n and backslash-t sequences (the
+ * backend sometimes keeps them escaped) and real newlines or tabs all become a single space; other whitespace
+ * runs collapse to one space. Pure text in, text out, so the view never needs HTML.
+ */
+export function cleanSnippet(s) {
+  if (s == null) return '';
+  return String(s).replace(/\\[nt]/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
 const escapeRe = s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 /**
