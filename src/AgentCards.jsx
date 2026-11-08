@@ -1,6 +1,5 @@
 import { React } from './sdk.js';
-import { ago } from './format.js';
-import { cardState, cardWord, pulseIds, rosterDuration } from './deck-model.js';
+import { cardState, cardMeta, pulseIds, rosterDuration } from './deck-model.js';
 
 // Glow hue per state (design 3.7): running teal, waiting gold, error red. Idle and offline have no glow.
 const STATE_RGB = { running: 'var(--c-live-rgb)', waiting: 'var(--c-gold-rgb)', error: 'var(--c-danger-rgb)' };
@@ -17,9 +16,9 @@ export function AgentCards({ agents, sessions, now, sel, onPick }) {
     <section id="dk-roster" className="dk-roster-wrap" aria-label="Agent status">
       <ul className="dk-acards">
         {agents.map(a => {
-          const st = cardState(a), word = cardWord(st);
+          const st = cardState(a);
           const running = st === 'running';
-          const dur = rosterDuration(a, (sessions || {})[a.id], now);
+          const meta = cardMeta(a, st, rosterDuration(a, (sessions || {})[a.id], now), now);
           const task = String(a.activity || '').trim() || 'no current task';
           const pressed = sel === 'a:' + a.id;
           const rgb = STATE_RGB[st];
@@ -27,7 +26,7 @@ export function AgentCards({ agents, sessions, now, sel, onPick }) {
             <li key={a.id} className="dk-acard-li">
               <button type="button" className={'dk-acard is-' + st + (pressed ? ' is-pressed' : '')}
                 style={{ '--dk-c': a.color || '#8a8a8a', ...(rgb ? { '--c-rgb': rgb } : {}) }} onClick={() => onPick(a.id)}
-                aria-label={`${a.name || a.id}, ${word}, ${task}${dur ? `, ${dur}` : ''}. Open panel`}>
+                aria-label={`${a.name || a.id}, ${meta.word}, ${task}${meta.dur ? `, ${meta.dur}` : ''}. Open panel`}>
                 <span className="dk-acard-a">
                   <i className={'dk-acard-dot' + (pulse.has(a.id) ? ' is-pulse' : '')} aria-hidden="true" />
                   <span className="dk-acard-name">{a.name || a.id}</span>
@@ -35,10 +34,9 @@ export function AgentCards({ agents, sessions, now, sel, onPick }) {
                 </span>
                 <span className="dk-acard-task">{task}</span>
                 <span className="dk-acard-c">
-                  <span className="dk-acard-state">{word}</span>
-                  <span aria-hidden="true">·</span>
-                  <time>{ago(a.lastActive, now)}</time>
-                  {dur && <span className="dk-acard-dur">· {dur}</span>}
+                  <span className="dk-acard-state">{meta.word}</span>
+                  {meta.time && <><span aria-hidden="true">·</span><time>{meta.time}</time></>}
+                  {meta.dur && <><span aria-hidden="true">·</span><span className="dk-acard-dur">{meta.dur}</span></>}
                 </span>
                 {running && <i className="dk-acard-hair" aria-hidden="true" />}
               </button>

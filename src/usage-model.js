@@ -10,6 +10,12 @@ export function clampPct(v) {
   return Math.max(0, Math.min(100, n));
 }
 
+/** The backend's unavailable reason, clipped to `max` characters with an ellipsis; blank gives the fallback text. */
+export function clipReason(reason, max = 90) {
+  const s = String(reason || '').trim() || 'the source did not say why';
+  return s.length > max ? s.slice(0, max - 1).trimEnd() + '…' : s;
+}
+
 /** Label for a ring or bar: "42% est." for estimated Claude values, "42%" for exact, "n/a" when unknown. */
 export function pctLabel(pct, estimated = false) {
   const p = clampPct(pct);

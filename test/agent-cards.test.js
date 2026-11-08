@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { cardState, cardWord, pulseIds, PULSE_MAX } from '../src/deck-model.js';
+import { cardState, cardWord, cardMeta, pulseIds, PULSE_MAX } from '../src/deck-model.js';
 
 test('cardState: working is running, waiting is waiting, idle and unknown are idle', () => {
   assert.equal(cardState({ status: 'working' }), 'running');
@@ -48,4 +48,25 @@ test('pulseIds: fewer than three running, non-running never pulse, empty input i
   assert.equal(pulseIds([{ id: 'a', status: 'idle' }, { id: 'b', status: 'offline' }]).size, 0);
   assert.equal(pulseIds(undefined).size, 0);
   assert.equal(pulseIds([{ id: 'x', status: 'working', error: 'E' }]).size, 0);
+});
+
+test('cardMeta: running with a duration says "for" and drops the time (never "now · 35m")', () => {
+  const now = 1_800_000_000;
+  assert.deepEqual(cardMeta({ lastActive: now }, 'running', '35m', now), { word: 'Running', time: null, dur: 'for 35m' });
+});
+
+test('cardMeta: no last-active time omits the time, never a bare dash', () => {
+  assert.deepEqual(cardMeta({}, 'idle', null, 1_800_000_000), { word: 'Idle', time: null, dur: null });
+  assert.deepEqual(cardMeta(null, 'offline', null, 1_800_000_000), { word: 'Offline', time: null, dur: null });
+});
+
+test('cardMeta: idle with a last-active time shows the time', () => {
+  const now = 1_800_000_000;
+  assert.deepEqual(cardMeta({ lastActive: now - 720 }, 'idle', null, now), { word: 'Idle', time: '12m ago', dur: null });
+});
+
+test('cardMeta: running without a duration keeps the time; a duration on a non-running card is dropped', () => {
+  const now = 1_800_000_000;
+  assert.deepEqual(cardMeta({ lastActive: now - 720 }, 'running', null, now), { word: 'Running', time: '12m ago', dur: null });
+  assert.deepEqual(cardMeta({ lastActive: now - 720 }, 'error', '5m', now), { word: 'Error', time: '12m ago', dur: null });
 });

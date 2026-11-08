@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { clampPct, pctLabel, usageRingModel } from '../src/usage-model.js';
+import { clampPct, pctLabel, usageRingModel, clipReason } from '../src/usage-model.js';
 
 test('clampPct: clamps to 0..100 and never invents a value', () => {
   assert.equal(clampPct(42), 42);
@@ -55,4 +55,14 @@ test('usageRingModel: missing payload never shows a number', () => {
   assert.equal(m.reason, null);
   assert.equal(m.rings.every(r => r.pct === null), true);
   assert.equal(m.rings.find(r => r.provider === 'deepseek').demo, true);
+});
+
+test('clipReason: short reasons pass through, long ones clip to 90 characters with an ellipsis', () => {
+  assert.equal(clipReason('usage lookup failed: TimeoutError'), 'usage lookup failed: TimeoutError');
+  const out = clipReason('x'.repeat(200));
+  assert.equal(out.length, 90);
+  assert.equal(out.endsWith('…'), true);
+  assert.equal(clipReason('a'.repeat(90)), 'a'.repeat(90));
+  assert.equal(clipReason(''), 'the source did not say why');
+  assert.equal(clipReason(null), 'the source did not say why');
 });

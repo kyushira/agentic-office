@@ -636,7 +636,11 @@ html.ao-full-active { background-color: var(--bg) !important; }
 /* usage rings (design 3.5): pure CSS conic ring; --p animates on mount only; the glow is a static drop-shadow on the wrapper */
 @property --p { syntax: '<number>'; inherits: true; initial-value: 0; }
 .dk-root .dk-usage-rings { display: flex; flex-direction: column; gap: 12px; padding: 12px; }
-.dk-root .dk-urings-seg { display: flex; align-self: flex-end; margin: 0; }
+.dk-root .dk-urings-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.dk-root .dk-urings-h { margin: 0; font: 600 11px/1 var(--font-sans); letter-spacing: .08em; text-transform: uppercase; color: var(--text-3); }
+.dk-root .dk-urings-seg { display: flex; margin: 0; }
+.dk-root .dk-urings-seg .dk-seg-btn { min-width: 44px; }   /* 44px minimum width for Ring | Bar */
+.dk-root .dk-uavail { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .dk-root .dk-urings { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
 .dk-root .dk-uring-li { display: flex; flex-direction: column; align-items: center; gap: 6px; min-width: 0; }
 .dk-root .dk-uring-wrap { filter: drop-shadow(0 0 10px rgba(var(--c-rgb), .3)); }
@@ -646,7 +650,10 @@ html.ao-full-active { background-color: var(--bg) !important; }
           mask: radial-gradient(farthest-side, transparent calc(100% - 9px), #000 calc(100% - 8px)); }
 .dk-root .dk-uring-in { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
   font: 600 13px/1 var(--font-mono); font-variant-numeric: tabular-nums; color: var(--text-1); }
-.dk-root .dk-uring-li.is-demo .dk-uring { background: var(--border); }
+/* no value (pct null, incl. DEMO): no glow, and a static dashed track instead of a conic arc */
+.dk-root .dk-uring-li.is-empty .dk-uring-wrap { filter: none; position: relative; }
+.dk-root .dk-uring-li.is-empty .dk-uring { background: none; }
+.dk-root .dk-uring-li.is-empty .dk-uring-wrap::before { content: ''; position: absolute; inset: 4px; border-radius: 50%; border: 1px dashed var(--border-strong); }
 .dk-root .dk-uring-li.is-demo .dk-uring-in { color: var(--text-3); }
 .dk-root .dk-uring-name { font-size: 12px; font-weight: 600; color: var(--text-1); }
 .dk-root .dk-uring-sub { font-size: 11px; color: var(--text-3); min-height: 14px; text-align: center; }

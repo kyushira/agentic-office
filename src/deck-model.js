@@ -418,6 +418,18 @@ export function rosterDuration(a, sessions, now) {
   return shortDuration(now - Math.min(...starts));
 }
 
+/**
+ * Row C parts for a status card: {word, time, dur}. `time` is the last-active text, or null when the agent has
+ * no last-active time (the card then drops the time and its separator, never a bare dash). A running card with a
+ * duration shows it as "for 35m" and no time, so it never reads "now · 35m". `dur` is null for other states.
+ */
+export function cardMeta(a, state, dur, now) {
+  const word = cardWord(state);
+  if (state === 'running' && dur) return { word, time: null, dur: `for ${dur}` };
+  const time = a && a.lastActive ? ago(a.lastActive, now) : null;
+  return { word, time, dur: null };
+}
+
 /** Clock face 'HH:MM' (24h, local) for a Date. */
 export function clockText(d) {
   const p = n => String(n).padStart(2, '0');
