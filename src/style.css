@@ -739,3 +739,20 @@ html.ao-full-active { background-color: var(--bg) !important; }
   background: radial-gradient(120% 60% at 50% 0%, rgba(var(--c-rgb), .12), transparent 70%), var(--surface-1);
   box-shadow: inset 0 2px 0 rgba(var(--c-rgb), .75); }
 .dk-root .dk-pane-memory[hidden] { display: none; }
+
+/* glow pass 2: header. Violet ambient wash behind the header; title text glow (beats the .dk-top text-shadow reset);
+   pills carry glow-1 in their state or provider colour; the active tab has a gold underline and a violet glow. */
+.dk-root .dk-top { background: radial-gradient(120% 80% at 0% 0%, rgba(var(--c-accent-rgb), .14), transparent 60%), var(--bg); }
+.dk-root .dk-title { text-shadow: 0 0 14px rgba(var(--c-accent-rgb), .55) !important; }   /* beats .dk-top * text-shadow reset */
+.dk-root .dk-top .dk-pill { --c-rgb: var(--c-accent-rgb); box-shadow: 0 0 0 1px rgba(var(--c-rgb), .35), 0 0 12px rgba(var(--c-rgb), .16); }
+.dk-root .dk-top .dk-working-pill { --c-rgb: var(--c-live-rgb); }
+.dk-root .dk-top .dk-usage { --c-rgb: var(--c-claude-rgb); }
+.dk-root .dk-top .dk-usage.is-warn { --c-rgb: var(--c-gold-rgb); }
+.dk-root .dk-top .dk-usage.is-hot { --c-rgb: var(--c-danger-rgb); }
+.dk-root .dk-top .dk-reset.is-soon, .dk-root .dk-top .dk-pill.is-err { --c-rgb: var(--c-danger-rgb); }
+.dk-root .dk-top .dk-bell.has-badge { --c-rgb: var(--c-gold-rgb); }
+.dk-root .dk-seg-btn.is-on, .dk-root .dk-rseg-btn.is-on {
+  box-shadow: inset 0 -2px 0 var(--c-gold), 0 0 12px rgba(var(--c-accent-rgb), .22); }
+
+/* usage ring strokes: drop-shadow on the wrapper (spec 3.5), hue = ring colour. Bar mode and empty rings keep no glow. */
+.dk-root .dk-uring-wrap { filter: drop-shadow(0 0 8px rgba(var(--c-rgb), .55)); }
