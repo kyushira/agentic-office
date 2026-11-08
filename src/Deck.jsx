@@ -9,6 +9,7 @@ import { Sprite } from './Sprite.jsx';
 import { useMedia, UpdatedAgo, LiveClock, Bell, NeedsYou, PaneTabs } from './DeckRevamp.jsx';
 import { AgentCards } from './AgentCards.jsx';
 import { UsageRings } from './UsageRings.jsx';
+import { ProjectsList } from './ProjectsList.jsx';
 import { visibleInterval } from './visible-timer.js';
 import Rail from './Rail.jsx';
 
@@ -612,6 +613,7 @@ export default function Deck() {
       <div className="dk-scroll">
       <NeedsYou items={needs} onPick={id => setSel('a:' + id)} />
       <AgentCards agents={(state && state.agents) || []} sessions={state && state.sessions} now={now} sel={sel} onPick={id => setSel('a:' + id)} />
+      <ProjectsList now={now} />
       {!desktop && <PaneTabs pane={pane} setPane={setPane} />}
       <div className="dk-panes">
       <section id="dk-pane-office" role="tabpanel" aria-labelledby="dk-pane-tab-office" className="dk-pane dk-pane-office"

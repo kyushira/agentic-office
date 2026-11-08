@@ -665,3 +665,21 @@ html.ao-full-active { background-color: var(--bg) !important; }
 @media (prefers-reduced-motion: reduce) { .dk-root .dk-uring { transition: none; } }
 .dk-root.is-lite .dk-uring { transition: none; }
 .dk-root .dk-uring { transition: --p 600ms ease-out; }
+
+/* projects list (design 3.8): 48px rows, status dot + word, name, last touched, last commit subject on one line */
+.dk-root .dk-projects { padding: 8px 8px 4px; }
+.dk-root .dk-projects-h { margin: 0 4px 6px; font: 600 11px/1 var(--font-sans); letter-spacing: .08em; text-transform: uppercase; color: var(--text-2); }
+.dk-root .dk-projects-n { font-family: var(--font-mono); color: var(--text-3); margin-left: 4px; }
+.dk-root .dk-prows { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.dk-root .dk-prow { display: grid; grid-template-columns: 10px auto minmax(0, 1fr) auto; grid-template-rows: 20px 18px; column-gap: 8px; align-items: center;
+  min-height: 48px; padding: 6px 10px; border-radius: 10px; background: var(--surface-1); border: 1px solid var(--border); }
+.dk-root .dk-pdot { grid-row: 1 / span 2; align-self: center; width: 8px; height: 8px; border-radius: 50%; background: var(--text-3); }
+.dk-root .dk-pdot.is-live { background: var(--c-live); }
+.dk-root .dk-pdot.is-gold { background: var(--c-gold); }
+.dk-root .dk-pstate { grid-column: 2; font-size: 11px; font-weight: 600; color: var(--text-2); white-space: nowrap; }
+.dk-root .dk-pdot.is-live + .dk-pstate { color: var(--c-live); }
+.dk-root .dk-pdot.is-gold + .dk-pstate { color: var(--c-gold); }
+.dk-root .dk-pname { grid-column: 3; font-size: 14px; font-weight: 600; color: var(--text-1); min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dk-root .dk-ptime { grid-column: 4; grid-row: 1; font-family: var(--font-mono); font-size: 11px; color: var(--text-3); white-space: nowrap; }
+.dk-root .dk-psubj { grid-column: 3 / span 2; grid-row: 2; min-width: 0; font-size: 12px; color: var(--text-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dk-root .dk-projects .dk-note { margin: 4px; }
