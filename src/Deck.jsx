@@ -657,7 +657,8 @@ export default function Deck() {
       </section>
       </div>
       {/* Memory: phone tab (hidden unless selected), full width below Office and Live/Comms on desktop. Fetches only on search. */}
-      <MemoryPane agents={(state && state.agents) || []} hidden={!desktop && pane !== 'memory'} />
+      <MemoryPane agents={(state && state.agents) || []} sessions={state && state.sessions} brain={state && state.brain}
+        lite={lite} hidden={!desktop && pane !== 'memory'} />
       </div>
       {picked && <Sheet onClose={() => setSel(null)} getReturn={sel && sel.startsWith('a:') ? () => tileRefs.current.get(sel.slice(2)) : null}>
         {picked.type === 'agent'

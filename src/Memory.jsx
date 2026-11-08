@@ -1,5 +1,6 @@
 import { React, useState, useEffect, useRef, fetchJSON } from './sdk.js';
 import { ago } from './format.js';
+import { NodeGraph } from './Graph.jsx';
 import {
   checkQuery, memoryUrl, highlightParts, searchMode, redactedNote, agentOptions, memoryView, cleanSnippet, MEMORY_DEBOUNCE_MS,
 } from './memory-model.js';
@@ -15,7 +16,7 @@ const HINT = {
  * Fetches only on submit or 400 ms after typing or an agent change, with at least 2 characters. There is no
  * polling. A new request aborts the one in flight. Results are text only; hits are wrapped in spans, never HTML.
  */
-export function MemoryPane({ agents, hidden }) {
+export function MemoryPane({ agents, sessions, brain, lite, hidden }) {
   const [text, setText] = useState('');
   const [agent, setAgent] = useState('');
   const [req, setReq] = useState({ status: 'idle', q: '', data: null, error: '' });
@@ -77,6 +78,8 @@ export function MemoryPane({ agents, hidden }) {
   return (
     <section id="dk-pane-memory" aria-labelledby="dk-mem-h" className="dk-pane dk-pane-memory" hidden={!!hidden}>
       <h2 id="dk-mem-h" className="dk-pane-h">Memory</h2>
+      {/* the graph runs its loop only while mounted; a hidden tab (phone) unmounts it */}
+      {!hidden && <NodeGraph agents={agents} sessions={sessions} brain={brain} lite={lite} />}
       <form className="dk-mem-form" role="search" onSubmit={onSubmit}>
         <label className="dk-mem-lbl" htmlFor="dk-mem-q">Search memory</label>
         <div className="dk-mem-controls">
