@@ -7,10 +7,12 @@ Only whitelisted fields leave this module: no tokens, keys, emails or account id
 import glob
 import importlib.util
 import os
+import sqlite3
 import sys
 import threading
 import time
 from datetime import datetime
+from pathlib import Path
 from types import SimpleNamespace
 from typing import Callable, Optional
 
@@ -174,12 +176,12 @@ def _map(snapshot, fetched_at: float) -> dict:
 def _compute(now: float, fetch: Callable) -> dict:
     try:
         snapshot = fetch()
-        if snapshot is None:
-            return _empty(now, "usage lookup returned nothing")
-        return _map(snapshot, now)
+        result = _empty(now, "usage lookup returned nothing") if snapshot is None else _map(snapshot, now)
     except Exception as exc:
         # Class name only: exception messages can carry paths or account details.
-        return _empty(now, f"usage lookup failed: {type(exc).__name__}")
+        result = _empty(now, f"usage lookup failed: {type(exc).__name__}")
+    result["tokens"] = _tokens_or_none(now)
+    return result
 
 
 def plan_usage(now: Optional[float] = None, fetch: Optional[Callable] = None) -> dict:
@@ -201,3 +203,97 @@ def _reset_cache() -> None:
     with _lock:
         _cache["at"] = None
         _cache["result"] = None
+
+
+# ---- Token estimates from Hermes state.db (Agent Deck usage rings, fallback when no plan % is available) ----
+# Read-only: every connection is file:...?mode=ro with PRAGMA query_only=ON, and a missing file is never created.
+# Tokens = input_tokens + output_tokens. Cache read/write tokens are deliberately EXCLUDED: they are large, bill at
+# a different rate, and would make the estimate look like plan usage. A row counts toward a window by its last_seen,
+# so a row whose work straddles a window edge counts in full (an estimate, not an exact meter).
+CLAUDE_PROVIDER = "claude-subscription-directsdk-experimental"
+DEEPSEEK_PROVIDER = "deepseek"
+_PROVIDERS = {"claude": CLAUDE_PROVIDER, "deepseek": DEEPSEEK_PROVIDER}
+_HOUR, _DAY = 3600.0, 86400.0
+_BUSY_S = 0.25
+_TOKEN_SQL = (
+    "SELECT "
+    "COALESCE(SUM(CASE WHEN last_seen >= :five THEN COALESCE(input_tokens, 0) + COALESCE(output_tokens, 0) ELSE 0 END), 0), "
+    "COALESCE(SUM(CASE WHEN last_seen >= :week THEN COALESCE(input_tokens, 0) + COALESCE(output_tokens, 0) ELSE 0 END), 0), "
+    "COALESCE(SUM(CASE WHEN last_seen >= :prev AND last_seen < :week THEN COALESCE(input_tokens, 0) + COALESCE(output_tokens, 0) ELSE 0 END), 0), "
+    "COUNT(DISTINCT CASE WHEN last_seen >= :week THEN session_id END) "
+    "FROM session_model_usage WHERE billing_provider = :provider AND last_seen >= :prev"
+)
+
+
+def _load_collect():
+    spec = importlib.util.spec_from_file_location("agent_office_collect", Path(__file__).with_name("collect.py"))
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def _state_dbs(root: Path) -> list:
+    """The root state.db plus every profiles/<name>/state.db that exists (same layout as collect.discover)."""
+    out = []
+    if (root / "state.db").is_file():
+        out.append(root / "state.db")
+    pdir = root / "profiles"
+    if pdir.is_dir():
+        out += [p / "state.db" for p in sorted(pdir.iterdir()) if (p / "state.db").is_file()]
+    return out
+
+
+def _default_dbs() -> list:
+    return _state_dbs(_load_collect().root_home(None))
+
+
+def _read_db(path: Path, now: float) -> dict:
+    """Window sums for one DB: {provider: (five, week, prev, sessions)}. Empty dict when the DB is unusable."""
+    out = {}
+    try:
+        conn = sqlite3.connect(f"{path.resolve().as_uri()}?mode=ro", uri=True, timeout=_BUSY_S)
+    except sqlite3.Error:
+        return out
+    try:
+        conn.execute("PRAGMA query_only = ON")
+        has_table = conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'session_model_usage'").fetchone()
+        if has_table is None:
+            return out
+        for key, provider in _PROVIDERS.items():
+            params = {"five": now - 5 * _HOUR, "week": now - 7 * _DAY, "prev": now - 14 * _DAY, "provider": provider}
+            row = conn.execute(_TOKEN_SQL, params).fetchone()
+            out[key] = tuple(int(v or 0) for v in row)
+    except sqlite3.Error:
+        return {}
+    finally:
+        conn.close()
+    return out
+
+
+def token_usage(now: Optional[float] = None, db_paths: Optional[list] = None) -> dict:
+    """Claude and DeepSeek token totals over the 5h, 7d and previous-7d windows, summed across every state.db.
+
+    Integers only; no model names, session ids or paths leave this function. Missing, unreadable or table-less DBs
+    are skipped without raising.
+    """
+    ts = time.time() if now is None else float(now)
+    paths = _default_dbs() if db_paths is None else [Path(p) for p in db_paths]
+    totals = {k: {"five_hour": 0, "seven_day": 0, "prev_seven_day": 0, "sessions_7d": 0} for k in _PROVIDERS}
+    for path in paths:
+        if not path.is_file():
+            continue
+        for key, (five, week, prev, sessions) in _read_db(path, ts).items():
+            t = totals[key]
+            t["five_hour"] += five
+            t["seven_day"] += week
+            t["prev_seven_day"] += prev
+            t["sessions_7d"] += sessions  # summed per DB: a session id is only unique inside one DB
+    return dict(totals, source="state.db", fetched_at=ts)
+
+
+def _tokens_or_none(now: float) -> Optional[dict]:
+    try:
+        return token_usage(now)
+    except Exception:
+        return None

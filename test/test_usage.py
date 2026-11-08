@@ -1,6 +1,8 @@
 """Unit tests for plugin/agent-office/dashboard/usage.py (run via unittest discover)."""
 import importlib.util
 import json
+import sqlite3
+import tempfile
 import unittest
 from datetime import datetime, timezone
 from pathlib import Path
@@ -24,9 +26,20 @@ def _snapshot():
     ), identity="secret-principal-123")
 
 
+FAKE_TOKENS = {
+    "claude": {"five_hour": 1, "seven_day": 2, "prev_seven_day": 3, "sessions_7d": 4},
+    "deepseek": {"five_hour": 0, "seven_day": 0, "prev_seven_day": 0, "sessions_7d": 0},
+    "source": "state.db", "fetched_at": 1000.0,
+}
+
+
 class PlanUsageTests(unittest.TestCase):
     def setUp(self):
         usage._reset_cache()
+        # plan_usage reads state.db through token_usage(); keep these tests off the real DBs.
+        patcher = patch.object(usage, "token_usage", return_value=FAKE_TOKENS)
+        patcher.start()
+        self.addCleanup(patcher.stop)
 
     def tearDown(self):
         usage._reset_cache()
@@ -39,6 +52,7 @@ class PlanUsageTests(unittest.TestCase):
             "seven_day": {"pct": 77.0, "resets_at": RESET_7D.isoformat()},
             "fetched_at": 1000.0,
             "reason": None,
+            "tokens": FAKE_TOKENS,
         })
 
     def test_raising_fetch_is_unavailable(self):
@@ -130,6 +144,19 @@ class PlanUsageTests(unittest.TestCase):
         usage.plan_usage(now=1061.0, fetch=fake)
         self.assertEqual(len(calls), 2)
 
+    def test_tokens_are_attached_even_when_plan_lookup_fails(self):
+        def boom():
+            raise RuntimeError("nope")
+        result = usage.plan_usage(now=1000.0, fetch=boom)
+        self.assertFalse(result["available"])
+        self.assertEqual(result["tokens"], FAKE_TOKENS)
+
+    def test_token_failure_gives_null_tokens_not_an_error(self):
+        with patch.object(usage, "token_usage", side_effect=RuntimeError("disk")):
+            result = usage.plan_usage(now=1000.0, fetch=_snapshot)
+        self.assertTrue(result["available"])
+        self.assertIsNone(result["tokens"])
+
     def test_failure_is_cached_too(self):
         calls = []
 
@@ -144,11 +171,121 @@ class PlanUsageTests(unittest.TestCase):
 
     def test_output_is_whitelisted(self):
         dumped = json.dumps(usage.plan_usage(now=1000.0, fetch=_snapshot))
-        self.assertNotIn("token", dumped.lower())
         self.assertNotIn("key", dumped.lower())
         self.assertNotIn("secret-principal", dumped)
         self.assertNotIn("identity", dumped)
         self.assertIn("reason", json.loads(dumped))
+
+
+STATE_SCHEMA = """CREATE TABLE session_model_usage (
+    session_id TEXT, model TEXT, billing_provider TEXT, api_call_count INTEGER,
+    input_tokens INTEGER, output_tokens INTEGER, cache_read_tokens INTEGER, cache_write_tokens INTEGER,
+    reasoning_tokens INTEGER, estimated_cost_usd REAL, actual_cost_usd REAL, first_seen REAL, last_seen REAL)"""
+CLAUDE = usage.CLAUDE_PROVIDER
+NOW = 2_000_000_000.0
+HOUR, DAY = 3600.0, 86400.0
+
+
+def _make_db(path, rows, schema=STATE_SCHEMA):
+    conn = sqlite3.connect(str(path))
+    if schema:
+        conn.execute(schema)
+    for sid, provider, last_seen, tin, tout, cache in rows:
+        conn.execute("INSERT INTO session_model_usage (session_id, model, billing_provider, api_call_count, "
+                     "input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, first_seen, last_seen) "
+                     "VALUES (?, 'm', ?, 1, ?, ?, ?, 0, ?, ?)",
+                     (sid, provider, tin, tout, cache, last_seen - 1, last_seen))
+    conn.commit()
+    conn.close()
+
+
+class TokenUsageTests(unittest.TestCase):
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.root = Path(self._tmp.name)
+
+    def tearDown(self):
+        self._tmp.cleanup()
+
+    def test_windows_sum_input_and_output_only_and_split_providers(self):
+        db = self.root / "state.db"
+        _make_db(db, [
+            ("a", CLAUDE, NOW - 1 * HOUR, 100, 50, 999_999),   # 5h, 7d: cache excluded
+            ("b", CLAUDE, NOW - 3 * DAY, 200, 10, 0),          # 7d only
+            ("c", CLAUDE, NOW - 10 * DAY, 400, 40, 0),         # previous week only
+            ("d", CLAUDE, NOW - 20 * DAY, 800, 80, 0),         # outside every window
+            ("e", "deepseek", NOW - 1 * HOUR, 7, 3, 0),        # other provider
+        ])
+        out = usage.token_usage(now=NOW, db_paths=[db])
+        self.assertEqual(out["claude"], {"five_hour": 150, "seven_day": 360, "prev_seven_day": 440, "sessions_7d": 2})
+        self.assertEqual(out["deepseek"], {"five_hour": 10, "seven_day": 10, "prev_seven_day": 0, "sessions_7d": 1})
+
+    def test_five_hour_window_starts_exactly_five_hours_back(self):
+        db = self.root / "state.db"
+        _make_db(db, [("in", CLAUDE, NOW - 5 * HOUR, 1, 0, 0), ("out", CLAUDE, NOW - 5 * HOUR - 1, 100, 0, 0)])
+        self.assertEqual(usage.token_usage(now=NOW, db_paths=[db])["claude"]["five_hour"], 1)
+
+    def test_sums_across_every_db(self):
+        root = self.root / "state.db"
+        prof = self.root / "profiles" / "dev" / "state.db"
+        prof.parent.mkdir(parents=True)
+        _make_db(root, [("a", CLAUDE, NOW - HOUR, 10, 0, 0)])
+        _make_db(prof, [("a", CLAUDE, NOW - HOUR, 20, 0, 0)])  # same session id in another DB is a different session
+        out = usage.token_usage(now=NOW, db_paths=[root, prof])
+        self.assertEqual(out["claude"]["five_hour"], 30)
+        self.assertEqual(out["claude"]["sessions_7d"], 2)
+
+    def test_missing_table_is_skipped(self):
+        bad = self.root / "bad.db"
+        _make_db(bad, [], schema="CREATE TABLE other (x INTEGER)")
+        good = self.root / "good.db"
+        _make_db(good, [("a", CLAUDE, NOW - HOUR, 5, 5, 0)])
+        out = usage.token_usage(now=NOW, db_paths=[bad, good])
+        self.assertEqual(out["claude"]["five_hour"], 10)
+
+    def test_broken_file_is_skipped(self):
+        broken = self.root / "broken.db"
+        broken.write_bytes(b"this is not a sqlite database at all" * 100)
+        good = self.root / "good.db"
+        _make_db(good, [("a", CLAUDE, NOW - HOUR, 5, 5, 0)])
+        out = usage.token_usage(now=NOW, db_paths=[broken, good])
+        self.assertEqual(out["claude"]["five_hour"], 10)
+
+    def test_missing_file_is_skipped_and_not_created(self):
+        ghost = self.root / "nope" / "state.db"
+        out = usage.token_usage(now=NOW, db_paths=[ghost])
+        self.assertEqual(out["claude"], {"five_hour": 0, "seven_day": 0, "prev_seven_day": 0, "sessions_7d": 0})
+        self.assertFalse(ghost.exists())
+
+    def test_readonly_connection_cannot_write(self):
+        db = self.root / "state.db"
+        _make_db(db, [("a", CLAUDE, NOW - HOUR, 5, 5, 0)])
+        conn = sqlite3.connect(f"{db.resolve().as_uri()}?mode=ro", uri=True)
+        conn.execute("PRAGMA query_only = ON")
+        with self.assertRaises(sqlite3.Error):
+            conn.execute("UPDATE session_model_usage SET input_tokens = 0")
+        conn.close()
+
+    def test_output_is_integers_and_source_only(self):
+        db = self.root / "state.db"
+        _make_db(db, [("a", CLAUDE, NOW - HOUR, 5, 5, 0)])
+        out = usage.token_usage(now=NOW, db_paths=[db])
+        self.assertEqual(out["source"], "state.db")
+        self.assertEqual(out["fetched_at"], NOW)
+        for prov in ("claude", "deepseek"):
+            for k, v in out[prov].items():
+                self.assertIs(type(v), int, k)
+        dumped = json.dumps(out)
+        self.assertNotIn("session_id", dumped)
+        self.assertNotIn(str(self.root), dumped)
+
+    def test_default_discovery_finds_root_and_profiles(self):
+        _make_db(self.root / "state.db", [])
+        (self.root / "profiles" / "red").mkdir(parents=True)
+        _make_db(self.root / "profiles" / "red" / "state.db", [])
+        (self.root / "profiles" / "empty").mkdir()
+        found = usage._state_dbs(self.root)
+        self.assertEqual(found, [self.root / "state.db", self.root / "profiles" / "red" / "state.db"])
 
 
 class ClaudeCommandTests(unittest.TestCase):
