@@ -1,0 +1,59 @@
+/* Agent Deck design tokens (design direction rev 2, sections 3 and 4). Dark only at v1.
+   Colour carries meaning: one hue per meaning. Glow is an accent, never a background.
+   Glow recipes are static box-shadows. A glow picks its hue by setting --c-rgb on the element
+   (e.g. style="--c-rgb: var(--c-live-rgb)") and then using class glow-1 / glow-2 / glow-3. */
+:root {
+  /* base */
+  --bg: #07070A;
+  --surface-1: #0E0E13;
+  --surface-2: #14131B;
+  --surface-3: #1C1A26;
+  --border: #23212E;
+  --border-strong: #3E3A50;
+  --text-1: #F2F1F6;   /* >= 17:1 on bg */
+  --text-2: #B3B0BF;   /* >= 9:1 */
+  --text-3: #8A8697;   /* >= 5:1, metadata only */
+
+  /* semantic: one hue per meaning */
+  --c-accent: #8B5CF6;  --c-accent-hover: #A855F7;  --c-accent-rgb: 139, 92, 246;   /* primary action, violet */
+  --c-live: #2FD6C4;    --c-live-rgb: 47, 214, 196;                                  /* running / on / listening, teal */
+  --c-gold: #E0B35A;    --c-gold-rgb: 224, 179, 90;                                  /* selected / waiting-you / DEMO */
+  --c-danger: #FF5A5F;  --c-danger-rgb: 255, 90, 95;                                 /* error / destructive */
+  --c-claude: #E07A3F;  --c-claude-rgb: 224, 122, 63;                                /* provider: Claude (copper) */
+  --c-deepseek: #22D3EE; --c-deepseek-rgb: 34, 211, 238;                             /* provider: DeepSeek (cyan) */
+  --c-codex: #4F7CFF;   --c-codex-rgb: 79, 124, 255;                                 /* provider: Codex */
+  --c-hermes: #EC4899;  --c-hermes-rgb: 236, 72, 153;                                /* Hermes ribbon */
+  --c-local: #E8E6F0;   --c-local-rgb: 232, 230, 240;                                /* local / neutral source */
+  --c-amber-deco: #F59E0B;                                                           /* decorative glow only, never a status */
+
+  /* default glow hue (violet); elements override --c-rgb */
+  --c-rgb: 139, 92, 246;
+  --ring-track: #23212E;
+
+  /* type: sans for text, mono (tabular) for numbers, costs, timers, model names, keys. No web font download. */
+  --font-sans: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-mono: ui-monospace, "JetBrains Mono", SFMono-Regular, Menlo, monospace;
+
+  /* radii */
+  --radius-card: 14px;
+  --radius-control: 10px;
+  --radius-chip: 999px;
+}
+
+/* glow recipes (static). Use with --c-rgb set on the element. */
+.glow-1 { box-shadow: 0 0 0 1px rgba(var(--c-rgb), .35), 0 0 12px rgba(var(--c-rgb), .16); }
+.glow-2 { box-shadow: 0 0 0 1px rgba(var(--c-rgb), .55), 0 0 22px rgba(var(--c-rgb), .28); }
+.glow-3 { box-shadow: 0 0 0 1px rgba(var(--c-rgb), .6), 0 0 36px rgba(var(--c-rgb), .38), 0 0 72px rgba(var(--c-rgb), .18); }
+
+/* ambient wash: one static radial gradient per screen, behind the header */
+.ambient-violet { background: radial-gradient(120% 80% at 0% 0%, rgba(139, 92, 246, .14), transparent 60%), var(--bg); }
+.ambient-teal { background: radial-gradient(120% 80% at 0% 0%, rgba(47, 214, 196, .12), transparent 60%), var(--bg); }
+.ambient-gold { background: radial-gradient(120% 80% at 0% 0%, rgba(224, 179, 90, .12), transparent 60%), var(--bg); }
+
+/* DEMO badge: any placeholder or unavailable data carries it. 9px uppercase, 1px gold border at 60%. */
+.demo-badge { display: inline-block; font: 600 9px/1 var(--font-sans); letter-spacing: .08em; text-transform: uppercase;
+  color: var(--c-gold); border: 1px solid rgba(224, 179, 90, .6); border-radius: 4px; padding: 2px 4px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .demo-badge { transition: none; }
+}
