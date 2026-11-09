@@ -5,6 +5,7 @@ worker thread (never on the event loop) and cached for a few seconds, so many
 open tabs cost one scan.
 """
 import asyncio
+import hashlib
 import importlib.util
 import json
 import re
@@ -135,11 +136,17 @@ async def memory_endpoint(q: str = Query("", max_length=200), agent: str | None 
     return JSONResponse(result, headers=NO_STORE)
 
 
+def _brain_view(agent):
+    """The GET /brain payload: the read-only snapshot with the edit state of every file (brain_edit.mark_snapshot)."""
+    return brain_edit.mark_snapshot(brain.snapshot(agent), brain_edit.edit_enabled())
+
+
 @router.get("/brain")
 async def brain_endpoint(agent: str | None = Query(None, max_length=32)):
-    """Read-only SOUL.md, MEMORY.md and USER.md per whitelisted agent (see brain.py). agent narrows to one agent;
-    an unknown agent -> 404. Nothing is written."""
-    result = await asyncio.to_thread(brain.snapshot, agent)
+    """Read-only SOUL.md, MEMORY.md and USER.md per whitelisted agent (see brain.py), with edit_enabled and each file's
+    editable / edit_block / confirm_token (brain_edit.mark_snapshot). agent narrows to one agent; an unknown agent ->
+    404. Nothing is written."""
+    result = await asyncio.to_thread(_brain_view, agent)
     if result["unknown_agent"]:
         return JSONResponse({"error": "unknown agent"}, status_code=404, headers=NO_STORE)
     return JSONResponse(result, headers=NO_STORE)
@@ -263,6 +270,38 @@ def _edit_refused(e) -> JSONResponse:
     return JSONResponse(e.body, status_code=e.status, headers=NO_STORE)
 
 
+def _edit_disabled() -> JSONResponse:
+    return JSONResponse({"error": "brain edit disabled"}, status_code=403, headers=NO_STORE)
+
+
+def _author(request: Request) -> str:
+    """Who an audit line names. A dashboard session: 'user:<Session.user_id>' (dashboard_auth/base.py). A bearer
+    token or native-app grant: only the path and the principal's type name, since the principal's fields belong to
+    the auth provider. Otherwise the client address and the first 16 hex of sha256(User-Agent); the raw User-Agent
+    is never kept. brain_edit cleans the text."""
+    sess = getattr(request.state, "session", None)
+    if sess is not None:
+        return f"user:{getattr(sess, 'user_id', '')}"
+    tp = getattr(request.state, "token_principal", None)
+    if tp is not None:
+        return f"token:{type(tp).__name__}"
+    grant = getattr(request.state, "native_http_principal", None)
+    if grant is not None:
+        return f"native:{grant.get('purpose', '') if isinstance(grant, dict) else ''}"
+    host = request.client.host if request.client else "unknown"
+    ua = request.headers.get("user-agent", "").encode("utf-8", errors="replace")
+    return f"addr:{host} ua:{hashlib.sha256(ua).hexdigest()[:16]}"
+
+
+def _version_view(agent, file, vid) -> dict:
+    """GET /brain/version: the backup (get_version) plus its restore fields (live_state): base_sha always, and a
+    confirm_token only while editing is on."""
+    enabled = brain_edit.edit_enabled()
+    out = brain_edit.get_version(agent, file, vid, root=brain.DEFAULT_ROOT)
+    out.update(brain_edit.live_state(agent, file, root=brain.DEFAULT_ROOT, enabled=enabled))
+    return out
+
+
 async def _brain_body(request: Request) -> dict:
     """JSON object body, refused with 413 past brain_edit.MAX_BODY_BYTES (checked on Content-Length and while reading)."""
     cl = request.headers.get("content-length", "")
@@ -285,12 +324,16 @@ async def _brain_body(request: Request) -> dict:
 
 @router.put("/brain")
 async def brain_save(request: Request):
+    """Saves one file. 403 'brain edit disabled' when the flag is off (checked before the body is read)."""
+    if not brain_edit.edit_enabled():
+        return _edit_disabled()
     reason = inbox.check_write_request(request.headers)
     if reason:
         return _forbidden(reason)
     try:
         payload = await _brain_body(request)
-        result = await asyncio.to_thread(brain_edit.save, payload, root=brain.DEFAULT_ROOT)
+        author = _author(request)
+        result = await asyncio.to_thread(brain_edit.save, payload, root=brain.DEFAULT_ROOT, author=author)
     except brain_edit.EditError as e:
         return _edit_refused(e)
     except OSError:
@@ -300,12 +343,16 @@ async def brain_save(request: Request):
 
 @router.post("/brain/restore")
 async def brain_restore(request: Request):
+    """Puts a backup back. 403 'brain edit disabled' when the flag is off (checked before the body is read)."""
+    if not brain_edit.edit_enabled():
+        return _edit_disabled()
     reason = inbox.check_write_request(request.headers)
     if reason:
         return _forbidden(reason)
     try:
         payload = await _brain_body(request)
-        result = await asyncio.to_thread(brain_edit.restore, payload, root=brain.DEFAULT_ROOT)
+        author = _author(request)
+        result = await asyncio.to_thread(brain_edit.restore, payload, root=brain.DEFAULT_ROOT, author=author)
     except brain_edit.EditError as e:
         return _edit_refused(e)
     except OSError:
@@ -326,9 +373,10 @@ async def brain_versions(agent: str | None = Query(None, max_length=32), file: s
 @router.get("/brain/version")
 async def brain_version(agent: str | None = Query(None, max_length=32), file: str | None = Query(None, max_length=16),
                         version_id: str | None = Query(None, alias="id", max_length=64)):
-    """One backup's redacted text, for the diff before a restore. The id must match the backup listing, else 404."""
+    """One backup's redacted text, its scan findings (findings, or scan_unavailable), and base_sha / confirm_token for a
+    restore (the token only while editing is on). The id must match the backup listing, else 404."""
     try:
-        result = await asyncio.to_thread(brain_edit.get_version, agent, file, version_id, root=brain.DEFAULT_ROOT)
+        result = await asyncio.to_thread(_version_view, agent, file, version_id)
     except brain_edit.EditError as e:
         return _edit_refused(e)
     return JSONResponse(result, headers=NO_STORE)

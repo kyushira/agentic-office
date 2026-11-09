@@ -12,6 +12,7 @@ from unittest import mock
 
 _DASH = Path(__file__).resolve().parent.parent / "plugin" / "agent-office" / "dashboard"
 _NOSCAN = lambda text: []  # the threat scanner is injected in every test, so the real one is never imported
+AUTO = object()  # Helper sentinel: issue a confirm token when the target needs one
 
 
 def _load(name: str, path: Path):
@@ -65,14 +66,21 @@ class _Temp(unittest.TestCase):
         p = self.target(agent, key)
         return _sha(p.read_bytes()) if p.is_file() else ""
 
-    def save(self, agent="dev", file="memory", text="hello", base=None, confirm=None, scanner=_NOSCAN, mkparent=True):
+    def save(self, agent="dev", file="memory", text="hello", base=None, token=AUTO, scanner=_NOSCAN, mkparent=True,
+             author=None):
+        """token=AUTO issues a live token bound to the payload's base_sha when the file needs one (soul, default);
+        token=None sends no token; any string is sent as is."""
         if mkparent and brain.resolve(agent) is not None and file in brain_edit.FILES:
             self.target(agent, file).parent.mkdir(parents=True, exist_ok=True)  # a missing file needs its folder
-        payload = {"agent": agent, "file": file, "text": text,
-                   "base_sha": self.current_sha(agent, file) if base is None else base}
-        if confirm is not None:
-            payload["confirm"] = confirm
-        return brain_edit.save(payload, root=self.root, backup_root=self.bk, scanner=scanner)
+        base_sha = self.current_sha(agent, file) if base is None else base
+        payload = {"agent": agent, "file": file, "text": text, "base_sha": base_sha}
+        if token is AUTO:
+            if brain.resolve(agent) is not None and file in brain_edit.FILES and (
+                    file == "soul" or brain.resolve(agent) == "default"):
+                payload["confirm_token"] = brain_edit.issue_token(brain.resolve(agent), file, base_sha)
+        elif token is not None:
+            payload["confirm_token"] = token
+        return brain_edit.save(payload, root=self.root, backup_root=self.bk, scanner=scanner, author=author)
 
     def refused(self, status: int, fn, *args, **kwargs):
         with self.assertRaises(brain_edit.EditError) as cm:
@@ -104,7 +112,7 @@ class _Temp(unittest.TestCase):
 class WhitelistAndPathTests(_Temp):
     def test_all_seven_agents_and_ash_alias_are_accepted(self):
         for agent in brain.AGENTS + ("ash",):
-            r = self.save(agent=agent, file="memory", text=f"entry for {agent}", confirm=True)
+            r = self.save(agent=agent, file="memory", text=f"entry for {agent}")
             self.assertTrue(r["saved"], agent)
             self.assertEqual(self.target(brain.resolve(agent), "memory").read_text(), f"entry for {agent}")
 
@@ -118,7 +126,7 @@ class WhitelistAndPathTests(_Temp):
     def test_traversal_strings_in_agent_write_nothing(self):
         before = self.snapshot(self.tmp)
         for bad in ("../default", "dev/../nova", "/etc", "dev%2f..", "dev\x00", "", None, 3):
-            self.refused(404, self.save, agent=bad, file="memory", text="x", confirm=True)
+            self.refused(404, self.save, agent=bad, file="memory", text="x")
         self.assertEqual(self.snapshot(self.tmp), before)
 
     def test_version_routes_also_refuse_unknown_names(self):
@@ -133,13 +141,13 @@ class LimitTests(_Temp):
         body = self.refused(422, self.save, text=_prose(limit + 1), base=self.current_sha("dev", "memory"))
         self.assertEqual(body, {"error": "over limit", "chars": limit + 1, "limit": limit})
 
-    def test_soul_limit_is_20000_and_soul_needs_confirm(self):
+    def test_soul_limit_is_20000_and_soul_needs_a_token(self):
         self.assertEqual(brain.EDIT_LIMITS["soul"], 20000)
-        self.assertTrue(self.save(agent="nova", file="soul", text=_prose(20000), confirm=True)["saved"])
-        self.refused(422, self.save, agent="nova", file="soul", text=_prose(20001), confirm=True)
+        self.assertTrue(self.save(agent="nova", file="soul", text=_prose(20000))["saved"])
+        self.refused(422, self.save, agent="nova", file="soul", text=_prose(20001))
 
     def test_user_limit(self):
-        self.refused(422, self.save, file="user", text="u" * 1376, confirm=None)
+        self.refused(422, self.save, file="user", text="u" * 1376)
 
     def test_crlf_is_counted_after_normalisation(self):
         # 2199 characters + one CRLF: 2200 after CRLF->LF, so it fits the memory limit exactly
@@ -168,17 +176,22 @@ class SecretAndScannerTests(_Temp):
 
 
 class ConfirmTests(_Temp):
-    def test_soul_without_confirm_is_428_and_with_confirm_is_ok(self):
-        self.refused(428, self.save, agent="nova", file="soul", text="x")
-        self.refused(428, self.save, agent="nova", file="soul", text="x", confirm="yes")
-        self.assertTrue(self.save(agent="nova", file="soul", text="x", confirm=True)["saved"])
+    def test_soul_without_token_is_428_and_with_token_is_ok(self):
+        body = self.refused(428, self.save, agent="nova", file="soul", text="x", token=None)
+        self.assertEqual(body, {"error": "confirm token required"})
+        self.assertTrue(self.save(agent="nova", file="soul", text="x")["saved"])
 
-    def test_default_agent_needs_confirm_for_any_file(self):
-        self.refused(428, self.save, agent="ash", file="memory", text="x")
-        self.refused(428, self.save, agent="default", file="user", text="x", confirm=False)
-        self.assertTrue(self.save(agent="default", file="user", text="x", confirm=True)["saved"])
+    def test_default_agent_needs_a_token_for_any_file(self):
+        self.refused(428, self.save, agent="ash", file="memory", text="x", token=None)
+        self.refused(428, self.save, agent="default", file="user", text="x", token=None)
+        self.assertTrue(self.save(agent="default", file="user", text="x")["saved"])
 
-    def test_other_agents_memory_needs_no_confirm(self):
+    def test_confirm_true_in_the_payload_is_not_a_token(self):
+        self.refused(428, brain_edit.save, {"agent": "nova", "file": "soul", "text": "x", "base_sha": "",
+                                            "confirm": True}, root=self.root, backup_root=self.bk, scanner=_NOSCAN)
+        self.assertFalse(self.target("nova", "soul").exists())
+
+    def test_other_agents_memory_needs_no_token(self):
         self.assertTrue(self.save(agent="red", file="memory", text="x")["saved"])
 
 
@@ -304,7 +317,8 @@ class SaveTests(_Temp):
         rec = json.loads(raw.splitlines()[-1])
         self.assertEqual(rec["action"], "save")
         self.assertEqual(set(rec), {"ts", "action", "agent", "file", "chars_before", "chars_after",
-                                    "sha_before", "sha_after", "backup"})
+                                    "sha_before", "sha_after", "backup", "author"})
+        self.assertIsNone(rec["author"])
         self.assertEqual(rec["sha_before"], _sha(f"{MARKER} old\n".encode()))
 
     def test_over_limit_body_has_no_contents(self):
@@ -338,17 +352,17 @@ class VersionAndRestoreTests(_Temp):
         self.assertEqual(self.target("dev", "memory").read_bytes(), b"changed line\n")
         before = len(self.backups("dev", "memory"))
         r = brain_edit.restore({"agent": "dev", "file": "memory", "id": saved["backup"],
-                                "base_sha": self.current_sha("dev", "memory"), "confirm": None},
-                               root=self.root, backup_root=self.bk)
+                                "base_sha": self.current_sha("dev", "memory")},
+                               root=self.root, backup_root=self.bk, scanner=_NOSCAN)
         self.assertEqual(r["restored"], saved["backup"])
         self.assertEqual(self.target("dev", "memory").read_bytes(), original)
         self.assertEqual(len(self.backups("dev", "memory")), before + 1)
         newest = self.bk / "dev" / "memory" / (r["backup"] + ".md")
         self.assertEqual(newest.read_bytes(), b"changed line\n")
 
-    def test_restore_is_not_redacted_or_threat_checked(self):
+    def test_restore_is_not_redacted(self):
         # A version that holds a secret-looking token. Saving that text would be refused, but restoring the bytes
-        # the file already had is allowed: restore does not redact or scan.
+        # the file already had is allowed: restore does not redact (the threat scan is injected clean here).
         secretish = "token sk-" + "b" * 24 + "\n"
         d = self.bk / "dev" / "memory"
         d.mkdir(parents=True)
@@ -356,19 +370,19 @@ class VersionAndRestoreTests(_Temp):
         self.make("dev", "memory", b"clean\n")
         bid = "20260101T000000_000000Z"
         r = brain_edit.restore({"agent": "dev", "file": "memory", "id": bid, "base_sha": self.current_sha("dev", "memory")},
-                               root=self.root, backup_root=self.bk)
+                               root=self.root, backup_root=self.bk, scanner=_NOSCAN)
         self.assertTrue(r["saved"])
         self.assertEqual(self.target("dev", "memory").read_bytes(), secretish.encode())
 
-    def test_restore_checks_sha_and_confirm(self):
+    def test_restore_checks_sha_and_token(self):
         self.make("dev", "memory", b"a\n")
         self.save(text="b\n")
         bid = self.backups("dev", "memory")[-1][:-3]
         self.refused(409, brain_edit.restore, {"agent": "dev", "file": "memory", "id": bid, "base_sha": "0" * 64},
-                     root=self.root, backup_root=self.bk)
+                     root=self.root, backup_root=self.bk, scanner=_NOSCAN)
         self.refused(428, brain_edit.restore, {"agent": "ash", "file": "memory", "id": bid,
                                                "base_sha": self.current_sha("ash", "memory")},
-                     root=self.root, backup_root=self.bk)
+                     root=self.root, backup_root=self.bk, scanner=_NOSCAN)
 
     def test_restore_of_oversize_version_is_422(self):
         self.make("dev", "memory", b"a\n")
@@ -438,21 +452,31 @@ class RouteTests(_Temp):
         except ImportError:
             self.skipTest("fastapi / httpx not installed")
         self._env = os.environ.get("AGENT_OFFICE_ROOT")
+        self._flag = os.environ.get("DECK_BRAIN_EDIT")
         os.environ["AGENT_OFFICE_ROOT"] = str(self.tmp / "office-root")
+        os.environ["DECK_BRAIN_EDIT"] = "1"  # the editor is on for these routes; the flag itself is tested elsewhere
         api = _load("plugin_api_brain_edit_test", _DASH / "plugin_api.py")
         api.brain.DEFAULT_ROOT = self.root
         api.brain_edit.DEFAULT_BACKUP_ROOT = self.bk
         self.api = api
+        # The routes use the default scanner: inject a clean one so no test imports Hermes' real scanner.
+        self._scan = mock.patch.object(api.brain_edit, "_default_scanner", lambda text: [])
+        self._scan.start()
         app = FastAPI()
         app.include_router(api.router, prefix="/api/plugins/agent-office")
         self.client = TestClient(app)
         self.base = "/api/plugins/agent-office"
 
     def tearDown(self):
+        self._scan.stop()
         if self._env is None:
             os.environ.pop("AGENT_OFFICE_ROOT", None)
         else:
             os.environ["AGENT_OFFICE_ROOT"] = self._env
+        if self._flag is None:
+            os.environ.pop("DECK_BRAIN_EDIT", None)
+        else:
+            os.environ["DECK_BRAIN_EDIT"] = self._flag
         super().tearDown()
 
     def put(self, body, headers=HDR, raw=None):

@@ -180,7 +180,7 @@ class StringConfirmTests(_Temp):
         self.make("default", "memory", b"d\n")
         for agent, file in (("nova", "soul"), ("ash", "memory")):
             body = self.refused(428, self.save, agent=agent, file=file, text="x\n")
-            self.assertEqual(body, {"error": "confirm required"})
+            self.assertEqual(body, {"error": "confirm token required"})
         with self.assertRaises(brain_edit.EditError) as cm:
             brain_edit.save({"agent": "nova", "file": "soul", "text": "x\n", "base_sha": _sha(b"s\n"),
                              "confirm": "true"}, root=self.root, backup_root=self.bk, scanner=_NOSCAN)
@@ -234,7 +234,9 @@ class StreamedOversizeTests(unittest.TestCase):
         self.root = self.tmp / "office"
         self.root.mkdir()
         self._env = os.environ.get("AGENT_OFFICE_ROOT")
+        self._flag = os.environ.get("DECK_BRAIN_EDIT")
         os.environ["AGENT_OFFICE_ROOT"] = str(self.tmp / "office-root")
+        os.environ["DECK_BRAIN_EDIT"] = "1"  # the flag is checked before the body is read, so it must be on here
         api = _load("plugin_api_review_stream", _DASH / "plugin_api.py")
         api.brain.DEFAULT_ROOT = self.root
         api.brain_edit.DEFAULT_BACKUP_ROOT = self.tmp / "bk"
@@ -252,6 +254,10 @@ class StreamedOversizeTests(unittest.TestCase):
             os.environ.pop("AGENT_OFFICE_ROOT", None)
         else:
             os.environ["AGENT_OFFICE_ROOT"] = self._env
+        if self._flag is None:
+            os.environ.pop("DECK_BRAIN_EDIT", None)
+        else:
+            os.environ["DECK_BRAIN_EDIT"] = self._flag
         self._tmp.cleanup()
 
     def test_streamed_body_over_the_cap_without_content_length_is_413(self):
