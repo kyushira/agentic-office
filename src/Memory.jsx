@@ -1,6 +1,7 @@
 import { React, useState, useEffect, useRef, fetchJSON } from './sdk.js';
 import { ago } from './format.js';
 import { NodeGraph } from './Graph.jsx';
+import { BrainOverview } from './Brain.jsx';
 import {
   checkQuery, memoryUrl, highlightParts, searchMode, redactedNote, agentOptions, memoryView, cleanSnippet, MEMORY_DEBOUNCE_MS,
 } from './memory-model.js';
@@ -78,6 +79,7 @@ export function MemoryPane({ agents, sessions, brain, lite, hidden }) {
   return (
     <section id="dk-pane-memory" aria-labelledby="dk-mem-h" className="dk-pane dk-pane-memory" hidden={!!hidden}>
       <h2 id="dk-mem-h" className="dk-pane-h">Memory</h2>
+      <BrainOverview hidden={!!hidden} agents={agents} />
       {/* the graph runs its loop only while mounted; a hidden tab (phone) unmounts it */}
       {!hidden && <NodeGraph agents={agents} sessions={sessions} brain={brain} lite={lite} />}
       <form className="dk-mem-form" role="search" onSubmit={onSubmit}>

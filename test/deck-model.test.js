@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { buildItems, headerCounts, durationText, modelText, modelParts, usageText, meterLevel, activeTokens, currentSessionId, eventLabel, detailRows, traceModel, newToolCalls, countStep, todayParts, newWalks, walkLabel, toolRing, newBrainTrips, brainCounts, brainText, brainNotes, helperChanges, swarmTip, needsYou, statusWord, greeting, shortDuration, rosterDuration, clockText, resetSoon, RIGHT_PANE_DEFAULT, livePolls, commsPolls, speechText, liveFeedMs, LIVE_POLL_MS, LIVE_POLL_LITE_MS, paneTabNext } from '../src/deck-model.js';
+import { buildItems, headerCounts, durationText, modelText, modelParts, usageText, meterLevel, activeTokens, currentSessionId, eventLabel, detailRows, traceModel, newToolCalls, countStep, todayParts, newWalks, walkLabel, toolRing, newBrainTrips, brainCounts, brainText, brainNotes, helperChanges, swarmTip, needsYou, statusWord, greeting, shortDuration, clockText, resetSoon, RIGHT_PANE_DEFAULT, livePolls, commsPolls, speechText, liveFeedMs, LIVE_POLL_MS, LIVE_POLL_LITE_MS, paneTabNext } from '../src/deck-model.js';
 
 const now = 1_800_000_000;
 const state = {
@@ -550,14 +550,6 @@ test('shortDuration: <1m, minutes, hours; bad input gives null', () => {
   assert.equal(shortDuration(2 * 3600 + 900), '2h');
   assert.equal(shortDuration(-5), null);
   assert.equal(shortDuration(NaN), null);
-});
-
-test('rosterDuration: from the earliest working session; null when not working or no start', () => {
-  const sessions = [{ status: 'working', started: now - 2340 }, { status: 'working', started: now - 60 }, { status: 'idle', started: now - 9000 }];
-  assert.equal(rosterDuration({ status: 'working' }, sessions, now), '39m');
-  assert.equal(rosterDuration({ status: 'idle' }, sessions, now), null);
-  assert.equal(rosterDuration({ status: 'working' }, [{ status: 'working' }], now), null);
-  assert.equal(rosterDuration({ status: 'working' }, undefined, now), null);
 });
 
 test('clockText: 24h HH:MM with leading zeros', () => {

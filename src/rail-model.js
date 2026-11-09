@@ -3,12 +3,12 @@
 
 /**
  * Rail buttons, top to bottom. Each one scrolls to and focuses an existing element on the same page
- * (never switches a view). `target` is the element id; `fallback` is used when the target is not
- * rendered (Needs you only exists while something needs the user).
+ * (never switches a view). `target` is the element id. Needs you only exists while something needs the user,
+ * so when it is not rendered Rail.jsx finds nothing and the button does nothing.
  */
 export const RAIL_SECTIONS = [
   { id: 'office', label: 'Office', target: 'dk-pane-office' },
-  { id: 'needs', label: 'Needs you', target: 'dk-needs', fallback: 'dk-roster' },
+  { id: 'needs', label: 'Needs you', target: 'dk-needs' },
   { id: 'live', label: 'Live and Comms', target: 'dk-pane-comms' },
   { id: 'memory', label: 'Memory', target: 'dk-pane-memory' },
   { id: 'usage', label: 'Usage (5h reset)', target: 'dk-sec-usage' },

@@ -1,16 +1,15 @@
 import { React, useState, useEffect, useRef, fetchJSON, API, USAGE_API, SESSION_API } from './sdk.js';
 import { ago, compact, resetCountdown } from './format.js';
-import { buildItems, headerCounts, durationText, modelText, modelParts, usageText, meterLevel, activeTokens, currentSessionId, eventLabel, detailRows, traceModel, newToolCalls, countStep, todayParts, COUNT_MS, newWalks, walkLabel, toolRing, newBrainTrips, brainCounts, brainText, brainNotes, helperChanges, swarmTip, needsYou, greeting, resetSoon, RIGHT_PANE_DEFAULT, livePolls, commsPolls, speechText, pulseCap } from './deck-model.js';
+import { buildItems, headerCounts, durationText, modelText, modelParts, usageText, meterLevel, activeTokens, currentSessionId, eventLabel, detailRows, traceModel, newToolCalls, countStep, todayParts, COUNT_MS, newWalks, walkLabel, toolRing, newBrainTrips, brainCounts, brainText, brainNotes, helperChanges, swarmTip, needsYou, greeting, resetSoon, RIGHT_PANE_DEFAULT, livePolls, commsPolls, speechText } from './deck-model.js';
 import { isStandalone, wantsFull, withFullParam, requestNativeFullscreen, exitNativeFullscreen, markFullPath } from './fullscreen.js';
 import { Live } from './Mission.jsx';
 import MissionComms from './MissionComms.jsx';
 import { useDialogFocus } from './dialog-focus.js';
 import { Sprite } from './Sprite.jsx';
-import { useMedia, UpdatedAgo, LiveClock, Bell, NeedsYou, PaneTabs, VoiceOrb } from './DeckRevamp.jsx';
+import { useMedia, UpdatedAgo, LiveClock, Bell, NeedsYou, PaneTabs } from './DeckRevamp.jsx';
 import { MemoryPane } from './Memory.jsx';
-import { AgentCards } from './AgentCards.jsx';
+import { BrainDetail } from './Brain.jsx';
 import { UsageRings } from './UsageRings.jsx';
-import { ringsBreathe } from './usage-model.js';
 import { ProjectsList } from './ProjectsList.jsx';
 import { visibleInterval } from './visible-timer.js';
 import Rail from './Rail.jsx';
@@ -298,7 +297,7 @@ function NowBlock({ det, err, now }) {
   );
 }
 
-const SHEET_TABS = [['live', 'Live'], ['comms', 'Comms'], ['details', 'Details']];
+const SHEET_TABS = [['live', 'Live'], ['comms', 'Comms'], ['details', 'Details'], ['brain', 'Brain']];
 
 function AgentSheet({ it, sessions, now, det, detErr, notes, agents, lite }) {
   const [open, setOpen] = useState(null);
@@ -331,6 +330,7 @@ function AgentSheet({ it, sessions, now, det, detErr, notes, agents, lite }) {
       <div id="dk-sh-panel" role="tabpanel" aria-labelledby={`dk-sh-tab-${tab}`}>
         {tab === 'live' && <div className="dk-mc-body"><Live agentKey={a.id} agents={agents} lite={lite} /></div>}
         {tab === 'comms' && <div className="dk-mc-body"><MissionComms agents={agents} agentKey={a.id} lite={lite} /></div>}
+        {tab === 'brain' && <BrainDetail agentId={a.id} />}
         {tab === 'details' && <>
           <NowBlock det={det} err={detErr} now={now} />
           {a.remit && <p className="dk-remit-full">{a.remit}</p>}
@@ -602,7 +602,6 @@ export default function Deck() {
           <Bell count={needs.length} onPick={() => needs.length && setSel('a:' + needs[0].id)} />
         </div>
         <div className="dk-acts">
-          <VoiceOrb />
           {!full && <button className="dk-btn" onClick={enterFull} aria-label="Open fullscreen deck">Fullscreen</button>}
           {full && !standalone && <button className="dk-btn ao-fs-exit" onClick={exitFull} aria-label="Exit fullscreen deck">Exit</button>}
           <button className={'dk-btn' + (lite ? ' on' : '')} aria-pressed={lite} onClick={() => setLite(!lite)} title="Low-power: no animation, refresh every 15s">Lite</button>
@@ -616,8 +615,6 @@ export default function Deck() {
         <UsageRings usage={usage} now={Date.now()} />
       </section>
       <NeedsYou items={needs} onPick={id => setSel('a:' + id)} />
-      <AgentCards agents={(state && state.agents) || []} sessions={state && state.sessions} now={now} sel={sel} onPick={id => setSel('a:' + id)}
-        pulseMax={pulseCap(ringsBreathe(usage))} />
       <ProjectsList now={now} />
       {!desktop && <PaneTabs pane={pane} setPane={setPane} />}
       <div className="dk-panes">

@@ -405,31 +405,6 @@ export function shortDuration(sec) {
   return s < 3600 ? `${Math.floor(s / 60)}m` : `${Math.floor(s / 3600)}h`;
 }
 
-/**
- * Duration tag for a roster card: how long the agent's earliest working session has been running, from
- * `started` (unix s) on the session rows. Null when the agent is not working or no started time is known.
- */
-export function rosterDuration(a, sessions, now) {
-  if (!a || a.status !== 'working') return null;
-  const starts = (Array.isArray(sessions) ? sessions : [])
-    .filter(s => s && s.status === 'working' && Number.isFinite(+s.started) && +s.started > 0)
-    .map(s => +s.started);
-  if (!starts.length) return null;
-  return shortDuration(now - Math.min(...starts));
-}
-
-/**
- * Row C parts for a status card: {word, time, dur}. `time` is the last-active text, or null when the agent has
- * no last-active time (the card then drops the time and its separator, never a bare dash). A running card with a
- * duration shows it as "for 35m" and no time, so it never reads "now · 35m". `dur` is null for other states.
- */
-export function cardMeta(a, state, dur, now) {
-  const word = cardWord(state);
-  if (state === 'running' && dur) return { word, time: null, dur: `for ${dur}` };
-  const time = a && a.lastActive ? ago(a.lastActive, now) : null;
-  return { word, time, dur: null };
-}
-
 /** Clock face 'HH:MM' (24h, local) for a Date. */
 export function clockText(d) {
   const p = n => String(n).padStart(2, '0');
@@ -496,59 +471,3 @@ export function speechText(activity) {
   return String(activity || '').replace(/\s*·\s*\d+\s+helpers?$/, '');
 }
 
-/**
- * Agent status card state (design direction 3.7). Five states, each with a text word so colour is never the
- * only signal. `error` is the backend's error field (the collector sets it when an agent's data could not be
- * read); `offline` is an agent with no data; `waiting` is waiting for the user; `running` is working.
- */
-export const CARD_WORDS = { running: 'Running', idle: 'Idle', waiting: 'Waiting for you', error: 'Error', offline: 'Offline' };
-export function cardState(a) {
-  if (!a || typeof a !== 'object') return 'offline';
-  if (a.error) return 'error';
-  if (a.status === 'offline') return 'offline';
-  if (a.status === 'working') return 'running';
-  if (a.status === 'waiting') return 'waiting';
-  return 'idle';
-}
-export function cardWord(state) { return CARD_WORDS[state] || 'Idle'; }
-
-/** Provider of an agent's main model: claude (copper), deepseek (cyan), codex (sapphire), or null (other). */
-export function providerKey(a) {
-  const s = `${(a && a.modelId) || ''} ${(a && a.model) || ''}`.toLowerCase();
-  if (/claude|sonnet|opus|haiku/.test(s)) return 'claude';
-  if (/deepseek/.test(s)) return 'deepseek';
-  if (/codex|gpt|\bo[1-9]\b/.test(s)) return 'codex';
-  return null;
-}
-
-const PROVIDER_RGB = { claude: 'var(--c-claude-rgb)', deepseek: 'var(--c-deepseek-rgb)', codex: 'var(--c-codex-rgb)' };
-const STATE_GLOW_RGB = { running: 'var(--c-live-rgb)', waiting: 'var(--c-gold-rgb)', error: 'var(--c-danger-rgb)' };
-const OFFLINE_RGB = '138, 134, 151';   // --text-3: offline has no hue
-
-/**
- * Edge and wash colour for one agent card (CSS value for --c-rgb). Running teal, waiting gold, error red;
- * idle keys to the provider colour (copper for Claude, cyan for DeepSeek) so idle cards are not grey;
- * offline stays neutral grey; anything else falls back to the accent violet.
- */
-export function cardRgb(a, state) {
-  if (STATE_GLOW_RGB[state]) return STATE_GLOW_RGB[state];
-  if (state === 'offline') return OFFLINE_RGB;
-  return PROVIDER_RGB[providerKey(a)] || 'var(--c-accent-rgb)';
-}
-
-/** Running pulse cap: the ids of the first `max` running agents in list order. Only these pulse (max 3 on screen). */
-export const PULSE_MAX = 3;
-/** Motion budget: at most three infinite animations on screen. A breathing usage ring takes one slot, so the dot
- *  cap drops to 2 while a ring breathes (dots <= 2, ring <= 1, total <= 3). */
-export const PULSE_MAX_WITH_BREATHING = 2;
-export function pulseCap(breathing) {
-  return breathing ? PULSE_MAX_WITH_BREATHING : PULSE_MAX;
-}
-export function pulseIds(agents, max = PULSE_MAX) {
-  const out = new Set();
-  for (const a of Array.isArray(agents) ? agents : []) {
-    if (out.size >= max) break;
-    if (a && cardState(a) === 'running') out.add(a.id);
-  }
-  return out;
-}

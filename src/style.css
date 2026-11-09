@@ -475,51 +475,6 @@ html.ao-full-active { background-color: var(--bg) !important; }
 .dk-root .dk-bell-n { min-width: 16px; height: 16px; padding: 0 4px; border-radius: 999px; background: var(--dk-red); color: var(--dk-on-hot);
   font-size: 11px; line-height: 16px; font-weight: 700; text-align: center; }
 
-/* agent status cards (design 3.7, 6): one per agent, state from cardState(). Phone: vertical list of rows (76px);
-   desktop: two columns (120px). Glow only on running (teal), waiting (gold) and error (red), static. Running gets a
-   2px hairline; offline is a hollow dot with a dashed border. Each state has a text word, so colour is never alone. */
-.dk-root .dk-roster-wrap { flex: none; padding: 8px 8px 0; }
-.dk-root .dk-acards { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; }
-.dk-root .dk-acard-li { min-width: 0; }
-.dk-root .dk-acard { position: relative; display: flex; flex-direction: column; justify-content: center; gap: 3px; width: 100%; min-height: 76px;
-  padding: 10px 12px 12px; box-sizing: border-box; overflow: hidden; border-radius: var(--radius-card); color: var(--text-1); text-align: left;
-  /* glow pass 2: coloured top-edge light (2px inset) and a dim wash from the top, hue = --c-rgb set per card in AgentCards */
-  background: radial-gradient(120% 70% at 50% 0%, rgba(var(--c-rgb), .10), transparent 70%),
-    linear-gradient(180deg, rgba(255, 255, 255, .04), rgba(255, 255, 255, 0)), var(--surface-1);
-  border: 1px solid var(--border); box-shadow: inset 0 2px 0 rgba(var(--c-rgb), .75); }
-.dk-root .dk-acard.is-pressed { border-color: var(--border-strong); }
-.dk-root .dk-acard.is-running, .dk-root .dk-acard.is-waiting, .dk-root .dk-acard.is-error {
-  box-shadow: inset 0 2px 0 rgba(var(--c-rgb), .75), 0 0 0 1px rgba(var(--c-rgb), .35), 0 0 12px rgba(var(--c-rgb), .16); }
-.dk-root .dk-acard.is-running { border-color: rgba(var(--c-rgb), .45); }
-.dk-root .dk-acard.is-waiting { border-left: 3px solid var(--c-gold); }
-.dk-root .dk-acard.is-error { border-color: var(--c-danger); }
-.dk-root .dk-acard.is-offline { border-style: dashed; border-color: var(--border-strong); }
-.dk-root .dk-acard.is-idle { color: var(--text-1); }
-.dk-root .dk-acard-a { display: flex; align-items: center; gap: 8px; min-width: 0; }
-.dk-root .dk-acard-dot { flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--text-3); }
-.dk-root .dk-acard.is-running .dk-acard-dot { background: var(--c-live); }
-.dk-root .dk-acard.is-waiting .dk-acard-dot { background: var(--c-gold); }
-.dk-root .dk-acard.is-error .dk-acard-dot { background: var(--c-danger); }
-.dk-root .dk-acard.is-offline .dk-acard-dot { background: transparent; box-shadow: inset 0 0 0 1.5px var(--text-3); }
-.dk-root .dk-acard-dot.is-pulse { animation: dk-card-pulse 1.6s ease-in-out infinite; }   /* loop 1 of the budget: running dots, capped by pulseCap() (3, or 2 while a ring breathes) */
-@keyframes dk-card-pulse { 0%, 100% { opacity: 1; } 50% { opacity: .4; } }
-.dk-root .dk-acard-name { min-width: 0; font-size: 15px; font-weight: 600; line-height: 20px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.dk-root .dk-acard-chip { margin-left: auto; flex: none; max-width: 46%; padding: 2px 7px; border-radius: 999px; border: 1px solid var(--border-strong);
-  font-family: var(--font-mono); font-size: 11px; line-height: 16px; color: var(--text-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.dk-root .dk-acard-task { display: block; min-width: 0; font-size: 13px; line-height: 18px; color: var(--text-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.dk-root .dk-acard-c { display: flex; align-items: center; gap: 6px; min-width: 0; font-family: var(--font-mono); font-size: 11px; line-height: 14px; color: var(--text-3); white-space: nowrap; overflow: hidden; }
-.dk-root .dk-acard-state { font-family: var(--font-sans); font-weight: 600; }
-.dk-root .dk-acard.is-running .dk-acard-state { color: var(--c-live); }
-.dk-root .dk-acard.is-waiting .dk-acard-state { color: var(--c-gold); }
-.dk-root .dk-acard.is-error .dk-acard-state { color: var(--c-danger); }
-.dk-root .dk-acard-hair { position: absolute; left: 0; right: 0; bottom: 0; height: 2px; background: var(--c-live); }
-.dk-root .dk-acard.is-pressed .dk-acard-task { color: var(--text-1); }
-@media (min-width: 900px) {
-  .dk-root .dk-acards { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .dk-root .dk-acard { min-height: 120px; }
-}
-@media (prefers-reduced-motion: reduce) { .dk-root .dk-acard-dot.is-pulse { animation: none; } }
-.dk-root.is-lite .dk-acard-dot.is-pulse { animation: none; }
 
 /* needs-you lane: only rendered when something needs the user; amber for approvals, red chips for questions */
 .dk-root .dk-needs { flex: none; margin: 6px 8px 0; padding: 8px 10px; border-radius: 10px; box-sizing: border-box;
@@ -797,11 +752,33 @@ html.ao-full-active { background-color: var(--bg) !important; }
 /* usage ring strokes: drop-shadow on the wrapper (spec 3.5), hue = ring colour. Bar mode and empty rings keep no glow. */
 .dk-root .dk-uring-wrap { filter: drop-shadow(0 0 8px rgba(var(--c-rgb), .55)); }
 
-/* voice orb (spec 3.6, UI only): 44px hit target around a 40px orb. Static halo at opacity .6; no animation at all. */
-.dk-root .dk-orb { position: relative; isolation: isolate; flex: none; width: 44px; height: 44px; min-width: 44px; margin: 0; padding: 0; border: 0;
-  border-radius: 50%; background: transparent; display: inline-grid; place-items: center; cursor: pointer; }
-.dk-root .dk-orb::before { content: ""; position: absolute; inset: -8px; border-radius: 50%; z-index: -1; pointer-events: none; opacity: .6;
-  background: radial-gradient(circle, #8B5CF6 0%, #EC4899 45%, transparent 70%); }
-.dk-root .dk-orb-core { display: block; width: 40px; height: 40px; border-radius: 50%;
-  background: radial-gradient(circle at 40% 35%, #FFFFFF22, transparent 45%), radial-gradient(circle, #8B5CF6 0%, #EC4899 55%, #22D3EE 100%);
-  box-shadow: 0 0 0 1px rgba(139, 92, 246, .6), 0 0 36px rgba(139, 92, 246, .38), 0 0 72px rgba(139, 92, 246, .18); }
+
+/* Brain view (overview in the Memory pane, one-agent Brain tab in the sheet). Read-only; plain text only.
+   Tap rows and buttons are >= 40px tall; long unbroken text wraps so nothing overflows at 360px. */
+.dk-root .dk-bv { margin: 0 10px 10px; min-width: 0; color: var(--dk-ink); }
+.dk-root .dk-bv-hd { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 4px 0 6px; }
+.dk-root .dk-bv-h { margin: 0; font-size: 12px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--dk-dim); }
+.dk-root .dk-bv-refresh { min-height: 40px; min-width: 40px; padding: 0 12px; border-radius: 8px; border: 1px solid var(--dk-line); background: var(--dk-panel, transparent); color: var(--dk-ink); font: inherit; font-size: 12px; cursor: pointer; }
+.dk-root .dk-bv-refresh:disabled { opacity: .6; cursor: default; }
+.dk-root .dk-bv-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; min-width: 0; }
+.dk-root .dk-bv-row { min-width: 0; border: 1px solid color-mix(in srgb, var(--dk-c, var(--c-accent)) 28%, transparent); border-radius: 10px; background: color-mix(in srgb, var(--dk-c, var(--c-accent)) 6%, transparent); overflow: hidden; }
+.dk-root .dk-bv-btn { all: unset; box-sizing: border-box; display: grid; gap: 4px; width: 100%; min-height: 40px; padding: 8px 10px; cursor: pointer; min-width: 0; }
+.dk-root .dk-bv-btn:focus-visible { outline: 2px solid var(--c-accent); outline-offset: 2px; }
+.dk-root .dk-bv-head { display: flex; align-items: center; gap: 6px; min-width: 0; font-size: 12px; }
+.dk-root .dk-bv-dot { flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--dk-c, var(--text-3)); box-shadow: 0 0 8px color-mix(in srgb, var(--dk-c, var(--text-3)) 60%, transparent); }
+.dk-root .dk-bv-name { font-weight: 700; flex: none; }
+.dk-root .dk-bv-soul { flex: 1; min-width: 0; color: var(--dk-faint); overflow-wrap: anywhere; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dk-root .dk-bv-chev { flex: none; color: var(--dk-faint); }
+.dk-root .dk-bv-bar { display: grid; grid-template-columns: 52px 1fr; grid-template-rows: auto auto; column-gap: 6px; align-items: center; min-width: 0; }
+.dk-root .dk-bv-bl { grid-row: 1; grid-column: 1; font-size: 11px; color: var(--dk-faint); }
+.dk-root .dk-bv-bar > .dk-meter { grid-row: 1; grid-column: 2; display: block; min-width: 0; }
+.dk-root .dk-bv-bv { grid-row: 2; grid-column: 1 / 3; font-size: 11px; color: var(--dk-dim); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.dk-root .dk-bv-first { display: block; font-size: 12px; color: var(--dk-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; overflow-wrap: anywhere; min-width: 0; }
+.dk-root .dk-bv-body { padding: 0 10px 10px; display: grid; gap: 10px; min-width: 0; }
+.dk-root .dk-bv-body[hidden] { display: none; }
+.dk-root .dk-bv-blk { min-width: 0; border-top: 1px solid var(--dk-line); padding-top: 8px; }
+.dk-root .dk-bv-blk-h { margin: 0; font-size: 12px; font-weight: 700; color: var(--dk-ink); }
+.dk-root .dk-bv-meta { margin: 2px 0 6px; font-size: 11px; color: var(--dk-faint); overflow-wrap: anywhere; }
+.dk-root .dk-bv-text { margin: 0; max-height: 50vh; overflow: auto; -webkit-overflow-scrolling: touch; white-space: pre-wrap; overflow-wrap: anywhere; word-break: break-word; font: 12px/1.45 var(--font-mono, monospace); color: var(--dk-ink); background: color-mix(in srgb, var(--c-accent-rgb) 6%, transparent); border: 1px solid var(--dk-line); border-radius: 8px; padding: 8px; min-width: 0; }
+.dk-root .dk-bv-detail { margin: 8px 0 0; }
+.dk-root .dk-bv-detail .dk-bv-body { padding: 0; }
