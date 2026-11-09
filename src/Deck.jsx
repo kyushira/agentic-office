@@ -615,7 +615,6 @@ export default function Deck() {
         <UsageRings usage={usage} now={Date.now()} />
       </section>
       <NeedsYou items={needs} onPick={id => setSel('a:' + id)} />
-      <ProjectsList now={now} />
       {!desktop && <PaneTabs pane={pane} setPane={setPane} />}
       <div className="dk-panes">
       <section id="dk-pane-office" role="tabpanel" aria-labelledby="dk-pane-tab-office" className="dk-pane dk-pane-office"
@@ -653,6 +652,8 @@ export default function Deck() {
         {commsPolls({ desktop, pane, rightPane }) && <MissionComms agents={(state && state.agents) || []} agentKey="" lite={lite} />}
       </section>
       </div>
+      {/* Projects sit below Office and Live (Sir 2026-11-09) */}
+      <ProjectsList now={now} />
       {/* Memory: phone tab (hidden unless selected), full width below Office and Live/Comms on desktop. Fetches only on search. */}
       <MemoryPane agents={(state && state.agents) || []} sessions={state && state.sessions} brain={state && state.brain}
         lite={lite} hidden={!desktop && pane !== 'memory'} />
