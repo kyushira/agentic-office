@@ -185,7 +185,7 @@ class SizeCapTests(_Temp):
         self.assertGreater(len(soul["text"]), 0)
 
     def test_text_over_text_cap_is_truncated_without_byte_overflow(self):
-        self.write("SOUL.md", "ab cd " * 3000)  # 18000 chars, under READ_CAP
+        self.write("SOUL.md", "ab cd " * 4000)  # 24000 chars: over TEXT_CAP (20000), under READ_CAP
         soul = brain.read_file(self.root / "SOUL.md", None)
         self.assertTrue(soul["truncated"])
         self.assertLessEqual(len(soul["text"]), brain.TEXT_CAP)

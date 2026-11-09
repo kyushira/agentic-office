@@ -8,6 +8,7 @@ characters. Nothing here writes.
 from __future__ import annotations
 
 import errno
+import hashlib
 import importlib.util
 import os
 import stat
@@ -27,8 +28,10 @@ DEFAULT_ROOT = Path("/opt/data")
 AGENTS = ("default", "dev", "nova", "pixel", "prism", "red", "sentinel")
 ALIASES = {"ash": "default", "hermes": "default"}
 LIMITS = {"memory": 2200, "user": 1375}
+EDIT_LIMITS = {"soul": 20000, "memory": 2200, "user": 1375}  # chars after CRLF->LF; brain_edit.py enforces them on PUT
 READ_CAP = 65536  # bytes read per file
-TEXT_CAP = 16000  # characters of redacted text returned per file
+TEXT_CAP = 20000  # characters of redacted text returned per file (a SOUL up to EDIT_LIMITS['soul'] comes back whole)
+_CHUNK = 65536
 FIRST_CAP = 140
 _OPEN_FLAGS = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_CLOEXEC", 0)
 
@@ -103,18 +106,23 @@ def read_file(path, limit=None) -> dict:
     finally:
         os.close(fd)
 
-    big = st.st_size > READ_CAP
+    return _view(data, st.st_size, st.st_mtime, limit)
+
+
+def _view(data: bytes, size: int, mtime, limit) -> dict:
+    """read_file's dict, built from bytes already read: data is at most READ_CAP bytes, size the file's full size."""
+    big = size > READ_CAP
     raw = data.decode("utf-8", errors="replace")
     if big and "\n" in raw:
         # Drop the cut-off last line: a secret split at READ_CAP would otherwise pass redaction unseen.
         raw = raw[: raw.rfind("\n") + 1]
-    chars = st.st_size if big else len(raw)
+    chars = size if big else len(raw)
     full = redact.redact(raw)
     text = redact.redact(raw, TEXT_CAP)
     lines = [ln.strip() for ln in text.splitlines() if ln.strip()]
     return {
         "exists": True,
-        "mtime": st.st_mtime,
+        "mtime": mtime,
         "chars": chars,
         "limit": limit,
         "pct": round(100 * chars / limit, 1) if limit else None,
@@ -126,14 +134,114 @@ def read_file(path, limit=None) -> dict:
     }
 
 
+def _blocked(out: dict, why: str) -> dict:
+    out.update(edit_block=why, editable=False)
+    return out
+
+
+_PRIVATE = ("view_data", "size", "mtime", "unreadable")
+
+
+def _slurp(fd: int):
+    """Every byte of an open file, read once: (sha256 hex of all of them, the first READ_CAP+1 of them, total count)."""
+    digest = hashlib.sha256()
+    data = bytearray()
+    total = 0
+    while True:
+        chunk = os.read(fd, _CHUNK)
+        if not chunk:
+            break
+        total += len(chunk)
+        digest.update(chunk)  # the whole file is hashed, so sha is of the bytes on disk
+        if len(data) <= READ_CAP:
+            data += chunk[: READ_CAP + 1 - len(data)]
+    return digest.hexdigest(), bytes(data), total
+
+
+def _state(path, key: str) -> dict:
+    """The one read of a file that every editor view is built from. kind is 'missing', 'file', 'link', 'other' or
+    'blocked' (parent folder missing or symlinked, or the file cannot be opened). Keys that probe() hides: view_data,
+    size and mtime (from the same descriptor as sha), unreadable (an OS error on open or read)."""
+    out = {"kind": "blocked", "sha": "", "mode": None, "raw": None, "text": None,
+           "edit_limit": EDIT_LIMITS[key], "edit_block": "unreadable", "editable": False}
+    path = Path(path)
+    try:
+        if path.parent.is_symlink() or not path.parent.is_dir():
+            return out
+        st = os.lstat(path)
+    except FileNotFoundError:
+        out.update(kind="missing", edit_block=None, editable=True)
+        return out
+    except OSError:
+        out["unreadable"] = True
+        return out
+    if not stat.S_ISREG(st.st_mode):
+        out["kind"] = "link" if stat.S_ISLNK(st.st_mode) else "other"
+        return out
+    try:
+        fd = os.open(path, _OPEN_FLAGS)
+    except OSError:
+        out["unreadable"] = True
+        return out
+    try:
+        fst = os.fstat(fd)
+        if not stat.S_ISREG(fst.st_mode):
+            out["kind"] = "other"
+            return out
+        sha, data, total = _slurp(fd)
+    except OSError:
+        out["unreadable"] = True
+        return out
+    finally:
+        os.close(fd)
+    out.update(kind="file", sha=sha, mode=stat.S_IMODE(fst.st_mode), size=total, mtime=fst.st_mtime, view_data=data)
+    if total > READ_CAP:
+        return _blocked(out, "too_large")
+    try:
+        text = data.decode("utf-8")
+    except UnicodeDecodeError:
+        return _blocked(out, "unreadable")
+    full = redact.redact(text)
+    if len(full) > TEXT_CAP:
+        return _blocked(out, "too_large")
+    if full != text:
+        return _blocked(out, "redacted")
+    out.update(raw=data, text=text, edit_block=None, editable=True)
+    return out
+
+
+def probe(path, key: str) -> dict:
+    """Write-side state of one file, read-only. kind is 'missing', 'file', 'link', 'other' or 'blocked' (parent folder
+    missing or symlinked, or the file cannot be opened). sha is sha256 of the raw bytes on disk ('' when missing),
+    mode the permission bits (None when missing). raw and text are kept only when editable.
+    edit_block is None when editable, else:
+      'redacted'   the redacted view differs from the file, so saving it would write [redacted] over real text;
+      'too_large'  over READ_CAP bytes or TEXT_CAP characters, so the view is partial;
+      'unreadable' not a regular file, not UTF-8, or no folder to write into."""
+    return {k: v for k, v in _state(path, key).items() if k not in _PRIVATE}
+
+
+def file_view(path, key: str) -> dict:
+    """One file as GET /brain and PUT /brain show it. Every field comes from the single read in _state, so sha is
+    always the sha of the text shown."""
+    st = _state(path, key)
+    limit = None if key == "soul" else LIMITS[key]
+    if st["kind"] == "file":
+        view = _view(st["view_data"][:READ_CAP], st["size"], st["mtime"], limit)
+    else:
+        view = _missing(limit, "unreadable" if st.get("unreadable") else None)
+    view.update(sha=st["sha"], edit_limit=st["edit_limit"], editable=st["editable"], edit_block=st["edit_block"])
+    return view
+
+
 def agent(agent_id: str, root=None) -> dict:
     p = paths(agent_id, root)
     return {
         "id": agent_id,
         "name": display_name(agent_id),
-        "soul": read_file(p["soul"], None),
-        "memory": read_file(p["memory"], LIMITS["memory"]),
-        "user": read_file(p["user"], LIMITS["user"]),
+        "soul": file_view(p["soul"], "soul"),
+        "memory": file_view(p["memory"], "memory"),
+        "user": file_view(p["user"], "user"),
     }
 
 

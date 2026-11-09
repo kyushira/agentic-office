@@ -213,6 +213,49 @@ class UntrustedWrapperTests(unittest.TestCase):
         self.assertNotIn("AbCdEf0123456789", out)
 
 
+class PerformanceTests(unittest.TestCase):
+    """redact() must be linear: each of these inputs finishes in under a second (it used to take 17-26 s at 20000+
+    characters because the key=value rules backtracked over every start position inside one long word)."""
+    LIMIT_S = 1.0
+
+    def timed(self, text):
+        import time
+        t0 = time.perf_counter()
+        out = redact.redact(text)
+        return out, time.perf_counter() - t0
+
+    def test_repeated_letter_run_65536(self):
+        out, dt = self.timed("a" * 65536)
+        self.assertLess(dt, self.LIMIT_S, f"took {dt:.2f}s")
+        self.assertEqual(out, M)  # one 33+ base64-looking run, redacted whole
+
+    def test_random_alnum_run_65536(self):
+        import random
+        rnd = random.Random(7)
+        text = "".join(rnd.choice("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789") for _ in range(65536))
+        out, dt = self.timed(text)
+        self.assertLess(dt, self.LIMIT_S, f"took {dt:.2f}s")
+        self.assertEqual(out, M)
+
+    def test_mixed_prose_20000(self):
+        words = ["the", "agent", "reads", "SOUL.md", "token", "password:", "x=1", "keyboard", "/opt/data/projects/a",
+                 "https://h.example/a?b=c", "--verbose", "secret", "sk-" + "b" * 20, "ship", "Friday."]
+        text = " ".join(words[i % len(words)] for i in range(4000))[:20000]
+        out, dt = self.timed(text)
+        self.assertLess(dt, self.LIMIT_S, f"took {dt:.2f}s")
+        self.assertNotIn("sk-" + "b" * 20, out)
+
+    def test_keyword_inside_long_word_65536(self):
+        out, dt = self.timed("a" * 32768 + "key" + "a" * 32765)
+        self.assertLess(dt, self.LIMIT_S, f"took {dt:.2f}s")
+
+    def test_repeated_flag_and_keyword_patterns_65536(self):
+        # --flag runs, KEY=\" runs and KEY runs: each used to re-scan the rest of the run from every start
+        for text in ("--a" * 21845, "key" * 21845, 'key="' * 13107, "key='" * 10922, "a=" * 32768):
+            out, dt = self.timed(text)
+            self.assertLess(dt, self.LIMIT_S, f"{text[:8]!r}: took {dt:.2f}s")
+
+
 class EnvPathTests(unittest.TestCase):
     def test_env_references_detected(self):
         for s in ("/opt/data/profiles/dev/.env", "cat .env", "read_file(.env.local)", '{"path": ".env"}'):

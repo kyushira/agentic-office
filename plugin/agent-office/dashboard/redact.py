@@ -32,9 +32,19 @@ _PREFIXES = [
     re.compile(r"\bxox[abpr]-[A-Za-z0-9\-]{10,}"),
     re.compile(r"\bAKIA[0-9A-Z]{16}\b"),
 ]
-_KV_QUOTED = re.compile(r"(" + _NAME + r"\s*[=:]\s*)([\"'])[^\n]*?\2")  # group 2 = the quote char
-_KV_BARE = re.compile(r"(" + _NAME + r"\s*[=:]\s*)[^\s\"'\\,;&]+")
-_FLAG = re.compile(r"(--[A-Za-z0-9_\-]*(?i:KEY|TOKEN|SECRET|PASSWORD|PASSWD)[A-Za-z0-9_\-]*\s+)[^\s\-][^\s]*")
+# Linear forms of the key=value rules. _NAME (a keyword with name characters on both sides) is quadratic when it sits
+# after an unanchored start: every start inside one long word re-scans the rest of the word. Here a name is anchored
+# to the start of its run of name characters (the lookbehind), the run must hold a keyword (the lookahead, scanned once
+# per run), and the run is taken possessively (a name ends where the separator starts, so nothing is given back).
+# The matched text and the replacement are the same as with _NAME: the name's start never changes the output.
+_NAME_CH = r"[A-Za-z0-9_.\-]"
+_NAME_RUN_HEAD = r"(?<![A-Za-z0-9_.\-])(?=" + _NAME_CH + r"*" + r"(?i:KEY|TOKEN|SECRET|PASSWORD|PASSWD))"
+_KV_QUOTED = re.compile(_NAME_RUN_HEAD + r"(" + _NAME_CH + r"*+\s*[=:]\s*)(?:(\")[^\n\"]*\"|(')[^\n']*')")  # quote = group 2 or 3
+_KV_BARE = re.compile(_NAME_RUN_HEAD + r"(" + _NAME_CH + r"*+\s*[=:]\s*)[^\s\"'\\,;&]+")
+# --flag value. Same linear scheme as _KV_BARE: the run of flag characters is taken from its start, and it holds a
+# keyword after its first '--' (the first '--' has the longest tail, so it decides for the whole run).
+_FLAG = re.compile(r"(?<![A-Za-z0-9_\-])(?=(?>[A-Za-z0-9_\-]*?--)[A-Za-z0-9_\-]*(?i:KEY|TOKEN|SECRET|PASSWORD|PASSWD))"
+                   r"([A-Za-z0-9_\-]*+\s+)[^\s\-][^\s]*")
 _HEX = re.compile(r"(?<![0-9A-Za-z])[0-9a-fA-F]{33,}(?![0-9A-Za-z])")
 _B64 = re.compile(r"(?<![A-Za-z0-9+/])[A-Za-z0-9+]{33,}={0,2}(?![A-Za-z0-9+/=])")
 _ENV_PATH = re.compile(r"(?<![A-Za-z0-9_\-])\.env(?![A-Za-z0-9_\-])")
@@ -74,7 +84,7 @@ def _scrub(s: str) -> str:
     s = _BEARER.sub(lambda m: m.group(1) + MARK, s)
     for p in _PREFIXES:
         s = p.sub(MARK, s)
-    s = _KV_QUOTED.sub(lambda m: m.group(1) + m.group(2) + MARK + m.group(2), s)
+    s = _KV_QUOTED.sub(lambda m: m.group(1) + (m.group(2) or m.group(3)) + MARK + (m.group(2) or m.group(3)), s)
     s = _KV_BARE.sub(lambda m: m.group(1) + MARK, s)
     s = _FLAG.sub(lambda m: m.group(1) + MARK, s)
     s = _HEX.sub(MARK, s)

@@ -7,6 +7,7 @@ open tabs cost one scan.
 import asyncio
 import importlib.util
 import json
+import re
 import threading
 import time
 from pathlib import Path
@@ -43,6 +44,10 @@ _ispec.loader.exec_module(inbox)
 _bspec = importlib.util.spec_from_file_location("agent_office_brain", Path(__file__).with_name("brain.py"))
 brain = importlib.util.module_from_spec(_bspec)
 _bspec.loader.exec_module(brain)
+
+_ebspec = importlib.util.spec_from_file_location("agent_office_brain_edit", Path(__file__).with_name("brain_edit.py"))
+brain_edit = importlib.util.module_from_spec(_ebspec)
+_ebspec.loader.exec_module(brain_edit)
 
 router = APIRouter()
 NO_STORE = {"Cache-Control": "no-store", "Pragma": "no-cache"}
@@ -155,7 +160,7 @@ def _refused(e) -> JSONResponse:
 async def _read_capped(request: Request) -> bytes:
     """Whole request body, refused with 413 past inbox.MAX_BODY_BYTES (checked on Content-Length and while reading)."""
     cl = request.headers.get("content-length", "")
-    if cl.isdigit() and int(cl) > inbox.MAX_BODY_BYTES:
+    if re.fullmatch(r"[0-9]+", cl) and int(cl) > inbox.MAX_BODY_BYTES:
         raise inbox.InboxError(413, "request too large")
     chunks, total = [], 0
     async for chunk in request.stream():
@@ -248,3 +253,82 @@ async def inbox_delete(name: str, request: Request):
     except inbox.InboxError as e:
         return _refused(e)
     return JSONResponse({"deleted": name}, headers=NO_STORE)
+
+
+# ---- Brain editor (brain_edit.py): PUT /brain saves one file, GET /brain/versions and /brain/version list and read
+# backups, POST /brain/restore puts a backup back. Writes need the same headers as the inbox (check_write_request).
+# Refusals carry brain_edit.EditError's status and body: no file contents, no paths.
+
+def _edit_refused(e) -> JSONResponse:
+    return JSONResponse(e.body, status_code=e.status, headers=NO_STORE)
+
+
+async def _brain_body(request: Request) -> dict:
+    """JSON object body, refused with 413 past brain_edit.MAX_BODY_BYTES (checked on Content-Length and while reading)."""
+    cl = request.headers.get("content-length", "")
+    if re.fullmatch(r"[0-9]+", cl) and int(cl) > brain_edit.MAX_BODY_BYTES:
+        raise brain_edit.EditError(413, {"error": "request too large"})
+    chunks, total = [], 0
+    async for chunk in request.stream():
+        total += len(chunk)
+        if total > brain_edit.MAX_BODY_BYTES:
+            raise brain_edit.EditError(413, {"error": "request too large"})
+        chunks.append(chunk)
+    try:
+        payload = json.loads(b"".join(chunks))
+    except (ValueError, RecursionError):
+        raise brain_edit.EditError(422, {"error": "body is not valid JSON"})
+    if not isinstance(payload, dict):
+        raise brain_edit.EditError(422, {"error": "body must be a JSON object"})
+    return payload
+
+
+@router.put("/brain")
+async def brain_save(request: Request):
+    reason = inbox.check_write_request(request.headers)
+    if reason:
+        return _forbidden(reason)
+    try:
+        payload = await _brain_body(request)
+        result = await asyncio.to_thread(brain_edit.save, payload, root=brain.DEFAULT_ROOT)
+    except brain_edit.EditError as e:
+        return _edit_refused(e)
+    except OSError:
+        return JSONResponse({"error": "save failed"}, status_code=500, headers=NO_STORE)
+    return JSONResponse(result, headers=NO_STORE)
+
+
+@router.post("/brain/restore")
+async def brain_restore(request: Request):
+    reason = inbox.check_write_request(request.headers)
+    if reason:
+        return _forbidden(reason)
+    try:
+        payload = await _brain_body(request)
+        result = await asyncio.to_thread(brain_edit.restore, payload, root=brain.DEFAULT_ROOT)
+    except brain_edit.EditError as e:
+        return _edit_refused(e)
+    except OSError:
+        return JSONResponse({"error": "restore failed"}, status_code=500, headers=NO_STORE)
+    return JSONResponse(result, headers=NO_STORE)
+
+
+@router.get("/brain/versions")
+async def brain_versions(agent: str | None = Query(None, max_length=32), file: str | None = Query(None, max_length=16)):
+    """Backups of one file, newest first: {versions: [{id, ts, chars, sha}]}. Unknown agent or file -> 404."""
+    try:
+        result = await asyncio.to_thread(brain_edit.list_versions, agent, file, root=brain.DEFAULT_ROOT)
+    except brain_edit.EditError as e:
+        return _edit_refused(e)
+    return JSONResponse(result, headers=NO_STORE)
+
+
+@router.get("/brain/version")
+async def brain_version(agent: str | None = Query(None, max_length=32), file: str | None = Query(None, max_length=16),
+                        version_id: str | None = Query(None, alias="id", max_length=64)):
+    """One backup's redacted text, for the diff before a restore. The id must match the backup listing, else 404."""
+    try:
+        result = await asyncio.to_thread(brain_edit.get_version, agent, file, version_id, root=brain.DEFAULT_ROOT)
+    except brain_edit.EditError as e:
+        return _edit_refused(e)
+    return JSONResponse(result, headers=NO_STORE)
