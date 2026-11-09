@@ -10,6 +10,10 @@ export const FILE_TITLES = Object.freeze({ soul: 'Soul', memory: 'Memory', user:
 export const FILE_NOUN = Object.freeze({ soul: 'soul', memory: 'memory', user: 'profile' });
 export const TOAST_MS = 5000;
 export const NO_VERSIONS = 'No saved versions yet.';
+export const EXPIRED_MESSAGE = 'Confirmation expired. Tap again to confirm.';
+export const SCAN_UNAVAILABLE_NOTE = 'Safety scan unavailable; restore will be refused.';
+export const RESTORE_ANYWAY = 'Restore anyway';
+export const DISABLED_REASON = 'Editing is turned off';
 
 /** CRLF to LF, as the server does before it counts or writes. Nothing else changes. */
 export function normText(s) {
@@ -142,21 +146,60 @@ export function needsExtraConfirm(agentId, file) {
 }
 
 /**
- * Button label. Not armed: 'Confirm save' (or 'Restore'). Armed (the first tap of an extra-confirm write):
- * "Tap again to save Ash's soul". verb is 'save' or 'restore'.
+ * Button label. Not armed: 'Confirm save' (or 'Restore', or 'Restore anyway' when the scanner gated the version).
+ * Armed (the first tap of an extra-confirm write): "Tap again to save Ash's soul". verb is 'save' or 'restore'.
  */
-export function confirmLabel({ verb = 'save', name, file, armed = false }) {
-  if (!armed) return verb === 'restore' ? 'Restore' : 'Confirm save';
-  return `Tap again to ${verb === 'restore' ? 'restore' : 'save'} ${name || 'this agent'}'s ${FILE_NOUN[file] || 'file'}`;
+export function confirmLabel({ verb = 'save', name, file, armed = false, override = false }) {
+  const restore = verb === 'restore';
+  if (!armed) {
+    if (restore) return override ? RESTORE_ANYWAY : 'Restore';
+    return 'Confirm save';
+  }
+  return `Tap again to ${restore ? 'restore' : 'save'} ${name || 'this agent'}'s ${FILE_NOUN[file] || 'file'}`;
 }
 
 /** Why a block cannot be edited, from file.edit_block; null when it can (or when there is no block). */
 export function blockReason(editBlock) {
   if (!editBlock) return null;
+  if (editBlock === 'disabled') return DISABLED_REASON;
   if (editBlock === 'redacted') return 'Has redacted secrets, edit on the server';
   if (editBlock === 'too_large') return 'Too large to edit here';
   if (editBlock === 'unreadable') return 'Could not be read';
   return 'Not editable here';
+}
+
+/** The one-time confirm token carried by a file object or a version response ('' when there is none). */
+export function confirmTokenOf(obj) {
+  const t = obj && obj.confirm_token;
+  return typeof t === 'string' ? t : '';
+}
+
+/** The scanner's findings as strings; [] when there are none or the field is null (scan unavailable). */
+export function findingsOf(version) {
+  const f = version && version.findings;
+  return Array.isArray(f) ? f.map(x => String(x)) : [];
+}
+
+/**
+ * What the restore review says about the safety scanner: null when there is nothing to say, else {tone, text}.
+ * tone 'alert' for findings (the restore is gated behind 'Restore anyway'), 'note' when the scan was unavailable.
+ */
+export function scanNotice(version) {
+  if (!version) return null;
+  const findings = findingsOf(version);
+  if (findings.length > 0) return { tone: 'alert', text: 'This version trips the safety scanner: ' + findings.join(', ') };
+  if (version.scan_unavailable) return { tone: 'note', text: SCAN_UNAVAILABLE_NOTE };
+  return null;
+}
+
+/**
+ * A 422 'blocked pattern' that the server says can be overridden (restore only). Returns the findings (possibly
+ * empty) when it applies, else null. The caller then offers 'Restore anyway', which sends override_findings: true.
+ */
+export function overridableFindings(failure) {
+  const b = (failure && failure.body) || {};
+  if (!failure || failure.status !== 422 || b.error !== 'blocked pattern' || b.overridable !== true) return null;
+  return Array.isArray(b.findings) ? b.findings.map(x => String(x)) : [];
 }
 
 /** A raw body (JSON text, or an already-parsed object) as a plain object; anything else becomes {}. */
@@ -196,6 +239,7 @@ export function errorInfo(failure) {
   const b = (failure && failure.body) || {};
   const err = typeof b.error === 'string' ? b.error : '';
   if (s === 0) return { kind: 'network', message: 'Could not reach the server. Your draft is still here; try again.' };
+  if (s === 403 && err === 'brain edit disabled') return { kind: 'disabled', message: DISABLED_REASON + '. Nothing was changed.' };
   if (s === 403) return { kind: 'refused', message: 'The server refused the request. Reload the page and try again.' };
   if (s === 404) return { kind: 'missing', message: 'Unknown agent or file.' };
   if (s === 409) {
@@ -219,7 +263,7 @@ export function errorInfo(failure) {
     if (err === 'version is not UTF-8' || err === 'version too large') return { kind: 'version', message: "This version can't be restored here." };
     return { kind: 'invalid', message: 'The server refused this text. Nothing was changed.' };
   }
-  if (s === 428) return { kind: 'confirm', message: 'Confirmation is needed. Tap again to confirm.' };
+  if (s === 428) return { kind: 'confirm', message: EXPIRED_MESSAGE };
   if (s === 503 && err === 'busy, try again') return { kind: 'busy', message: 'Busy, try again in a moment.' };
   if (s === 503 && err === 'safety scanner unavailable') return { kind: 'scanner', message: 'Safety scanner unavailable; nothing was saved.' };
   if (s === 500 && err === 'audit log unavailable') return { kind: 'audit', message: 'Audit log unavailable; nothing was saved.' };
@@ -238,17 +282,21 @@ export function undoable(backup) {
   return backup != null && backup !== '';
 }
 
-/** Save request: PUT. confirm is added to the body only when the caller passes it. */
-export function saveRequest({ agent, file, text, base_sha, confirm } = {}) {
+/** Save request: PUT. confirm_token is added to the body only when the caller passes it (extra-confirm files). */
+export function saveRequest({ agent, file, text, base_sha, confirm_token } = {}) {
   const body = { agent, file, text, base_sha };
-  if (confirm !== undefined) body.confirm = confirm;
+  if (confirm_token !== undefined) body.confirm_token = confirm_token;
   return { method: 'PUT', url: BRAIN_API, headers: { ...WRITE_HEADERS }, body: JSON.stringify(body) };
 }
 
-/** Restore request: POST /brain/restore. confirm is added only when passed. */
-export function restoreRequest({ agent, file, id, base_sha, confirm } = {}) {
+/**
+ * Restore request: POST /brain/restore. confirm_token is added only when passed. override_findings is sent only as
+ * true (the user tapped 'Restore anyway'); it is never sent as false.
+ */
+export function restoreRequest({ agent, file, id, base_sha, confirm_token, override_findings } = {}) {
   const body = { agent, file, id, base_sha };
-  if (confirm !== undefined) body.confirm = confirm;
+  if (confirm_token !== undefined) body.confirm_token = confirm_token;
+  if (override_findings === true) body.override_findings = true;
   return { method: 'POST', url: `${BRAIN_API}/restore`, headers: { ...WRITE_HEADERS }, body: JSON.stringify(body) };
 }
 

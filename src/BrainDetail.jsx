@@ -3,7 +3,7 @@ import { brainUrl, brainAgents } from './brain-model.js';
 import {
   countChars, counterState, isDirty, lineDiff, diffSummaryText, needsExtraConfirm, confirmLabel, parseFailure,
   errorInfo, undoable, saveRequest, restoreRequest, versionsUrl, versionUrl, versionLabel, restoreState, editState,
-  FILE_TITLES, TOAST_MS, NO_VERSIONS, saveBlockedReason,
+  FILE_TITLES, TOAST_MS, NO_VERSIONS, saveBlockedReason, confirmTokenOf, findingsOf, scanNotice, overridableFindings, EXPIRED_MESSAGE,
 } from './brain-edit-model.js';
 import { BrainBlock } from './Brain.jsx';
 import { Counter, DiffList, UnsavedPrompt, Alert, Toast } from './BrainEdit.jsx';
@@ -75,7 +75,8 @@ export function BrainDetail({ agentId, guard }) {
     return Number.isFinite(n) && n > 0 ? n : FALLBACK_LIMIT[key];
   };
 
-  const send = (req, key, onOk) => {
+  // onFail(failure) may take over a failure (return true); otherwise it becomes the alert.
+  const send = (req, key, onOk, onFail) => {
     if (flight.current) return undefined;
     flight.current = true;
     setBusy(true);
@@ -90,9 +91,25 @@ export function BrainDetail({ agentId, guard }) {
       .catch(e => {
         flight.current = false;
         setBusy(false);
-        const info = errorInfo(parseFailure(e));
+        const f = parseFailure(e);
+        if (onFail && onFail(f)) return;
+        const info = errorInfo(f);
         setErr({ kind: info.kind, message: info.message, key });
       });
+  };
+
+  // Single-flight GET used by the token refresh paths (a 428 means the token is gone: fetch a fresh one, don't retry).
+  const getJSON = (url, onOk, onErr) => {
+    if (flight.current) return;
+    flight.current = true;
+    setBusy(true);
+    fetchJSON(url, { credentials: 'same-origin' })
+      .then(d => { flight.current = false; setBusy(false); onOk(d || {}); })
+      .catch(e => { flight.current = false; setBusy(false); onErr(errorInfo(parseFailure(e)).message); });
+  };
+  const fileFrom = (d, key) => {
+    const a = (Array.isArray(d && d.agents) ? d.agents : []).find(x => String(x.id) === agentId) || {};
+    return a[key] || {};
   };
 
   const startEdit = key => {
@@ -119,13 +136,33 @@ export function BrainDetail({ agentId, guard }) {
     const extra = needsExtraConfirm(agentId, review.key);
     if (extra && !review.armed) { setReview({ ...review, armed: true }); return; }
     const { key, then, text, base_sha } = review;
-    const req = saveRequest({ agent: agentId, file: key, text, base_sha, confirm: extra ? true : undefined });
+    // The token comes from the file object of the last GET /brain (or the last save's response, if it carried one).
+    const token = extra ? (confirmTokenOf(rawAgent[key]) || undefined) : undefined;
+    const req = saveRequest({ agent: agentId, file: key, text, base_sha, confirm_token: token });
     // Failures are reported by send(): the review stays open (a 409 'changed' offers Reload; the draft is kept).
     send(req, key, res => {
       setEd(null); setReview(null);
       if (res.saved) setToast({ msg: 'Saved', undo: undoable(res.backup), backup: res.backup, key, sha: res.file && res.file.sha });
       if (then) then();
+    }, f => {
+      if (f.status !== 428) return false;
+      expireSave(key, base_sha);
+      return true;
     });
+  };
+
+  // 428 on save: the token was missing, used, or expired. Refetch GET /brain. If the file is still the one the user
+  // reviewed, the fresh token is in place and the review stays armed, so the next tap sends. Otherwise it changed.
+  const expireSave = (key, baseSha) => {
+    getJSON(brainUrl(agentId), d => {
+      setSt({ status: 'ok', data: d, error: '' });
+      if (String(fileFrom(d, key).sha || '') !== baseSha) {
+        setReview(null);
+        setErr({ kind: 'changed', message: 'Changed since you opened it', key });
+        return;
+      }
+      setErr({ kind: 'confirm', message: EXPIRED_MESSAGE, key });
+    }, message => setErr({ kind: 'load', message, key }));
   };
 
   const openVersions = key => {
@@ -147,29 +184,73 @@ export function BrainDetail({ agentId, guard }) {
         setBusy(false);
         const f = rawAgent[key] || {};
         setVers(null);
+        // base_sha is the sha the diff was made against (the editor's view); a live move on shows up as a 428/409.
         setReview({ kind: 'restore', key, id: v.id, version: v, text: v.text || '', base_sha: f.sha || '', armed: false,
-          then: null, ops: lineDiff(typeof f.text === 'string' ? f.text : '', v.text || '') });
+          confirm_token: confirmTokenOf(v), gated: findingsOf(v).length > 0, then: null,
+          ops: lineDiff(typeof f.text === 'string' ? f.text : '', v.text || '') });
       })
       .catch(e => { flight.current = false; setBusy(false); setErr({ kind: 'load', message: errorInfo(parseFailure(e)).message, key }); });
   };
 
+  // Restore: the token and the current base_sha come from GET /brain/version (fetched when the version was picked).
+  // A scanner finding gates the restore: the send carries override_findings only after the user taps 'Restore anyway'.
   const confirmRestore = () => {
     if (!review || busy || review.kind !== 'restore' || !restoreState(review.version).restorable) return;
     const extra = needsExtraConfirm(agentId, review.key);
     if (extra && !review.armed) { setReview({ ...review, armed: true }); return; }
     const { key, id, base_sha } = review;
-    const req = restoreRequest({ agent: agentId, file: key, id, base_sha, confirm: extra ? true : undefined });
+    const req = restoreRequest({
+      agent: agentId, file: key, id, base_sha,
+      confirm_token: extra ? (confirmTokenOf(review) || undefined) : undefined,
+      override_findings: review.gated ? true : undefined,
+    });
     send(req, key, res => {
       setEd(null); setReview(null);
       if (res.saved) setToast({ msg: 'Restored', undo: false, backup: null, key });
-    });
+    }, f => restoreRefused(f, key, id, base_sha));
   };
 
+  // A refused restore: a 422 the server calls overridable shows the findings and the 'Restore anyway' control; a 428
+  // refetches the version for a fresh token (or, if the live file moved on, drops the review).
+  const restoreRefused = (f, key, id, baseSha) => {
+    const gate = overridableFindings(f);
+    if (gate) {
+      setReview(r => (r ? { ...r, gated: true, armed: false, version: { ...(r.version || {}), findings: gate, scan_unavailable: false } } : r));
+      return true;
+    }
+    if (f.status !== 428) return false;
+    getJSON(versionUrl(agentId, key, id), v => {
+      const cur = typeof v.base_sha === 'string' ? v.base_sha : baseSha;
+      if (cur !== baseSha) {
+        setReview(null);
+        setErr({ kind: 'changed', message: 'Changed since you opened it', key });
+        // Refresh the file block too, so the next pick compares against the live text.
+        getJSON(brainUrl(agentId), d => setSt({ status: 'ok', data: d, error: '' }), () => {});
+        return;
+      }
+      setReview(r => (r ? { ...r, confirm_token: confirmTokenOf(v), armed: true } : r));
+      setErr({ kind: 'confirm', message: EXPIRED_MESSAGE, key });
+    }, message => setErr({ kind: 'load', message, key }));
+    return true;
+  };
+
+  // Undo of a save restores the backup. For an extra-confirm file it needs a fresh token, from the backup's version
+  // response; that response is bound to the live sha, which must still be the sha this save produced.
   const undo = () => {
-    if (!toast || busy || !undoable(toast.backup)) return;
+    if (!toast || busy || flight.current || !undoable(toast.backup)) return;
     const { key, backup, sha } = toast;
-    const req = restoreRequest({ agent: agentId, file: key, id: backup, base_sha: sha, confirm: true });
-    send(req, key, res => { if (res.saved) setToast({ msg: 'Restored', undo: false, backup: null, key }); });
+    const go = token => {
+      const req = restoreRequest({ agent: agentId, file: key, id: backup, base_sha: sha, confirm_token: token });
+      send(req, key, res => { if (res.saved) setToast({ msg: 'Restored', undo: false, backup: null, key }); });
+    };
+    if (!needsExtraConfirm(agentId, key)) { go(undefined); return; }
+    getJSON(versionUrl(agentId, key, backup), v => {
+      if (typeof v.base_sha === 'string' && v.base_sha !== sha) {
+        setErr({ kind: 'changed', message: 'Changed since you saved, so this cannot be undone here.', key });
+        return;
+      }
+      go(confirmTokenOf(v) || undefined);
+    }, message => setErr({ kind: 'load', message, key }));
   };
 
   // 409 'changed since loaded': reload the file, keep the draft in the editor (copyable), and ask to save again.
@@ -211,18 +292,24 @@ export function BrainDetail({ agentId, guard }) {
       onDiscard={() => { const run = pending.run; setPending(null); setEd(null); setReview(null); setErr(null); run(); }}
       onKeep={() => setPending(null)} />
   );
-  const alert = <Alert err={err} busy={busy} onReload={err && err.kind === 'changed' ? reloadKeepDraft : null} />;
+  // Reload is offered only for the editor's own file (it keeps the draft); a restore refusal just goes back.
+  const reloadable = err && err.kind === 'changed' && ed && ed.key === err.key;
+  const alert = <Alert err={err} busy={busy} onReload={reloadable ? reloadKeepDraft : null} />;
   const toastEl = <Toast toast={toast} busy={busy} onUndo={undo} />;
 
   if (review) {
     const restore = review.kind === 'restore';
     const rs = restore ? restoreState(review.version) : { restorable: true, reason: '' };
-    const label = confirmLabel({ verb: restore ? 'restore' : 'save', name, file: review.key, armed: review.armed });
+    const notice = restore ? scanNotice(review.version) : null;
+    const gated = restore && !!review.gated;
+    const label = confirmLabel({ verb: restore ? 'restore' : 'save', name, file: review.key, armed: review.armed, override: gated });
     return (
       <div className="dk-bv dk-bv-detail dk-be">
         {alert}
         <h4 className="dk-be-h">{(restore ? 'Restore ' : 'Review ') + FILE_TITLES[review.key]}</h4>
         <p className="dk-be-note">{restore ? 'Version from ' + versionLabel(review.version) + '. Current text is the left side.' : "Applies from the agent's next session."}</p>
+        {notice && <p className={notice.tone === 'alert' ? 'dk-be-warn' : 'dk-note'} role={notice.tone}>{notice.text}</p>}
+        {gated && !notice && <p className="dk-be-warn" role="alert">This version was blocked by the safety scanner. Restore it only if you have checked it.</p>}
         <p className="dk-be-sum">{diffSummaryText(review.ops)}</p>
         <DiffList ops={review.ops} />
         {!rs.restorable && <p className="dk-note">{rs.reason}</p>}

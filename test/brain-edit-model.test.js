@@ -4,6 +4,7 @@ import {
   normText, countChars, counterState, isDirty, splitLines, lineDiff, diffSummary, diffSummaryText, diffView,
   needsExtraConfirm, confirmLabel, blockReason, parseFailure, errorInfo, undoable, saveRequest, restoreRequest,
   versionsUrl, versionUrl, editState, versionLabel, restoreState, WRITE_HEADERS, TOAST_MS,
+  confirmTokenOf, findingsOf, scanNotice, overridableFindings, EXPIRED_MESSAGE, RESTORE_ANYWAY, SCAN_UNAVAILABLE_NOTE,
 } from '../src/brain-edit-model.js';
 import { BRAIN_API } from '../src/brain-model.js';
 
@@ -249,16 +250,18 @@ test('undoable: only a real backup id gives an Undo', () => {
   assert.equal(TOAST_MS, 5000);
 });
 
-test('saveRequest: PUT with the X-Requested-With header; confirm only when passed', () => {
+test('saveRequest: PUT with the X-Requested-With header; confirm_token only when passed, never the old confirm flag', () => {
   const r = saveRequest({ agent: 'dev', file: 'memory', text: 'hi', base_sha: 'abc' });
   assert.equal(r.method, 'PUT');
   assert.equal(r.url, BRAIN_API);
   assert.equal(r.headers['X-Requested-With'], 'agent-deck');
   assert.equal(r.headers['Content-Type'], 'application/json');
   assert.deepEqual(JSON.parse(r.body), { agent: 'dev', file: 'memory', text: 'hi', base_sha: 'abc' });
+  assert.equal('confirm_token' in JSON.parse(r.body), false);
   assert.equal('confirm' in JSON.parse(r.body), false);
-  const c = saveRequest({ agent: 'default', file: 'soul', text: 'hi', base_sha: '', confirm: true });
-  assert.equal(JSON.parse(c.body).confirm, true);
+  const c = saveRequest({ agent: 'default', file: 'soul', text: 'hi', base_sha: 'sha1', confirm_token: 'tok' });
+  assert.equal(JSON.parse(c.body).confirm_token, 'tok');
+  assert.equal('confirm' in JSON.parse(c.body), false);
   assert.equal(WRITE_HEADERS['X-Requested-With'], 'agent-deck');
 });
 
@@ -267,13 +270,88 @@ test('saveRequest: the text goes in the body untouched (separator and CRLF are n
   assert.equal(JSON.parse(saveRequest({ agent: 'dev', file: 'memory', text, base_sha: 'x' }).body).text, text);
 });
 
-test('restoreRequest: POST to /restore with id and the header; confirm only when passed', () => {
-  const r = restoreRequest({ agent: 'default', file: 'soul', id: '20261109T101010_000001Z', base_sha: 'sha1', confirm: true });
+test('restoreRequest: POST to /restore with id, confirm_token when passed, and the header', () => {
+  const r = restoreRequest({ agent: 'default', file: 'soul', id: '20261109T101010_000001Z', base_sha: 'sha1', confirm_token: 'tok' });
   assert.equal(r.method, 'POST');
   assert.equal(r.url, BRAIN_API + '/restore');
   assert.equal(r.headers['X-Requested-With'], 'agent-deck');
-  assert.deepEqual(JSON.parse(r.body), { agent: 'default', file: 'soul', id: '20261109T101010_000001Z', base_sha: 'sha1', confirm: true });
-  assert.equal('confirm' in JSON.parse(restoreRequest({ agent: 'dev', file: 'user', id: 'x', base_sha: 'y' }).body), false);
+  assert.deepEqual(JSON.parse(r.body), { agent: 'default', file: 'soul', id: '20261109T101010_000001Z', base_sha: 'sha1', confirm_token: 'tok' });
+  const bare = JSON.parse(restoreRequest({ agent: 'dev', file: 'user', id: 'x', base_sha: 'y' }).body);
+  assert.equal('confirm_token' in bare, false);
+  assert.equal('confirm' in bare, false);
+});
+
+test('restoreRequest: override_findings is sent only as true (never false, never absent-as-false)', () => {
+  const base = { agent: 'dev', file: 'memory', id: 'x', base_sha: 'y' };
+  assert.equal('override_findings' in JSON.parse(restoreRequest(base).body), false);
+  assert.equal('override_findings' in JSON.parse(restoreRequest({ ...base, override_findings: false }).body), false);
+  assert.equal('override_findings' in JSON.parse(restoreRequest({ ...base, override_findings: undefined }).body), false);
+  assert.equal(JSON.parse(restoreRequest({ ...base, override_findings: true }).body).override_findings, true);
+});
+
+test('blockReason: a disabled editor says editing is turned off', () => {
+  assert.equal(blockReason('disabled'), 'Editing is turned off');
+  assert.equal(editState({ editable: false, edit_block: 'disabled' }).reason, 'Editing is turned off');
+});
+
+test('confirmTokenOf: reads a string token; anything else is empty', () => {
+  assert.equal(confirmTokenOf({ confirm_token: 'abc' }), 'abc');
+  assert.equal(confirmTokenOf({}), '');
+  assert.equal(confirmTokenOf({ confirm_token: null }), '');
+  assert.equal(confirmTokenOf({ confirm_token: 5 }), '');
+  assert.equal(confirmTokenOf(null), '');
+});
+
+test('confirmLabel: restore that the scanner gated says Restore anyway until armed', () => {
+  assert.equal(confirmLabel({ verb: 'restore', name: 'Ash', file: 'soul', override: true }), 'Restore anyway');
+  assert.equal(confirmLabel({ verb: 'restore', name: 'Ash', file: 'soul', override: true, armed: true }), "Tap again to restore Ash's soul");
+  assert.equal(confirmLabel({ verb: 'save', name: 'Ash', file: 'soul', override: true }), 'Confirm save');
+});
+
+test('findingsOf: the strings, or [] for null and missing', () => {
+  assert.deepEqual(findingsOf({ findings: ['a', 'b'] }), ['a', 'b']);
+  assert.deepEqual(findingsOf({ findings: null, scan_unavailable: true }), []);
+  assert.deepEqual(findingsOf({}), []);
+  assert.deepEqual(findingsOf(null), []);
+});
+
+test('scanNotice: findings are an alert listing them; scan unavailable is a note; clean is nothing', () => {
+  assert.deepEqual(scanNotice({ findings: ['invisible unicode', 'ignore previous'] }),
+    { tone: 'alert', text: 'This version trips the safety scanner: invisible unicode, ignore previous' });
+  assert.deepEqual(scanNotice({ findings: null, scan_unavailable: true }),
+    { tone: 'note', text: 'Safety scan unavailable; restore will be refused.' });
+  assert.equal(scanNotice({ findings: [] }), null);
+  assert.equal(scanNotice({ findings: [], scan_unavailable: false }), null);
+  assert.equal(scanNotice(null), null);
+});
+
+test('overridableFindings: only a 422 blocked pattern with overridable true; findings come back as strings', () => {
+  const f = overridableFindings({ status: 422, body: { error: 'blocked pattern', findings: ['x', 2], overridable: true } });
+  assert.deepEqual(f, ['x', '2']);
+  assert.deepEqual(overridableFindings({ status: 422, body: { error: 'blocked pattern', overridable: true } }), []);
+  assert.equal(overridableFindings({ status: 422, body: { error: 'blocked pattern', findings: ['x'] } }), null);
+  assert.equal(overridableFindings({ status: 422, body: { error: 'blocked pattern', findings: ['x'], overridable: false } }), null);
+  assert.equal(overridableFindings({ status: 422, body: { error: 'over limit', overridable: true } }), null);
+  assert.equal(overridableFindings({ status: 503, body: { error: 'blocked pattern', overridable: true } }), null);
+  assert.equal(overridableFindings(null), null);
+});
+
+test('errorInfo: 403 brain edit disabled says editing is turned off; any other 403 is the generic refusal', () => {
+  const d = errorInfo({ status: 403, body: { error: 'brain edit disabled' } });
+  assert.equal(d.kind, 'disabled');
+  assert.equal(d.message, 'Editing is turned off. Nothing was changed.');
+  assert.equal(errorInfo({ status: 403, body: {} }).kind, 'refused');
+});
+
+test('errorInfo: 428 says the confirmation expired and to tap again (the client refetches the token)', () => {
+  assert.equal(errorInfo({ status: 428, body: { error: 'confirm token required' } }).message, 'Confirmation expired. Tap again to confirm.');
+  assert.equal(errorInfo({ status: 428, body: { error: 'confirm token invalid or expired' } }).kind, 'confirm');
+});
+
+test('the copy constants the review shows', () => {
+  assert.equal(EXPIRED_MESSAGE, 'Confirmation expired. Tap again to confirm.');
+  assert.equal(SCAN_UNAVAILABLE_NOTE, 'Safety scan unavailable; restore will be refused.');
+  assert.equal(RESTORE_ANYWAY, 'Restore anyway');
 });
 
 test('versionsUrl and versionUrl: encoded query, GET by default', () => {
