@@ -15,4 +15,5 @@ export const fetchJSON = SDK.fetchJSON || (async (url, init) => {
 export const API = '/api/plugins/agent-office/state';
 export const USAGE_API = '/api/plugins/agent-office/usage';
 export const SERVER_API = '/api/plugins/agent-office/server';
+export const WIKI_API = '/api/plugins/agent-office/wiki';
 export const SESSION_API = '/api/plugins/agent-office/session';

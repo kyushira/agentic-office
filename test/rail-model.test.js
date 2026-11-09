@@ -7,7 +7,7 @@ const item = (id, top, visible = true) => ({ id, top, visible });
 
 describe('RAIL_SECTIONS', () => {
   test('five buttons in the agreed order, with unique ids and targets', () => {
-    assert.deepEqual(RAIL_SECTIONS.map(s => s.id), ['office', 'needs', 'live', 'memory', 'usage']);
+    assert.deepEqual(RAIL_SECTIONS.map(s => s.id), ['office', 'needs', 'live', 'wiki', 'usage']);
     assert.equal(new Set(RAIL_SECTIONS.map(s => s.id)).size, RAIL_SECTIONS.length);
     assert.equal(new Set(RAIL_SECTIONS.map(s => s.target)).size, RAIL_SECTIONS.length);
   });

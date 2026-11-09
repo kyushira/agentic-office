@@ -10,7 +10,7 @@ export const RAIL_SECTIONS = [
   { id: 'office', label: 'Office', target: 'dk-pane-office' },
   { id: 'needs', label: 'Needs you', target: 'dk-needs' },
   { id: 'live', label: 'Live and Comms', target: 'dk-pane-comms' },
-  { id: 'memory', label: 'Memory', target: 'dk-pane-memory' },
+  { id: 'wiki', label: 'Wiki', target: 'dk-pane-wiki' },
   { id: 'usage', label: 'Usage (5h reset)', target: 'dk-sec-usage' },
 ];
 

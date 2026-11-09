@@ -1,13 +1,13 @@
 import { React, useState, useEffect, useRef, fetchJSON, API, USAGE_API, SESSION_API } from './sdk.js';
 import { ago, compact, resetCountdown } from './format.js';
-import { buildItems, headerCounts, durationText, modelText, modelParts, usageText, meterLevel, activeTokens, currentSessionId, eventLabel, detailRows, traceModel, newToolCalls, countStep, todayParts, COUNT_MS, newWalks, walkLabel, toolRing, newBrainTrips, brainCounts, brainText, brainNotes, helperChanges, swarmTip, needsYou, greeting, resetSoon, RIGHT_PANE_DEFAULT, livePolls, commsPolls, speechText } from './deck-model.js';
+import { buildItems, headerCounts, durationText, modelText, modelParts, usageText, meterLevel, activeTokens, currentSessionId, eventLabel, detailRows, traceModel, newToolCalls, countStep, todayParts, COUNT_MS, newWalks, walkLabel, toolRing, newBrainTrips, brainCounts, brainText, brainNotes, helperChanges, swarmTip, needsYou, greeting, resetSoon, RIGHT_PANE_DEFAULT, livePolls, commsPolls, speechText, paneTabNext } from './deck-model.js';
 import { isStandalone, wantsFull, withFullParam, requestNativeFullscreen, exitNativeFullscreen, markFullPath } from './fullscreen.js';
 import { Live } from './Mission.jsx';
 import MissionComms from './MissionComms.jsx';
 import { useDialogFocus } from './dialog-focus.js';
 import { Sprite } from './Sprite.jsx';
-import { useMedia, UpdatedAgo, LiveClock, Bell, NeedsYou, PaneTabs } from './DeckRevamp.jsx';
-import { MemoryPane } from './Memory.jsx';
+import { useMedia, UpdatedAgo, LiveClock, Bell, NeedsYou } from './DeckRevamp.jsx';
+import { WikiPane } from './Wiki.jsx';
 import { BrainDetail } from './BrainDetail.jsx';
 import { UsageRings } from './UsageRings.jsx';
 import { ServerCard } from './ServerCard.jsx';
@@ -19,6 +19,34 @@ import Rail from './Rail.jsx';
 const POLL_MS = 15000, POLL_LITE_MS = 15000, DETAIL_MS = 5000;   // spec 5: 15s visible, Lite no slower; hidden is paused elsewhere
 
 const pctStr = p => (p == null ? 'n/a' : Math.round(p) + '%');
+
+const PHONE_TABS = [['office', 'Office'], ['live', 'Live'], ['comms', 'Comms'], ['wiki', 'Wiki']];
+
+/**
+ * Phone pane tabs: Office | Live | Comms | Wiki. Same markup and keys as DeckRevamp's PaneTabs, which still
+ * lists the retired Memory tab, so Deck uses this one.
+ */
+function PhoneTabs({ pane, setPane }) {
+  const onKey = (e, i) => {
+    const next = paneTabNext(i, e.key, PHONE_TABS.length);
+    if (next < 0) return;
+    e.preventDefault();
+    setPane(PHONE_TABS[next][0]);
+    e.currentTarget.parentElement.querySelectorAll('[role="tab"]')[next].focus();
+  };
+  return (
+    <div className="dk-seg" role="tablist" aria-label="Deck pane">
+      {PHONE_TABS.map(([id, label], i) => {
+        const on = pane === id;
+        return (
+          <button key={id} id={'dk-pane-tab-' + id} type="button" role="tab" aria-selected={on}
+            aria-controls={'dk-pane-' + id} tabIndex={on ? 0 : -1} className={'dk-seg-btn' + (on ? ' is-on' : '')}
+            onClick={() => setPane(id)} onKeyDown={e => onKey(e, i)}>{label}</button>
+        );
+      })}
+    </div>
+  );
+}
 
 /**
  * Thin percent bar (cyan ok, amber warn, red hot). No value means a bare track.
@@ -423,7 +451,7 @@ export default function Deck() {
   const [, setTick] = useState(0);
   const [usage, setUsage] = useState(null);
   const usageRef = useRef(null);                                       // usage rings section; the header pill scrolls to it
-  const [pane, setPane] = useState('office');                          // phone only: Office | Live | Comms | Memory
+  const [pane, setPane] = useState('office');                          // phone only: Office | Live | Comms | Wiki
   const [rightPane, setRightPane] = useState(RIGHT_PANE_DEFAULT);      // desktop only: right pane is Live (default) or Comms
   const desktop = useMedia('(min-width: 900px)');                      // side by side from 900px
   const [updatedAt, setUpdatedAt] = useState(null);                    // ms of the last good /state poll
@@ -630,7 +658,7 @@ export default function Deck() {
         <UsageRings usage={usage} now={Date.now()} />
       </section>
       <NeedsYou items={needs} onPick={id => setSel('a:' + id)} />
-      {!desktop && <PaneTabs pane={pane} setPane={setPane} />}
+      {!desktop && <PhoneTabs pane={pane} setPane={setPane} />}
       <div className="dk-panes">
       <section id="dk-pane-office" role="tabpanel" aria-labelledby="dk-pane-tab-office" className="dk-pane dk-pane-office"
         hidden={!desktop && pane !== 'office'}>
@@ -669,9 +697,8 @@ export default function Deck() {
       </div>
       {/* Projects sit below Office and Live (Sir 2026-11-09) */}
       <ProjectsList now={now} />
-      {/* Memory: phone tab (hidden unless selected), full width below Office and Live/Comms on desktop. Fetches only on search. */}
-      <MemoryPane agents={(state && state.agents) || []} sessions={state && state.sessions} brain={state && state.brain}
-        lite={lite} hidden={!desktop && pane !== 'memory'} />
+      {/* Wiki: phone tab (hidden unless selected), full width below Office and Live/Comms on desktop. Self-contained: fetches on first show and on user action. */}
+      <WikiPane hidden={!desktop && pane !== 'wiki'} />
       </div>
       {picked && <Sheet onClose={closeSheet} getReturn={sel && sel.startsWith('a:') ? () => tileRefs.current.get(sel.slice(2)) : null}>
         {picked.type === 'agent'

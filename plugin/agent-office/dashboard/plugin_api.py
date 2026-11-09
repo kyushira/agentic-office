@@ -54,6 +54,10 @@ _sspec = importlib.util.spec_from_file_location("agent_office_server_stats", Pat
 server_stats = importlib.util.module_from_spec(_sspec)
 _sspec.loader.exec_module(server_stats)
 
+_wspec = importlib.util.spec_from_file_location("agent_office_wiki", Path(__file__).with_name("wiki.py"))
+wiki = importlib.util.module_from_spec(_wspec)
+_wspec.loader.exec_module(wiki)
+
 router = APIRouter()
 NO_STORE = {"Cache-Control": "no-store", "Pragma": "no-cache"}
 CACHE_SECS = 4.0
@@ -394,3 +398,45 @@ async def brain_version(agent: str | None = Query(None, max_length=32), file: st
     except brain_edit.EditError as e:
         return _edit_refused(e)
     return JSONResponse(result, headers=NO_STORE)
+
+
+# ---- Wiki (wiki.py): read-only GET routes over the wiki root. Every refusal is {"error": fixed string}, no paths.
+
+async def _wiki_result(fn, *args):
+    try:
+        body = await asyncio.to_thread(fn, *args)
+    except wiki.WikiError as e:
+        return JSONResponse({"error": e.message}, status_code=e.status, headers=NO_STORE)
+    except OSError:
+        return JSONResponse({"error": "read failed"}, status_code=500, headers=NO_STORE)
+    return JSONResponse(body, headers=NO_STORE)
+
+
+@router.get("/wiki/index")
+async def wiki_index():
+    """index.md as {"text"}. 413 past 64 KB; 404 when missing or refused."""
+    return await _wiki_result(wiki.index)
+
+
+@router.get("/wiki/list")
+async def wiki_list(dir: str | None = Query(None)):
+    """Pages in one of entities, concepts, comparisons, queries: {"items": [{path, title, type, updated}]}. 400 otherwise."""
+    return await _wiki_result(wiki.list_pages, dir)
+
+
+@router.get("/wiki/page")
+async def wiki_page(path: str | None = Query(None)):
+    """One page: frontmatter, redacted body (256 KB cap), links and backlinks. Any refused path or missing file -> 404."""
+    return await _wiki_result(wiki.page, path)
+
+
+@router.get("/wiki/search")
+async def wiki_search(q: str | None = Query(None)):
+    """Case-insensitive substring search over titles and bodies: {"results": [{path, title, snippet}]}, max 20. q must be 2..100 chars."""
+    return await _wiki_result(wiki.search, q)
+
+
+@router.get("/wiki/log")
+async def wiki_log(tail: str | None = Query(None)):
+    """Parsed log.md headings, newest first: {"entries": [{date, action, subject, body}]}. tail is 1..200, default 50."""
+    return await _wiki_result(wiki.log, tail)
