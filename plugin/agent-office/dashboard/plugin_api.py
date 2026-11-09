@@ -40,6 +40,10 @@ _ispec = importlib.util.spec_from_file_location("agent_office_inbox", Path(__fil
 inbox = importlib.util.module_from_spec(_ispec)
 _ispec.loader.exec_module(inbox)
 
+_bspec = importlib.util.spec_from_file_location("agent_office_brain", Path(__file__).with_name("brain.py"))
+brain = importlib.util.module_from_spec(_bspec)
+_bspec.loader.exec_module(brain)
+
 router = APIRouter()
 NO_STORE = {"Cache-Control": "no-store", "Pragma": "no-cache"}
 CACHE_SECS = 4.0
@@ -121,6 +125,16 @@ async def memory_endpoint(q: str = Query("", max_length=200), agent: str | None 
     drop-box text notes (agent 'inbox'). limit is clamped to 1..50; an unknown agent -> 404."""
     lim = max(1, min(limit, memory.MAX_LIMIT))
     result = await asyncio.to_thread(memory.search, q, agent, lim, None, inbox_dir=inbox.inbox_dir())
+    if result["unknown_agent"]:
+        return JSONResponse({"error": "unknown agent"}, status_code=404, headers=NO_STORE)
+    return JSONResponse(result, headers=NO_STORE)
+
+
+@router.get("/brain")
+async def brain_endpoint(agent: str | None = Query(None, max_length=32)):
+    """Read-only SOUL.md, MEMORY.md and USER.md per whitelisted agent (see brain.py). agent narrows to one agent;
+    an unknown agent -> 404. Nothing is written."""
+    result = await asyncio.to_thread(brain.snapshot, agent)
     if result["unknown_agent"]:
         return JSONResponse({"error": "unknown agent"}, status_code=404, headers=NO_STORE)
     return JSONResponse(result, headers=NO_STORE)
