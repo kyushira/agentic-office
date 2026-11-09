@@ -819,3 +819,49 @@ html.ao-full-active { background-color: var(--bg) !important; }
 .dk-root .dk-be-vlist { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
 .dk-root .dk-be-row { display: block; width: 100%; box-sizing: border-box; min-height: 44px; text-align: left; padding: 8px 10px; border: 1px solid var(--dk-line-2); border-radius: 6px; background: var(--dk-tile); color: var(--dk-ink); font: inherit; font-size: 12px; cursor: pointer; }
 .dk-root .dk-be-row:disabled { opacity: .55; cursor: default; }
+
+/* Server card (Agent Deck): RAM ring, disk bar, load, top memory. 360px first. Colour is always paired with a word. */
+.dk-root .dk-sc { margin: 8px 8px 0; padding: 12px; border: 1px solid var(--border); border-radius: 14px; background: var(--surface-1); color: var(--text-1); display: flex; flex-direction: column; gap: 12px; }
+.dk-root .dk-sc-head { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.dk-root .dk-sc-h { margin: 0; font: 600 11px/1 var(--font-sans); letter-spacing: .08em; text-transform: uppercase; color: var(--text-3); }
+.dk-root .dk-sc-meta { margin-left: auto; font-size: 11px; color: var(--text-3); white-space: nowrap; }
+.dk-root .dk-sc-mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+.dk-root .dk-sc-refresh { min-height: 44px; min-width: 44px; height: auto; }
+.dk-root .dk-sc-body { display: flex; flex-direction: column; gap: 12px; }
+.dk-root .dk-sc-body.is-stale { opacity: .5; }
+.dk-root .dk-sc-ram { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+.dk-root .dk-sc-ring { position: relative; width: 96px; height: 96px; }
+.dk-root .dk-sc-svg { display: block; }
+.dk-root .dk-sc-track { stroke: var(--ring-track); }
+.dk-root .dk-sc-arc { stroke: var(--c-live); }
+.dk-root .dk-sc-ring.is-low .dk-sc-arc { stroke: var(--c-gold); }
+.dk-root .dk-sc-ring.is-critical .dk-sc-arc { stroke: var(--c-danger); }
+.dk-root .dk-sc-ring.is-loading .dk-sc-track { stroke: var(--text-3); stroke-dasharray: 4 6; }
+.dk-root .dk-sc-centre { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; max-width: 70px; margin: auto; height: fit-content; text-align: center; font: 600 11px/1.2 var(--font-mono); font-variant-numeric: tabular-nums; color: var(--text-1); }
+.dk-root .dk-sc-ram-txt { display: flex; flex-direction: column; align-items: center; gap: 4px; text-align: center; }
+.dk-root .dk-sc-level { font: 600 12px/1 var(--font-sans); letter-spacing: .04em; text-transform: uppercase; color: var(--text-2); }
+.dk-root .dk-sc-level.is-ok { color: var(--c-live); }
+.dk-root .dk-sc-level.is-low { color: var(--c-gold); }
+.dk-root .dk-sc-level.is-critical { color: var(--c-danger); }
+.dk-root .dk-sc-free { font: 500 12px/1 var(--font-mono); font-variant-numeric: tabular-nums; color: var(--text-2); }
+.dk-root .dk-sc-row { display: flex; align-items: center; gap: 8px; min-width: 0; min-height: 32px; }
+.dk-root .dk-sc-k { flex: none; min-width: 56px; font-size: 12px; color: var(--text-2); }
+.dk-root .dk-sc-v { flex: none; margin-left: auto; font-size: 12px; color: var(--text-1); text-align: right; }
+.dk-root .dk-sc-disk .dk-meter { display: block; flex: 1 1 auto; width: auto; min-width: 40px; height: 4px; }
+.dk-root .dk-sc-top { display: flex; flex-direction: column; }
+.dk-root .dk-sc-th { margin: 0 0 4px; font: 600 11px/1 var(--font-sans); letter-spacing: .08em; text-transform: uppercase; color: var(--text-3); }
+.dk-root .dk-sc-rows { list-style: none; margin: 0; padding: 0; }
+.dk-root .dk-sc-trow { min-height: 44px; border-top: 1px solid var(--border); }
+.dk-root .dk-sc-name { flex: 1 1 auto; min-width: 0; font-size: 13px; color: var(--text-1); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dk-root .dk-sc-trow .dk-sc-v { font-size: 12px; }
+.dk-root .dk-sc .is-demo { flex: none; font: 600 9px/1 var(--font-sans); letter-spacing: .08em; text-transform: uppercase; color: var(--c-gold); border: 1px solid rgba(var(--c-gold-rgb), .6); border-radius: 4px; padding: 2px 4px; }
+.dk-root .dk-sc-note { margin: 0; font-size: 12px; color: var(--text-2); }
+.dk-root .dk-sc-err { color: var(--c-danger); }
+/* RAM critical: the ring glow breathes (opacity .4 to 1 over 2.4s). Reduced motion and Lite hold it still. */
+.dk-root .dk-pulse { position: relative; }
+.dk-root .dk-pulse::after { content: ''; position: absolute; inset: 0; border-radius: 50%; pointer-events: none;
+  box-shadow: 0 0 0 3px rgba(var(--c-danger-rgb), .45), 0 0 12px rgba(var(--c-danger-rgb), .35);
+  animation: dk-pulse 2.4s ease-in-out infinite; }
+@keyframes dk-pulse { 0%, 100% { opacity: .4; } 50% { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .dk-root .dk-pulse::after { animation: none; } }
+.dk-root.is-lite .dk-pulse::after { animation: none; }

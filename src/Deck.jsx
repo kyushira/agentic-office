@@ -10,6 +10,7 @@ import { useMedia, UpdatedAgo, LiveClock, Bell, NeedsYou, PaneTabs } from './Dec
 import { MemoryPane } from './Memory.jsx';
 import { BrainDetail } from './BrainDetail.jsx';
 import { UsageRings } from './UsageRings.jsx';
+import { ServerCard } from './ServerCard.jsx';
 import { ProjectsList } from './ProjectsList.jsx';
 import { visibleInterval } from './visible-timer.js';
 import Rail from './Rail.jsx';
@@ -623,6 +624,7 @@ export default function Deck() {
       </header>
       {error && <div className="dk-err">Can't reach the deck data ({error}). Retrying…</div>}
       <div className="dk-scroll">
+      <ServerCard />
       {/* spec 2: the usage rings row comes first and is always on the page (n/a rings plus the backend reason when unavailable) */}
       <section id="dk-usage-rings" ref={usageRef} className="dk-uplan" tabIndex={-1} aria-label="Plan usage">
         <UsageRings usage={usage} now={Date.now()} />

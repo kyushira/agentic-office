@@ -50,6 +50,10 @@ _ebspec = importlib.util.spec_from_file_location("agent_office_brain_edit", Path
 brain_edit = importlib.util.module_from_spec(_ebspec)
 _ebspec.loader.exec_module(brain_edit)
 
+_sspec = importlib.util.spec_from_file_location("agent_office_server_stats", Path(__file__).with_name("server_stats.py"))
+server_stats = importlib.util.module_from_spec(_sspec)
+_sspec.loader.exec_module(server_stats)
+
 router = APIRouter()
 NO_STORE = {"Cache-Control": "no-store", "Pragma": "no-cache"}
 CACHE_SECS = 4.0
@@ -89,6 +93,16 @@ async def projects_endpoint():
 @router.get("/usage")
 async def usage_endpoint():
     return await asyncio.to_thread(usage.plan_usage)
+
+
+@router.get("/server")
+async def server_endpoint():
+    """Read-only server card: RAM, root disk, load and top-3 RSS processes. Query params are ignored. Unreadable
+    meminfo -> 503 with a fixed body; any other failing section is null."""
+    result = await asyncio.to_thread(server_stats.snapshot)
+    if result is None:
+        return JSONResponse({"error": "server stats unavailable"}, status_code=503, headers=NO_STORE)
+    return JSONResponse(result, headers=NO_STORE)
 
 
 @router.get("/session")
