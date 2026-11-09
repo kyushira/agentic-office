@@ -3,10 +3,15 @@
 Serves the dev harness, the built plugin files and the plugin's real API router,
 the same paths the Hermes dashboard uses. Binds to 127.0.0.1 only.
 
-    /opt/hermes/.venv/bin/python -I dev/serve.py [port] [--demo]
+    /opt/hermes/.venv/bin/python -I dev/serve.py [port] [--demo] [--brain-root <dir>]
 
 --demo (harness only, never shipped): adds sample helpers, toasts and Brain trips on top of the
 real snapshot so the v2 animations can be checked when no agent happens to be delegating.
+
+--brain-root <dir> (ALWAYS pass it when testing the Brain editor): the Brain read and write routes use <dir>
+instead of /opt/data, and backups go to <dir>/deck-backups. <dir> must hold a copy of the agent files in the
+same layout (SOUL.md, memories/MEMORY.md, memories/USER.md, profiles/<agent>/...). Without it the harness
+would write to the real agent files, so the server warns loudly. It refuses <dir> = /opt/data.
 """
 import copy
 import importlib.util
@@ -25,6 +30,29 @@ api = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(api)
 DEMO = "--demo" in sys.argv
 T0 = time.time()
+
+
+def _brain_root_arg(argv):
+    """The directory after --brain-root, or None. Exits with a message if the flag has no directory."""
+    if "--brain-root" not in argv:
+        return None
+    i = argv.index("--brain-root")
+    if i + 1 >= len(argv) or argv[i + 1].startswith("--"):
+        sys.exit("serve.py: --brain-root needs a directory")
+    return Path(argv[i + 1])
+
+
+BRAIN_ROOT = _brain_root_arg(sys.argv)
+if BRAIN_ROOT is not None:
+    root = BRAIN_ROOT.resolve()
+    if root == Path("/opt/data").resolve():
+        sys.exit("serve.py: refusing --brain-root /opt/data (that is the real agent data)")
+    api.brain.DEFAULT_ROOT = root
+    api.brain_edit.DEFAULT_BACKUP_ROOT = root / "deck-backups"
+    print(f"serve.py: Brain root = {root}, backups = {root / 'deck-backups'}", file=sys.stderr)
+else:
+    print("!!! serve.py: NO --brain-root. Brain write routes (PUT /brain, restore) act on REAL agent files "
+          "under /opt/data. Pass --brain-root <temp copy> for any test. !!!", file=sys.stderr)
 
 app = FastAPI()
 if DEMO:

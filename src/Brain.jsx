@@ -24,17 +24,19 @@ function FillBar({ label, f }) {
 }
 
 /** One of the three blocks (Soul, Memory, User profile): size line, optional fill bar, full redacted text. */
-function BrainBlock({ title, f, bar, id }) {
+/** `control` (Edit / reason, sheet only) sits under the title; `editor` replaces the text while a block is edited. */
+export function BrainBlock({ title, f, bar, id, control, editor }) {
   const meta = f.exists ? [`${fmtInt(f.chars)} chars`, f.updated].filter(Boolean).join(' · ') : 'no file';
   return (
     <section className="dk-bv-blk" aria-labelledby={id}>
       <h4 id={id} className="dk-bv-blk-h">{title}</h4>
+      {control || null}
       <p className="dk-bv-meta">{meta}</p>
       {bar && <FillBar label={title === 'User profile' ? 'User' : 'Memory'} f={f} />}
-      {!f.exists && <p className="dk-note">No file yet.</p>}
-      {f.exists && f.error && <p className="dk-note">This file could not be read.</p>}
-      {f.exists && !f.error && <pre className="dk-bv-text" tabIndex={0} aria-label={title + ' text'}>{f.text || '(empty)'}</pre>}
-      {f.exists && f.truncated && <p className="dk-note">Shortened: only the first part of this file is shown.</p>}
+      {!editor && !f.exists && <p className="dk-note">No file yet.</p>}
+      {!editor && f.exists && f.error && <p className="dk-note">This file could not be read.</p>}
+      {editor ? editor : (f.exists && !f.error && <pre className="dk-bv-text" tabIndex={0} aria-label={title + ' text'}>{f.text || '(empty)'}</pre>)}
+      {!editor && f.exists && f.truncated && <p className="dk-note">Shortened: only the first part of this file is shown.</p>}
     </section>
   );
 }
@@ -129,34 +131,4 @@ export function BrainOverview({ hidden, agents }) {
   );
 }
 
-/** Brain tab in the agent sheet: one agent's three blocks. Fetches once when the tab mounts (the tab opens). */
-export function BrainDetail({ agentId }) {
-  const [attempt, setAttempt] = useState(0);
-  const [st, setSt] = useState({ status: 'loading', data: null, error: '' });
-  useEffect(() => {
-    const c = new AbortController();
-    setSt({ status: 'loading', data: null, error: '' });
-    fetchJSON(brainUrl(agentId), { signal: c.signal })
-      .then(d => { if (!c.signal.aborted) setSt({ status: 'ok', data: d, error: '' }); })
-      .catch(e => { if (!c.signal.aborted) setSt({ status: 'error', data: null, error: String((e && e.message) || e || 'error') }); });
-    return () => c.abort();
-  }, [agentId, attempt]);
 
-  if (st.status === 'loading') return <p className="dk-bv-detail dk-mem-hint-t" role="status" aria-busy="true">Loading brain…</p>;
-  if (st.status === 'error') {
-    return (
-      <div className="dk-bv dk-bv-detail">
-        <div className="dk-err" role="alert">Can't read this brain ({st.error}). <button type="button" className="dk-bv-refresh" onClick={() => setAttempt(n => n + 1)}>Retry</button></div>
-      </div>
-    );
-  }
-  const rows = brainAgents(st.data, nowSec());
-  const r = rows.find(x => x.id === agentId) || rows[0];
-  if (!r) return <p className="dk-note">Not in the brain list.</p>;
-  const idp = 'dk-bv-sheet-' + r.id;
-  return (
-    <div className="dk-bv dk-bv-detail">
-      <BrainBlocks r={r} idp={idp} />
-    </div>
-  );
-}

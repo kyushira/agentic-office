@@ -8,7 +8,7 @@ import { useDialogFocus } from './dialog-focus.js';
 import { Sprite } from './Sprite.jsx';
 import { useMedia, UpdatedAgo, LiveClock, Bell, NeedsYou, PaneTabs } from './DeckRevamp.jsx';
 import { MemoryPane } from './Memory.jsx';
-import { BrainDetail } from './Brain.jsx';
+import { BrainDetail } from './BrainDetail.jsx';
 import { UsageRings } from './UsageRings.jsx';
 import { ProjectsList } from './ProjectsList.jsx';
 import { visibleInterval } from './visible-timer.js';
@@ -299,18 +299,24 @@ function NowBlock({ det, err, now }) {
 
 const SHEET_TABS = [['live', 'Live'], ['comms', 'Comms'], ['details', 'Details'], ['brain', 'Brain']];
 
-function AgentSheet({ it, sessions, now, det, detErr, notes, agents, lite }) {
+function AgentSheet({ it, sessions, now, det, detErr, notes, agents, lite, guard }) {
   const [open, setOpen] = useState(null);
   const [tab, setTab] = useState('details');
   const a = it.agent;
   const s = open && sessions.find(x => x.id === open);
   if (s) return <SessionDetail s={s} now={now} onBack={() => setOpen(null)} />;
   const ring = toolRing(a.tools, a.activity, a.status);
+  // Leaving the Brain tab with unsaved edits asks first (the editor shows the prompt).
+  const go = id => {
+    const g = guard && guard.current;
+    if (tab === 'brain' && id !== 'brain' && g && g.dirty) g.ask(() => setTab(id));
+    else setTab(id);
+  };
   const onTabKey = (e, i) => {
     if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
     e.preventDefault();
     const next = (i + (e.key === 'ArrowRight' ? 1 : SHEET_TABS.length - 1)) % SHEET_TABS.length;
-    setTab(SHEET_TABS[next][0]);
+    go(SHEET_TABS[next][0]);
     e.currentTarget.parentElement.querySelectorAll('[role="tab"]')[next].focus();
   };
   return (
@@ -323,14 +329,14 @@ function AgentSheet({ it, sessions, now, det, detErr, notes, agents, lite }) {
           return (
             <button key={id} id={`dk-sh-tab-${id}`} role="tab" aria-selected={on} aria-controls="dk-sh-panel"
               tabIndex={on ? 0 : -1} className={'dk-mc-tab' + (on ? ' is-on' : '')}
-              onClick={() => setTab(id)} onKeyDown={e => onTabKey(e, i)}>{label}</button>
+              onClick={() => go(id)} onKeyDown={e => onTabKey(e, i)}>{label}</button>
           );
         })}
       </div>
       <div id="dk-sh-panel" role="tabpanel" aria-labelledby={`dk-sh-tab-${tab}`}>
         {tab === 'live' && <div className="dk-mc-body"><Live agentKey={a.id} agents={agents} lite={lite} /></div>}
         {tab === 'comms' && <div className="dk-mc-body"><MissionComms agents={agents} agentKey={a.id} lite={lite} /></div>}
-        {tab === 'brain' && <BrainDetail agentId={a.id} />}
+        {tab === 'brain' && <BrainDetail agentId={a.id} guard={guard} />}
         {tab === 'details' && <>
           <NowBlock det={det} err={detErr} now={now} />
           {a.remit && <p className="dk-remit-full">{a.remit}</p>}
@@ -404,6 +410,13 @@ export default function Deck() {
   const [state, setState] = useState(null);
   const [error, setError] = useState('');
   const [sel, setSel] = useState(null);
+  // Set by the Brain editor while it has unsaved changes: { dirty, ask(next) }. Close goes through ask().
+  const brainGuard = useRef(null);
+  const closeSheet = () => {
+    const g = brainGuard.current;
+    if (g && g.dirty) g.ask(() => setSel(null));
+    else setSel(null);
+  };
   const [lite, setLite] = useState(readLite);
   const [height, setHeight] = useState(600);
   const [, setTick] = useState(0);
@@ -658,11 +671,11 @@ export default function Deck() {
       <MemoryPane agents={(state && state.agents) || []} sessions={state && state.sessions} brain={state && state.brain}
         lite={lite} hidden={!desktop && pane !== 'memory'} />
       </div>
-      {picked && <Sheet onClose={() => setSel(null)} getReturn={sel && sel.startsWith('a:') ? () => tileRefs.current.get(sel.slice(2)) : null}>
+      {picked && <Sheet onClose={closeSheet} getReturn={sel && sel.startsWith('a:') ? () => tileRefs.current.get(sel.slice(2)) : null}>
         {picked.type === 'agent'
           ? <AgentSheet key={picked.key} it={picked} sessions={(state.sessions || {})[picked.agent.id] || []} now={now}
                       det={detOk && detOk.data} detErr={!!(detOk && detOk.err)} notes={brainNotes(state.brain)}
-                      agents={state.agents || []} lite={lite} />
+                      agents={state.agents || []} lite={lite} guard={brainGuard} />
           : <HelperSheet it={picked} now={now} />}
       </Sheet>}
     </div>

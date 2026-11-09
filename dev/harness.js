@@ -6,7 +6,15 @@ import { createRoot } from 'react-dom/client';
 window.__HERMES_PLUGIN_SDK__ = {
   React,
   hooks: { useState: React.useState, useEffect: React.useEffect, useRef: React.useRef, useMemo: React.useMemo, useCallback: React.useCallback },
-  fetchJSON: url => fetch(url).then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); }),
+  // Same error shape as the host's ApiError: numeric .status (0 = no response), raw response text in .body.
+  fetchJSON: async (url, init) => {
+    let r;
+    try { r = await fetch(url, { credentials: 'same-origin', ...init }); }
+    catch (e) { throw Object.assign(new Error('Could not reach the server'), { status: 0, body: '' }); }
+    const text = await r.text();
+    if (!r.ok) throw Object.assign(new Error('HTTP ' + r.status), { status: r.status, body: text });
+    return JSON.parse(text);
+  },
 };
 const root = createRoot(document.getElementById('root'));
 window.__HERMES_PLUGINS__ = { register: (name, Comp) => root.render(React.createElement(Comp)), registerSlot() {} };

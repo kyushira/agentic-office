@@ -782,3 +782,40 @@ html.ao-full-active { background-color: var(--bg) !important; }
 .dk-root .dk-bv-text { margin: 0; max-height: 50vh; overflow: auto; -webkit-overflow-scrolling: touch; white-space: pre-wrap; overflow-wrap: anywhere; word-break: break-word; font: 12px/1.45 var(--font-mono, monospace); color: var(--dk-ink); background: color-mix(in srgb, var(--c-accent-rgb) 6%, transparent); border: 1px solid var(--dk-line); border-radius: 8px; padding: 8px; min-width: 0; }
 .dk-root .dk-bv-detail { margin: 8px 0 0; }
 .dk-root .dk-bv-detail .dk-bv-body { padding: 0; }
+
+/* Brain editor (BrainDetail.jsx, BrainEdit.jsx). Amber = --dk-warn and red = --dk-red always come with words. */
+.dk-root .dk-be { min-width: 0; }
+.dk-root .dk-be-h { margin: 6px 0 4px; font-size: 13px; color: var(--dk-ink); }
+.dk-root .dk-be-note, .dk-root .dk-be-sum { font-size: 12px; color: var(--dk-mut); margin: 4px 0; overflow-wrap: anywhere; }
+.dk-root .dk-be-ctl { display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: center; margin: 4px 0; }
+.dk-root .dk-be-btn { min-height: 44px; min-width: 44px; padding: 0 14px; border-radius: 8px; border: 1px solid var(--dk-line-2); background: var(--dk-tile); color: var(--dk-ink); font: inherit; font-size: 12px; cursor: pointer; }
+.dk-root .dk-be-btn.is-primary { border-color: var(--dk-dim); color: var(--dk-hot); }
+.dk-root .dk-be-btn:disabled { opacity: .55; cursor: default; }
+.dk-root .dk-be-link { min-height: 44px; padding: 0 4px; background: none; border: 0; color: var(--dk-ink); font: inherit; font-size: 12px; text-decoration: underline; cursor: pointer; }
+.dk-root .dk-be-link:disabled { opacity: .55; cursor: default; }
+.dk-root .dk-be-banner { font-size: 12px; color: var(--dk-mut); border-left: 3px solid var(--dk-dim); padding: 4px 8px; margin: 6px 0; }
+.dk-root .dk-be-lbl { display: block; font-size: 12px; color: var(--dk-mut); margin: 6px 0 4px; }
+.dk-root .dk-be-ta { display: block; box-sizing: border-box; width: 100%; max-width: 100%; min-width: 0; font-family: var(--dk-mono); font-size: 12px; line-height: 1.4; color: var(--dk-ink); background: var(--dk-bg); border: 1px solid var(--dk-line-2); border-radius: 6px; padding: 8px; resize: vertical; white-space: pre-wrap; overflow-wrap: anywhere; }
+.dk-root .dk-be-ta.is-over { border-color: var(--dk-red); }
+.dk-root .dk-be-count { font-size: 12px; font-variant-numeric: tabular-nums; color: var(--dk-mut); margin: 6px 0; overflow-wrap: anywhere; }
+.dk-root .dk-be-count.is-warn { color: var(--dk-warn); font-weight: 700; }
+.dk-root .dk-be-count.is-over { color: var(--dk-red); font-weight: 700; }
+.dk-root .dk-be-acts { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0; }
+.dk-root .dk-be-warn { font-size: 12px; color: var(--dk-warn); margin: 6px 0; }
+.dk-root .dk-be-diff { font-family: var(--dk-mono); font-size: 11px; max-height: 45vh; overflow: auto; border: 1px solid var(--dk-line); border-radius: 6px; padding: 4px 0; min-width: 0; }
+.dk-root .dk-be-l { display: flex; gap: 6px; padding: 0 8px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.dk-root .dk-be-l.is-add { color: var(--dk-hot-2); background: var(--dk-glow-soft); }
+.dk-root .dk-be-l.is-del { color: var(--dk-red); background: color-mix(in srgb, var(--dk-red) 12%, transparent); }
+.dk-root .dk-be-sign { flex: none; width: 1ch; }
+.dk-root .dk-be-txt { min-width: 0; flex: 1; }
+.dk-root .dk-be-gap { margin: 0; padding: 2px 8px; font-size: 11px; color: var(--dk-faint); }
+.dk-root .dk-be-prompt { border: 1px solid var(--dk-dim); border-radius: 8px; padding: 8px 10px; margin: 6px 0; background: var(--dk-tile); }
+.dk-root .dk-be-prompt-t { margin: 0 0 6px; font-size: 12px; color: var(--dk-ink); }
+.dk-root .dk-be-ok { margin: 0 0 8px; padding: 8px 10px; border: 1px solid var(--dk-dim); border-radius: 6px; font-size: 12px; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.dk-root .dk-be-err { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.dk-root .dk-be-toast { margin: 8px 0; padding: 8px 10px; border: 1px solid var(--dk-dim); border-radius: 8px; font-size: 12px; background: var(--dk-tile); display: flex; align-items: center; flex-wrap: wrap; gap: 4px; }
+@media (prefers-reduced-motion: no-preference) { .dk-root .dk-be-toast { animation: dk-be-in var(--dk-t) var(--dk-ease) both; } }
+@keyframes dk-be-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+.dk-root .dk-be-vlist { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.dk-root .dk-be-row { display: block; width: 100%; box-sizing: border-box; min-height: 44px; text-align: left; padding: 8px 10px; border: 1px solid var(--dk-line-2); border-radius: 6px; background: var(--dk-tile); color: var(--dk-ink); font: inherit; font-size: 12px; cursor: pointer; }
+.dk-root .dk-be-row:disabled { opacity: .55; cursor: default; }
