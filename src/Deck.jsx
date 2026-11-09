@@ -6,25 +6,28 @@ import { Live } from './Mission.jsx';
 import MissionComms from './MissionComms.jsx';
 import { useDialogFocus } from './dialog-focus.js';
 import { Sprite } from './Sprite.jsx';
-import { useMedia, UpdatedAgo, LiveClock, Bell, NeedsYou } from './DeckRevamp.jsx';
+import { useMedia, UpdatedAgo, LiveClock, Bell } from './DeckRevamp.jsx';
 import { WikiPane } from './Wiki.jsx';
 import { BrainDetail } from './BrainDetail.jsx';
-import { UsageRings } from './UsageRings.jsx';
-import { ServerCard } from './ServerCard.jsx';
 import { ProjectsList } from './ProjectsList.jsx';
 import { visibleInterval } from './visible-timer.js';
-import Rail from './Rail.jsx';
+import { parseHash, hashFor, ASH_ID } from './tabs-model.js';
+import BottomNav from './BottomNav.jsx';
+import { AshCard } from './AshCard.jsx';
+import MenuTab from './MenuTab.jsx';
+import { AgentsTab } from './AgentsTab.jsx';
+import { InboxTab } from './InboxTab.jsx';
 
 
 const POLL_MS = 15000, POLL_LITE_MS = 15000, DETAIL_MS = 5000;   // spec 5: 15s visible, Lite no slower; hidden is paused elsewhere
 
 const pctStr = p => (p == null ? 'n/a' : Math.round(p) + '%');
 
-const PHONE_TABS = [['office', 'Office'], ['live', 'Live'], ['comms', 'Comms'], ['wiki', 'Wiki']];
+const PHONE_TABS = [['office', 'Office'], ['live', 'Live'], ['comms', 'Comms']];
 
 /**
- * Phone pane tabs: Office | Live | Comms | Wiki. Same markup and keys as DeckRevamp's PaneTabs, which still
- * lists the retired Memory tab, so Deck uses this one.
+ * Phone pane tabs on Home: Office | Live | Comms. Same markup and keys as DeckRevamp's PaneTabs, which still
+ * lists the retired Memory tab, so Deck uses this one. Wiki has its own tab now.
  */
 function PhoneTabs({ pane, setPane }) {
   const onKey = (e, i) => {
@@ -450,10 +453,16 @@ export default function Deck() {
   const [height, setHeight] = useState(600);
   const [, setTick] = useState(0);
   const [usage, setUsage] = useState(null);
-  const usageRef = useRef(null);                                       // usage rings section; the header pill scrolls to it
-  const [pane, setPane] = useState('office');                          // phone only: Office | Live | Comms | Wiki
+  const [tab, setTab] = useState(() => parseHash(location.hash));       // home | agents | inbox | wiki | menu, synced to #hash
+  const goTab = id => { if (location.hash !== hashFor(id)) location.hash = hashFor(id); setTab(id); };
+  useEffect(() => {
+    const onHash = () => setTab(parseHash(location.hash));              // browser Back / Forward moves between tabs
+    window.addEventListener('hashchange', onHash);
+    return () => window.removeEventListener('hashchange', onHash);
+  }, []);
+  const [pane, setPane] = useState('office');                          // phone only, on Home: Office | Live | Comms
   const [rightPane, setRightPane] = useState(RIGHT_PANE_DEFAULT);      // desktop only: right pane is Live (default) or Comms
-  const desktop = useMedia('(min-width: 900px)');                      // side by side from 900px
+  const desktop = useMedia('(min-width: 900px)');                      // desktop: left rail nav, Office and Live/Comms side by side
   const [updatedAt, setUpdatedAt] = useState(null);                    // ms of the last good /state poll
   const [standalone] = useState(() => isStandalone(window));
   const [full, setFull] = useState(() => wantsFull(location.search, standalone));
@@ -621,18 +630,26 @@ export default function Deck() {
 
   const root = (
     <div ref={rootRef} className={'dk-root' + (lite ? ' is-lite' : '') + (hidden ? ' is-hidden' : '') + (items.length && items.length <= 6 ? ' is-few' : '')} style={{ height: full ? '100%' : height }}>
-      {desktop && <Rail rootRef={rootRef} needsCount={needs.length} full={full} standalone={standalone} lite={lite}
-        onToggleFull={full ? exitFull : enterFull} onToggleLite={() => setLite(!lite)} />}
-      <header className="dk-top">
+      <header className="dk-top dk-topbar">
         <div className="dk-brand">
           <h1 className="dk-title">Agent Deck</h1>
-          <p className="dk-sub">{greeting(new Date().getHours())} Sir · your AI team, live</p>
+          <span className="dk-pill dk-local" title="Served from this machine">local</span>
         </div>
-        <div className="dk-sum">
+        <div className="dk-acts">
           <UpdatedAgo at={updatedAt} error={!!error} />
+          <button className="dk-btn dk-tb-refresh" onClick={load} aria-label="Refresh">↻</button>
+        </div>
+      </header>
+      {error && <div className="dk-err">Can't reach the deck data ({error}). Retrying…</div>}
+      <BottomNav tab={tab} onTab={goTab} needsCount={needs.length} desktop={desktop} />
+      <div id="dk-tabpanel" className={'dk-scroll dk-tabbody dk-tab-' + tab} role="tabpanel" aria-labelledby={'dk-tab-' + tab}>
+      {tab === 'home' && <>
+      <div className="dk-home-hd">
+        <p className="dk-sub">{greeting(new Date().getHours())} Sir · your AI team, live</p>
+        <div className="dk-sum">
           <span className="dk-pill dk-working-pill" title="Agents working now, of all agents">{counts ? `${counts.working} of ${counts.working + counts.idle} working` : 'loading…'}</span>
           <button id="dk-sec-usage" type="button" className={'dk-pill dk-usage dk-usage-btn is-' + ut.level} title={ut.title} aria-label={ut.aria}
-            onClick={() => { const el = usageRef.current; if (el) { el.scrollIntoView({ block: 'start' }); el.focus({ preventScroll: true }); } }}>
+            onClick={() => goTab('menu')}>
             {ut.level === 'na' && ut.reason ? <span className="dk-uw-na">usage n/a</span> : ut.windows.map(w => (
               <span key={w.key} className="dk-uw" aria-hidden="true">
                 <span className="dk-uw-l">{w.short}</span><Meter pct={w.pct} decorative /><span className="dk-uw-v">{pctStr(w.pct)}</span>
@@ -643,21 +660,10 @@ export default function Deck() {
           <LiveClock />
           <Bell count={needs.length} onPick={() => needs.length && setSel('a:' + needs[0].id)} />
         </div>
-        <div className="dk-acts">
-          {!full && <button className="dk-btn" onClick={enterFull} aria-label="Open fullscreen deck">Fullscreen</button>}
-          {full && !standalone && <button className="dk-btn ao-fs-exit" onClick={exitFull} aria-label="Exit fullscreen deck">Exit</button>}
-          <button className={'dk-btn' + (lite ? ' on' : '')} aria-pressed={lite} onClick={() => setLite(!lite)} title="Low-power: no animation, refresh every 15s">Lite</button>
-          <button className="dk-btn" onClick={load} aria-label="Refresh">↻</button>
-        </div>
-      </header>
-      {error && <div className="dk-err">Can't reach the deck data ({error}). Retrying…</div>}
-      <div className="dk-scroll">
-      <ServerCard />
-      {/* spec 2: the usage rings row comes first and is always on the page (n/a rings plus the backend reason when unavailable) */}
-      <section id="dk-usage-rings" ref={usageRef} className="dk-uplan" tabIndex={-1} aria-label="Plan usage">
-        <UsageRings usage={usage} now={Date.now()} />
-      </section>
-      <NeedsYou items={needs} onPick={id => setSel('a:' + id)} />
+      </div>
+      <AshCard agents={state && state.agents} sessions={state && state.sessions} error={error} loaded={!!state}
+        onOpen={() => setSel('a:' + ASH_ID)} />
+      {needs.length > 0 && <button type="button" className="dk-needs-chip" onClick={() => goTab('inbox')}>Needs you · {needs.length}</button>}
       {!desktop && <PhoneTabs pane={pane} setPane={setPane} />}
       <div className="dk-panes">
       <section id="dk-pane-office" role="tabpanel" aria-labelledby="dk-pane-tab-office" className="dk-pane dk-pane-office"
@@ -697,8 +703,14 @@ export default function Deck() {
       </div>
       {/* Projects sit below Office and Live (Sir 2026-11-09) */}
       <ProjectsList now={now} />
-      {/* Wiki: phone tab (hidden unless selected), full width below Office and Live/Comms on desktop. Self-contained: fetches on first show and on user action. */}
-      <WikiPane hidden={!desktop && pane !== 'wiki'} />
+      </>}
+      {tab === 'agents' && <AgentsTab agents={(state && state.agents) || []} sessions={state && state.sessions} now={now}
+        loading={!state && !error} error={error} onRetry={load} onPick={id => setSel('a:' + id)} />}
+      {tab === 'inbox' && <InboxTab items={needs} loading={!state && !error} error={error} onRetry={load} onPick={id => setSel('a:' + id)} />}
+      {/* Wiki mounts only while its tab is shown; it fetches on first show */}
+      {tab === 'wiki' && <WikiPane hidden={false} />}
+      {tab === 'menu' && <MenuTab usage={usage} now={Date.now()} full={full} standalone={standalone} lite={lite}
+        onEnterFull={enterFull} onExitFull={exitFull} onToggleLite={() => setLite(!lite)} />}
       </div>
       {picked && <Sheet onClose={closeSheet} getReturn={sel && sel.startsWith('a:') ? () => tileRefs.current.get(sel.slice(2)) : null}>
         {picked.type === 'agent'
