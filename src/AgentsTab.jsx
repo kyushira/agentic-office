@@ -1,6 +1,9 @@
 // Agents tab: filter control and one card per agent. Pure logic lives in agents-model.js.
 import { React, useState } from './sdk.js';
 import { FILTERS, filterAgents, counts, pulseIds, cardView } from './agents-model.js';
+import { OfficeScene } from './OfficeScene.jsx';
+
+const VIEWS = [['grid', 'Grid'], ['office', 'Office']];
 
 const FILTER_LABEL = { all: 'All', running: 'Running', waiting: 'Waiting', error: 'Error' };
 const SKELETON = [0, 1, 2, 3, 4, 5];
@@ -29,18 +32,35 @@ function Problem({ text, onRetry }) {
   );
 }
 
-export function AgentsTab({ agents, sessions, now, loading, error, onRetry, onPick }) {
+/** Grid | Office switch: the existing segmented control, pressed state via aria-pressed like the filter. */
+function ViewToggle({ view, onView }) {
+  return (
+    <div className="dk-seg dk-ag-view" role="group" aria-label="Agents view">
+      {VIEWS.map(([id, label]) => (
+        <button key={id} type="button" className={'dk-seg-btn' + (view === id ? ' is-on' : '')}
+          aria-pressed={view === id} onClick={() => onView && onView(id)}>{label}</button>
+      ))}
+    </div>
+  );
+}
+
+/** Grid | Office switch. view and onView come from Deck (the hash is the source of truth). */
+export function AgentsTab({ agents, sessions, now, loading, error, onRetry, onPick, view = 'grid', onView }) {
   const [filter, setFilter] = useState('all');
   const list = Array.isArray(agents) ? agents.filter(Boolean) : [];
   if (loading) return <SkeletonCards />;
   if (error && !list.length) return <Problem text="Couldn't load agents." onRetry={onRetry} />;
 
+  const office = view === 'office';
   const c = counts(list);
   const shown = filterAgents(list, filter);
   const pulse = new Set(pulseIds(shown));
 
   return (
     <section className="dk-ag" aria-label="Agents">
+      <ViewToggle view={office ? 'office' : 'grid'} onView={onView} />
+      {error && <Problem text="Couldn't refresh agents." onRetry={onRetry} />}
+      {office ? <OfficeScene agents={list} onPick={onPick} /> : <>
       <div className="dk-ag-seg" role="group" aria-label="Filter agents">
         {FILTERS.map(f => (
           <button key={f} type="button" className="dk-ag-seg-btn" aria-pressed={filter === f}
@@ -49,7 +69,6 @@ export function AgentsTab({ agents, sessions, now, loading, error, onRetry, onPi
           </button>
         ))}
       </div>
-      {error && <Problem text="Couldn't refresh agents." onRetry={onRetry} />}
       {shown.length === 0 ? (
         <p className="dk-ag-state dk-ag-empty" role="status">No agents in this state.</p>
       ) : (
@@ -74,6 +93,7 @@ export function AgentsTab({ agents, sessions, now, loading, error, onRetry, onPi
           })}
         </ul>
       )}
+      </>}
     </section>
   );
 }

@@ -1,7 +1,37 @@
 // Unit tests for src/tabs-model.js (run by `node --test test/*.test.js`).
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
-import { TABS, DEFAULT_TAB, isTab, parseHash, hashFor, tabStep, ASH_ID, ashView } from '../src/tabs-model.js';
+import { TABS, DEFAULT_TAB, isTab, parseHash, hashFor, tabStep, ASH_ID, ashView, agentsViewOf, hashForAgentsView } from '../src/tabs-model.js';
+
+describe('Agents sub-view hash (#agents/office)', () => {
+  test('parseHash keeps #agents/office on the agents tab', () => {
+    assert.equal(parseHash('#agents/office'), 'agents');
+    assert.equal(parseHash('agents/office'), 'agents');
+    assert.equal(parseHash('#agents/anything'), 'agents');
+  });
+  test('parseHash still rejects a nested hash whose first segment is empty', () => {
+    assert.equal(parseHash('#/agents/office'), 'home');
+    assert.equal(parseHash('#chat/office'), 'home');
+  });
+  test('agentsViewOf: only #agents/office is the office view', () => {
+    assert.equal(agentsViewOf('#agents/office'), 'office');
+    assert.equal(agentsViewOf('agents/office'), 'office');
+    assert.equal(agentsViewOf('#agents'), 'grid');
+    assert.equal(agentsViewOf('#agents/office/x'), 'grid');
+    assert.equal(agentsViewOf('#inbox'), 'grid');
+    assert.equal(agentsViewOf(''), 'grid');
+    assert.equal(agentsViewOf(undefined), 'grid');
+  });
+  test('hashForAgentsView round-trips through agentsViewOf and stays on the agents tab', () => {
+    assert.equal(hashForAgentsView('office'), '#agents/office');
+    assert.equal(hashForAgentsView('grid'), '#agents');
+    assert.equal(hashForAgentsView('bogus'), '#agents');
+    for (const v of ['grid', 'office']) {
+      assert.equal(agentsViewOf(hashForAgentsView(v)), v);
+      assert.equal(parseHash(hashForAgentsView(v)), 'agents');
+    }
+  });
+});
 
 describe('TABS', () => {
   test('five tabs in nav order with unique ids and labels', () => {

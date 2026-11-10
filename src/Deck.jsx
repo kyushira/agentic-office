@@ -11,7 +11,7 @@ import { WikiPane } from './Wiki.jsx';
 import { BrainDetail } from './BrainDetail.jsx';
 import { ProjectsList } from './ProjectsList.jsx';
 import { visibleInterval } from './visible-timer.js';
-import { parseHash, hashFor, ASH_ID } from './tabs-model.js';
+import { parseHash, hashFor, ASH_ID, agentsViewOf, hashForAgentsView } from './tabs-model.js';
 import BottomNav from './BottomNav.jsx';
 import { AshCard } from './AshCard.jsx';
 import MenuTab from './MenuTab.jsx';
@@ -455,8 +455,9 @@ export default function Deck() {
   const [usage, setUsage] = useState(null);
   const [tab, setTab] = useState(() => parseHash(location.hash));       // home | agents | inbox | wiki | menu, synced to #hash
   const goTab = id => { if (location.hash !== hashFor(id)) location.hash = hashFor(id); setTab(id); };
+  const [hash, setHash] = useState(location.hash);                      // kept so the Agents Grid / Office view re-renders on #agents/office
   useEffect(() => {
-    const onHash = () => setTab(parseHash(location.hash));              // browser Back / Forward moves between tabs
+    const onHash = () => { setTab(parseHash(location.hash)); setHash(location.hash); };  // browser Back / Forward moves between tabs
     window.addEventListener('hashchange', onHash);
     return () => window.removeEventListener('hashchange', onHash);
   }, []);
@@ -705,7 +706,8 @@ export default function Deck() {
       <ProjectsList now={now} />
       </>}
       {tab === 'agents' && <AgentsTab agents={(state && state.agents) || []} sessions={state && state.sessions} now={now}
-        loading={!state && !error} error={error} onRetry={load} onPick={id => setSel('a:' + id)} />}
+        loading={!state && !error} error={error} onRetry={load} onPick={id => setSel('a:' + id)}
+        view={agentsViewOf(hash)} onView={v => { const h = hashForAgentsView(v); if (location.hash !== h) location.hash = h; setHash(h); }} />}
       {tab === 'inbox' && <InboxTab items={needs} loading={!state && !error} error={error} onRetry={load} onPick={id => setSel('a:' + id)} />}
       {/* Wiki mounts only while its tab is shown; it fetches on first show */}
       {tab === 'wiki' && <WikiPane hidden={false} />}

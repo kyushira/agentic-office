@@ -15,10 +15,23 @@ export function isTab(id) {
   return TABS.some(t => t.id === id);
 }
 
-/** '#agents' or 'agents' -> 'agents'. Anything that is not a tab id (empty, unknown, '#/x') -> 'home'. */
+/**
+ * '#agents', 'agents' or '#agents/office' -> the tab id. The first path segment picks the tab, so a
+ * sub-view (#agents/office) stays on its tab. Anything that is not a tab id (empty, unknown, '#/x') -> 'home'.
+ */
 export function parseHash(hash) {
-  const id = String(hash || '').replace(/^#/, '');
+  const id = String(hash || '').replace(/^#/, '').split('/')[0];
   return isTab(id) ? id : DEFAULT_TAB;
+}
+
+/** Agents tab view from the hash: '#agents/office' -> 'office'; anything else -> 'grid'. */
+export function agentsViewOf(hash) {
+  return String(hash || '').replace(/^#/, '') === 'agents/office' ? 'office' : 'grid';
+}
+
+/** Agents view -> hash: 'office' -> '#agents/office', otherwise '#agents' (the grid). */
+export function hashForAgentsView(view) {
+  return view === 'office' ? '#agents/office' : '#agents';
 }
 
 /** Tab id -> hash string. An unknown id maps to the home hash. */
