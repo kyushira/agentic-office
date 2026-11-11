@@ -1,9 +1,0 @@
-{
-  "name": "claude-office",
-  "label": "Office",
-  "description": "Claude Office (the pixel office) inside the Hermes dashboard, served by the agent-office plugin's /office/ proxy behind dashboard auth.",
-  "icon": "Puzzle",
-  "version": "0.1.0",
-  "tab": { "path": "/office", "position": "end" },
-  "entry": "index.js"
-}

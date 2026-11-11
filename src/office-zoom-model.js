@@ -1,8 +1,7 @@
 // Pure fit/zoom model for OfficeHome (the Home iframe). No DOM, no React, no messaging.
 // Taken from feat/office-exact (src/office-frame-model.js, Phase 2) and cut down to the zoom part only:
 // the postMessage protocol, pick and gesture helpers are not here (the sandboxed adapter is dropped).
-// Unit-tested in test/office-zoom.test.js. Kept apart from the old office-frame-model.js, which OfficeFrame
-// still imports until the removal commit.
+// Unit-tested in test/office-zoom.test.js.
 //
 // Size: the office page is 1056x682 = a 756px room + a 300px right column. Embed mode (plugin
 // office-build/embed.css, under 900px) hides that column and the status strip, so the frame is the room plus the

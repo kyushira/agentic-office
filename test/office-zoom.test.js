@@ -1,4 +1,4 @@
-// Fit/zoom model for OfficeHome (src/office-frame-model.js). Ported from feat/office-exact's office-zoom tests,
+// Fit/zoom model for OfficeHome (src/office-zoom-model.js). Ported from feat/office-exact's office-zoom tests,
 // keeping only the zoom and size parts (the postMessage protocol and gesture tests are not carried over).
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
