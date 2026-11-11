@@ -17,6 +17,8 @@ import { AshCard } from './AshCard.jsx';
 import MenuTab from './MenuTab.jsx';
 import { AgentsTab } from './AgentsTab.jsx';
 import { OfficeScene } from './OfficeScene.jsx';
+import { OfficeFrame } from './OfficeFrame.jsx';
+import { officeExactRequested, OFFICE_FLAG_KEY } from './office-flag.js';
 import { InboxTab } from './InboxTab.jsx';
 
 
@@ -676,7 +678,11 @@ export default function Deck() {
       <h2 className="dk-pane-h">Office</h2>
       {(desktop || pane === 'office') && <>
           {/* Agents are desks in the scene. Helper sessions have no desk, so they keep a tile row under it. */}
-          <OfficeScene agents={(state && state.agents) || []} onPick={id => setSel('a:' + id)} />
+          {/* Phase 1c: the exact Claude-Office frame only behind office=exact / localStorage flag; default is OfficeScene.
+              The frame is mounted only while the page is visible (hidden unmounts it, which stops its rAF loop). */}
+          {officeExactRequested(location.hash, () => localStorage.getItem(OFFICE_FLAG_KEY))
+            ? (!hidden && <OfficeFrame state={state} error={error} onPick={id => setSel('a:' + id)} />)
+            : <OfficeScene agents={(state && state.agents) || []} onPick={id => setSel('a:' + id)} />}
           {items.some(it => it.type !== 'agent') && <div className="dk-grid dk-helper-row">
             {items.filter(it => it.type !== 'agent').map(it => <HelperTile key={it.key} it={it} pressed={it.key === sel} onPick={() => setSel(it.key)} />)}
           </div>}
