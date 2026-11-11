@@ -707,7 +707,7 @@ export default function Deck() {
       {tab === 'agents' && <AgentsTab agents={(state && state.agents) || []} sessions={state && state.sessions} now={now}
         loading={!state && !error} error={error} onRetry={load} onPick={id => setSel('a:' + id)}
         />}
-      {tab === 'usage' && <UsageTab usage={usage} now={Date.now()} />}
+      {tab === 'usage' && <UsageTab usage={usage} agents={(state && state.agents) || []} now={Date.now()} />}
       {tab === 'inbox' && <InboxTab items={needs} loading={!state && !error} error={error} onRetry={load} onPick={id => setSel('a:' + id)} />}
       {/* Wiki mounts only while its tab is shown; it fetches on first show */}
       {tab === 'wiki' && <WikiPane hidden={false} />}

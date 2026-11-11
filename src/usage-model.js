@@ -3,6 +3,8 @@
 // ring falls back to token totals from Hermes state.db (usage.tokens): a ratio against the user's own history, not a
 // plan limit. Claude percentages are estimated: Pro weekly % has no public API.
 
+import { colourOf, hashedColour } from './office-model.js';
+
 /** Clamp a percentage to 0..100. Anything missing or not a number is null (never a made-up 0). */
 export function clampPct(v) {
   if (v == null || v === '' || typeof v === 'boolean') return null;
@@ -119,4 +121,197 @@ export function usageRingModel(usage) {
 /** True when a usage ring is breathing on screen (uses one of the three animation slots). */
 export function ringsBreathe(usage) {
   return usageRingModel(usage).breathing;
+}
+
+// ---- Usage tab (batch 1 / P1): window chips, per-agent bars, daily trend, footer. Source: GET /usage/breakdown. ----
+// Pure helpers only (no DOM). Tokens are input + output (the backend's `tokens`); cache and reasoning are shown apart.
+
+/** Plan usage and breakdown refresh while the Usage tab is open and the page is visible. */
+export const USAGE_POLL_MS = 60000;
+/** The windows the chips offer. The backend clamps 1..30; the chips only ever send these three. */
+export const USAGE_DAYS = [1, 7, 30];
+export const DEFAULT_DAYS = 7;
+const CLAUDE_PROVIDER = 'claude-subscription-directsdk-experimental';
+const PROVIDER_LABEL = { [CLAUDE_PROVIDER]: 'Claude', deepseek: 'DeepSeek', unknown: 'Unknown' };
+const COST_BADGE = {
+  actual: { label: 'actual', cls: 'is-actual' },
+  estimated: { label: 'est.', cls: 'is-est' },
+  mixed: { label: 'mixed', cls: 'is-mixed' },
+};
+
+/** A window in USAGE_DAYS (number or numeric string); anything else is DEFAULT_DAYS. */
+export function validDays(d) {
+  const n = typeof d === 'string' && d.trim() !== '' ? Number(d) : d;
+  return typeof n === 'number' && USAGE_DAYS.includes(n) ? n : DEFAULT_DAYS;
+}
+
+/** The window chips: [{id, label: '7d', selected}]. An invalid `selected` selects DEFAULT_DAYS. */
+export function windowChips(selected) {
+  const on = validDays(selected);
+  return USAGE_DAYS.map(id => ({ id, label: `${id}d`, selected: id === on }));
+}
+
+/** A count from the payload: a non-negative finite number, anything else is 0. */
+function num(v) {
+  if (v == null || v === '' || typeof v === 'boolean') return 0;
+  const n = Number(v);
+  return Number.isFinite(n) ? Math.max(0, n) : 0;
+}
+
+/** A cost from the payload: a finite number, or null when there is none (never a made-up 0). */
+function costNum(v) {
+  if (v == null || v === '' || typeof v === 'boolean') return null;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : null;
+}
+
+/** Agent colour as '#RRGGBB': the agent's own colour when its id is in `agents`, else the hashed palette colour. */
+export function agentColour(name, agents) {
+  const list = Array.isArray(agents) ? agents.filter(Boolean) : [];
+  const hit = list.find(a => a.id === name);
+  return hit ? colourOf(hit) : hashedColour(name);
+}
+
+/** Money text: '$1.50', '<$0.01' for tiny costs, '$0.00' for zero, 'no cost data' for null. */
+export function costText(v) {
+  const n = costNum(v);
+  if (n == null) return 'no cost data';
+  if (n === 0) return '$0.00';
+  if (n < 0.01) return '<$0.01';
+  return '$' + n.toFixed(2);
+}
+
+/** Badge for an agent's cost_kind: {kind, label, cls} for actual | estimated | mixed; null for none or unknown. */
+export function costBadge(kind) {
+  if (typeof kind !== 'string' || !Object.prototype.hasOwnProperty.call(COST_BADGE, kind)) return null;
+  return { kind, ...COST_BADGE[kind] };
+}
+
+/** True when any agent or the totals carry a cost. False means the cost column is hidden. */
+export function hasAnyCost(bd) {
+  if (!bd || typeof bd !== 'object') return false;
+  if (costNum(bd.totals && bd.totals.cost_usd) != null) return true;
+  return (Array.isArray(bd.agents) ? bd.agents : []).some(a => a && costNum(a.cost_usd) != null);
+}
+
+/** Provider split of one agent: [{key, label, tokens, share}], biggest first. Shares are 0..1 (0 when no tokens). */
+export function providerRows(byProvider) {
+  if (!byProvider || typeof byProvider !== 'object') return [];
+  const rows = Object.entries(byProvider).map(([key, v]) => ({ key, label: PROVIDER_LABEL[key] || key, tokens: num(v) }));
+  const total = rows.reduce((s, r) => s + r.tokens, 0);
+  for (const r of rows) r.share = total > 0 ? r.tokens / total : 0;
+  return rows.sort((x, y) => y.tokens - x.tokens || (x.label < y.label ? -1 : x.label > y.label ? 1 : 0));
+}
+
+/**
+ * One row per agent, biggest first (ties by name): {agent, label, colour, tokens, share, sharePct, cost_usd, costText,
+ * costBadge, sessions, api_calls, input, output, cache_read, cache_write, reasoning, providers}.
+ * share is tokens / total tokens (0..1). label is the agent's name from `agents`, else its folder name.
+ */
+export function agentBars(bd, agents) {
+  const list = Array.isArray(bd && bd.agents) ? bd.agents.filter(a => a && typeof a === 'object') : [];
+  const known = Array.isArray(agents) ? agents : [];
+  const rows = list.map(a => {
+    const name = String(a.agent || 'unknown');
+    const hit = known.find(x => x && x.id === name);
+    const cost = costNum(a.cost_usd);
+    return {
+      agent: name,
+      label: (hit && hit.name) || name,
+      colour: agentColour(name, agents),
+      tokens: num(a.tokens),
+      share: 0,
+      sharePct: 0,
+      cost_usd: cost,
+      costText: costText(cost),
+      costBadge: costBadge(a.cost_kind),
+      sessions: num(a.sessions),
+      api_calls: num(a.api_calls),
+      input: num(a.input),
+      output: num(a.output),
+      cache_read: num(a.cache_read),
+      cache_write: num(a.cache_write),
+      reasoning: num(a.reasoning),
+      providers: providerRows(a.by_provider),
+    };
+  });
+  const total = rows.reduce((s, r) => s + r.tokens, 0);
+  for (const r of rows) {
+    r.share = total > 0 ? r.tokens / total : 0;
+    r.sharePct = Math.round(r.share * 100);
+  }
+  return rows.sort((x, y) => y.tokens - x.tokens || (x.agent < y.agent ? -1 : x.agent > y.agent ? 1 : 0));
+}
+
+/** Totals strip: tokens and calls as short text, cost as money text (hasCost false -> 'no cost data'). */
+export function totalsView(bd) {
+  const t = bd && bd.totals && typeof bd.totals === 'object' ? bd.totals : {};
+  const tokens = num(t.tokens);
+  const apiCalls = num(t.api_calls);
+  const cost = costNum(t.cost_usd);
+  return {
+    tokens, tokensText: compactTokens(tokens),
+    apiCalls, apiCallsText: compactTokens(apiCalls),
+    cost, costText: costText(cost), hasCost: cost != null,
+  };
+}
+
+/** True when the payload has at least one agent. False is the empty state. */
+export function hasAgents(bd) {
+  return !!(bd && Array.isArray(bd.agents) && bd.agents.length > 0);
+}
+
+/** 'YYYY-MM-DD' -> 'MM-DD'. Anything else comes back unchanged. */
+export function shortDay(day) {
+  const s = String(day == null ? '' : day);
+  return /^\d{4}-\d{2}-\d{2}$/.test(s) ? s.slice(5) : s;
+}
+
+/** Footer lines for unreadable state.db files: 'state.db unreadable: <agent>'. */
+export function errorLines(bd) {
+  const list = Array.isArray(bd && bd.errors) ? bd.errors : [];
+  return list.filter(e => e && typeof e === 'object').map(e => `state.db unreadable: ${String(e.agent || 'unknown')}`);
+}
+
+/**
+ * Daily trend, oldest first. Empty days are kept. Each day: {day, label, tokens, empty, heightPct, costText, aria,
+ * segments: [{agent, tokens, heightPct, colour}]}. heightPct is 0..100 relative to the largest day; segments follow
+ * agentOrder (bottom of the stack first), then any unknown agent from by_agent in name order. max is the largest day.
+ */
+export function trendStack(trend, agentOrder, agents) {
+  const days = (Array.isArray(trend) ? trend : [])
+    .filter(d => d && typeof d === 'object' && typeof d.day === 'string')
+    .sort((x, y) => (x.day < y.day ? -1 : x.day > y.day ? 1 : 0));
+  const order = Array.isArray(agentOrder) ? agentOrder.map(String) : [];
+  const names = [...order];
+  const seen = new Set(order);
+  const extra = [];
+  const byAgentOf = d => (d.by_agent && typeof d.by_agent === 'object' ? d.by_agent : {});
+  for (const d of days) {
+    for (const k of Object.keys(byAgentOf(d))) {
+      if (!seen.has(k)) { seen.add(k); extra.push(k); }
+    }
+  }
+  names.push(...extra.sort());
+  const dayTokens = d => Math.max(num(d.tokens), Object.values(byAgentOf(d)).reduce((s, v) => s + num(v), 0));
+  const max = Math.max(0, ...days.map(dayTokens));
+  const pct = v => (max > 0 ? (num(v) / max) * 100 : 0);
+  const out = days.map(d => {
+    const byAgent = byAgentOf(d);
+    const tokens = dayTokens(d);
+    const cText = costText(d.cost_usd);
+    return {
+      day: d.day,
+      label: shortDay(d.day),
+      tokens,
+      empty: tokens === 0,
+      heightPct: pct(tokens),
+      costText: cText,
+      aria: `${d.day}: ${compactTokens(tokens)} tokens, ${cText}`,
+      segments: names.filter(n => num(byAgent[n]) > 0).map(n => ({
+        agent: n, tokens: num(byAgent[n]), heightPct: pct(byAgent[n]), colour: agentColour(n, agents),
+      })),
+    };
+  });
+  return { days: out, max };
 }
