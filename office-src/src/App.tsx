@@ -17,7 +17,7 @@ import StatusStrip from './components/StatusStrip'
 import { readSound, saveVolume, saveMuted, readDayNightMode, saveDayNightMode, type DayNightMode } from './settings'
 import { Agent, AGENT_CONFIGS } from './types'
 import { getCurrentPhase, getPhaseLabel, type DayPhase } from './daylight'
-import { useAgentSocket } from './hooks/useAgentSocket'
+import { useAgentSocket, postPick } from './hooks/useAgentSocket'
 import { dispatchMeters } from './meters'
 import * as sfx from './sounds'
 import { findWaypointPath } from './agentManager'
@@ -334,7 +334,10 @@ const App: React.FC = () => {
   // The inspector card (src/components/AgentCard.tsx): the character clicked
   // last; clicking the same one again closes it
   const [inspectedId, setInspectedId] = useState<string | null>(null)
-  const handleCharacterClick = useCallback((id: string) => setInspectedId(prev => (prev === id ? null : id)), [])
+  const handleCharacterClick = useCallback((id: string) => {
+    setInspectedId(prev => (prev === id ? null : id))
+    postPick(id) // tells the Deck which profile was picked; ids only
+  }, [])
 
   const handleFurnitureClick = useCallback((itemId: string) => {
     const interaction = getInteraction(itemId)

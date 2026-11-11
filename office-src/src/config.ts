@@ -18,7 +18,8 @@ export interface BossConfig { name: string; sprite: string; color: string; emoji
 const userConfigModules = import.meta.glob<UserConfig>('../office.config.json', { eager: true, import: 'default' })
 const userConfig: UserConfig = Object.values(userConfigModules)[0] ?? {}
 
-const bossName   = userConfig.boss?.name   ?? 'Boss'
+// Sir's seat: a static boss (Me sprite), not fed from /state.
+const bossName   = userConfig.boss?.name   ?? 'Sir'
 const bossSprite = userConfig.boss?.sprite ?? 'Me-1'
 const bossColor  = userConfig.boss?.color  ?? '#ff4444'
 const bossEmoji  = userConfig.boss?.emoji  ?? '👑'
