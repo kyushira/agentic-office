@@ -4,6 +4,7 @@ Wraps ``agent.account_usage.fetch_account_usage('anthropic', read_only=True)`` b
 60-second cache (failures are cached too, so a broken credential cannot be hammered).
 Only whitelisted fields leave this module: no tokens, keys, emails or account identity.
 """
+import copy
 import glob
 import importlib.util
 import os
@@ -11,7 +12,7 @@ import sqlite3
 import sys
 import threading
 import time
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Callable, Optional
@@ -297,3 +298,187 @@ def _tokens_or_none(now: float) -> Optional[dict]:
         return token_usage(now)
     except Exception:
         return None
+
+
+# ---- Per-agent token and cost breakdown (GET /usage/breakdown) ----
+# Same source and enumeration as token_usage(): session_model_usage in the root state.db and profiles/*/state.db,
+# every connection read-only. Agent names: the root profile is "ash" (the Ash of office_team.TEAM), a profile is
+# named by its folder. Cost per row is COALESCE(actual_cost_usd, estimated_cost_usd); the response says which kind
+# the agent's cost came from. Only numbers, provider names and agent names leave this module: no session ids,
+# model names, titles or message text.
+BREAKDOWN_CACHE_SECS = 60.0
+BREAKDOWN_DAYS_MIN, BREAKDOWN_DAYS_MAX, BREAKDOWN_DAYS_DEFAULT = 1, 30, 7
+ROOT_AGENT = "ash"
+_BREAKDOWN_SQL = (
+    "SELECT session_id, billing_provider, last_seen, "
+    "COALESCE(input_tokens, 0), COALESCE(output_tokens, 0), COALESCE(cache_read_tokens, 0), "
+    "COALESCE(cache_write_tokens, 0), COALESCE(reasoning_tokens, 0), COALESCE(api_call_count, 0), "
+    "actual_cost_usd, estimated_cost_usd "
+    "FROM session_model_usage WHERE last_seen >= ?"
+)
+_breakdown_cache: dict = {}
+_breakdown_lock = threading.Lock()
+
+
+def parse_days(raw) -> int:
+    """The `days` query value as an int (1..30 clamp applied). Raises ValueError for a non-integer."""
+    if raw is None:
+        return BREAKDOWN_DAYS_DEFAULT
+    return clamp_days(int(str(raw).strip()))
+
+
+def clamp_days(days) -> int:
+    return max(BREAKDOWN_DAYS_MIN, min(BREAKDOWN_DAYS_MAX, int(days)))
+
+
+def _open_ro(path: Path) -> sqlite3.Connection:
+    """A read-only connection: mode=ro in the URI, and query_only so even a write through this handle fails."""
+    conn = sqlite3.connect(f"{path.resolve().as_uri()}?mode=ro", uri=True, timeout=_BUSY_S)
+    try:
+        conn.execute("PRAGMA query_only = ON")
+    except sqlite3.Error:
+        conn.close()
+        raise
+    return conn
+
+
+def _read_breakdown_rows(path: Path, since: float) -> list:
+    """Raw breakdown rows for one state.db. Raises sqlite3.Error (locked, missing table or column)."""
+    conn = _open_ro(path)
+    try:
+        return conn.execute(_BREAKDOWN_SQL, (since,)).fetchall()
+    finally:
+        conn.close()
+
+
+def _new_acc() -> dict:
+    return {"input": 0, "output": 0, "cache_read": 0, "cache_write": 0, "reasoning": 0, "api_calls": 0,
+            "sessions": set(), "cost": 0.0, "cost_n": 0, "n_actual": 0, "n_est": 0, "by_provider": {}}
+
+
+def _utc_day(ts: float) -> str:
+    return datetime.fromtimestamp(ts, tz=timezone.utc).strftime("%Y-%m-%d")
+
+
+def _day_range(since: float, now: float) -> list:
+    """Every UTC calendar day from the day of `since` through the day of `now`, oldest first."""
+    day = datetime.fromtimestamp(since, tz=timezone.utc).date()
+    last = datetime.fromtimestamp(now, tz=timezone.utc).date()
+    out = []
+    while day <= last:
+        out.append(day.strftime("%Y-%m-%d"))
+        day += timedelta(days=1)
+    return out
+
+
+def _cost_kind(acc: dict) -> str:
+    if acc["n_actual"] and acc["n_est"]:
+        return "mixed"
+    if acc["n_actual"]:
+        return "actual"
+    if acc["n_est"]:
+        return "estimated"
+    return "none"
+
+
+def token_breakdown(root, days=7, now: Optional[float] = None) -> dict:
+    """Per-agent tokens, calls and cost over the last `days` days, plus a per-UTC-day trend and totals.
+
+    `root` is the Hermes root home. A state.db that cannot be read is skipped and named in `errors` by agent and
+    exception class only. Tokens = input + output (as in token_usage). Cost is None when no row has any cost.
+    """
+    ts = time.time() if now is None else float(now)
+    days = clamp_days(days)
+    since = ts - days * _DAY
+    root = Path(root)
+    accs: dict = {}
+    trend = {d: {"tokens": 0, "cost": 0.0, "cost_n": 0, "by_agent": {}} for d in _day_range(since, ts)}
+    errors = []
+    for path in _state_dbs(root):
+        agent = ROOT_AGENT if path.parent == root else path.parent.name
+        try:
+            rows = _read_breakdown_rows(path, since)
+        except sqlite3.Error as exc:
+            errors.append({"agent": agent, "error": type(exc).__name__})
+            continue
+        acc = accs.setdefault(agent, _new_acc())
+        for sid, provider, last_seen, inp, out, cread, cwrite, reasoning, calls, actual, est in rows:
+            tokens = inp + out
+            cost = actual if actual is not None else est
+            acc["input"] += inp
+            acc["output"] += out
+            acc["cache_read"] += cread
+            acc["cache_write"] += cwrite
+            acc["reasoning"] += reasoning
+            acc["api_calls"] += calls
+            acc["sessions"].add(sid)
+            key = provider or "unknown"
+            acc["by_provider"][key] = acc["by_provider"].get(key, 0) + tokens
+            if cost is not None:
+                acc["cost"] += cost
+                acc["cost_n"] += 1
+                if actual is not None:
+                    acc["n_actual"] += 1
+                else:
+                    acc["n_est"] += 1
+            # a row stamped after `now` (clock skew) lands in today's bucket rather than off the trend
+            bucket = trend.setdefault(_utc_day(min(last_seen, ts)),
+                                      {"tokens": 0, "cost": 0.0, "cost_n": 0, "by_agent": {}})
+            bucket["tokens"] += tokens
+            if cost is not None:
+                bucket["cost"] += cost
+                bucket["cost_n"] += 1
+            if tokens:
+                bucket["by_agent"][agent] = bucket["by_agent"].get(agent, 0) + tokens
+
+    agents = []
+    for name, acc in accs.items():
+        agents.append({
+            "agent": name,
+            "input": acc["input"], "output": acc["output"],
+            "cache_read": acc["cache_read"], "cache_write": acc["cache_write"], "reasoning": acc["reasoning"],
+            "tokens": acc["input"] + acc["output"],
+            "api_calls": acc["api_calls"],
+            "sessions": len(acc["sessions"]),
+            "cost_usd": round(acc["cost"], 6) if acc["cost_n"] else None,
+            "cost_kind": _cost_kind(acc),
+            "by_provider": dict(sorted(acc["by_provider"].items())),
+        })
+    agents.sort(key=lambda a: (-a["tokens"], a["agent"]))
+
+    trend_out = [{"day": day, "tokens": b["tokens"],
+                  "cost_usd": round(b["cost"], 6) if b["cost_n"] else None,
+                  "by_agent": dict(sorted(b["by_agent"].items()))}
+                 for day, b in sorted(trend.items())]
+
+    total_cost = [a for a in agents if a["cost_usd"] is not None]
+    totals = {
+        "tokens": sum(a["tokens"] for a in agents),
+        "cost_usd": round(sum(a["cost_usd"] for a in total_cost), 6) if total_cost else None,
+        "api_calls": sum(a["api_calls"] for a in agents),
+    }
+    return {"days": days, "since": since, "fetched_at": ts, "source": "state.db",
+            "agents": agents, "trend": trend_out, "totals": totals, "errors": errors}
+
+
+def _default_root() -> Path:
+    return _load_collect().root_home(None)
+
+
+def breakdown_usage(days=BREAKDOWN_DAYS_DEFAULT, now: Optional[float] = None) -> dict:
+    """token_breakdown() of the default root, cached per clamped `days` value for 60s (per-DB errors are in the result)."""
+    days = clamp_days(days)
+    ts = time.time() if now is None else float(now)
+    with _breakdown_lock:
+        hit = _breakdown_cache.get(days)
+        if hit is not None and 0 <= ts - hit[0] <= BREAKDOWN_CACHE_SECS:
+            return copy.deepcopy(hit[1])
+        result = token_breakdown(_default_root(), days, ts)
+        _breakdown_cache[days] = (ts, result)
+    return copy.deepcopy(result)
+
+
+def _reset_breakdown_cache() -> None:
+    """Test hook: drop every cached breakdown."""
+    with _breakdown_lock:
+        _breakdown_cache.clear()

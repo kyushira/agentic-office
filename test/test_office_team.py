@@ -11,6 +11,7 @@ import os
 import sqlite3
 import tempfile
 import threading
+import time
 import unittest
 from pathlib import Path
 
@@ -413,6 +414,121 @@ class StartTests(unittest.TestCase):
                 poller.stop()
             if old is not None:
                 os.environ["AGENT_OFFICE_TEAM_POLL"] = old
+
+
+class _EnvPatch:
+    """Set (or unset, with None) one env var for the duration of a test."""
+
+    def __init__(self, name, value):
+        self.name, self.value = name, value
+
+    def __enter__(self):
+        self.old = os.environ.get(self.name)
+        if self.value is None:
+            os.environ.pop(self.name, None)
+        else:
+            os.environ[self.name] = self.value
+
+    def __exit__(self, *exc):
+        if self.old is None:
+            os.environ.pop(self.name, None)
+        else:
+            os.environ[self.name] = self.old
+
+
+class ViewerCadenceTests(unittest.TestCase):
+    def setUp(self):
+        # leave the process-wide counter where it was found
+        self._saved = ot.viewer_count()
+        self.addCleanup(self._restore)
+        ot._wake.clear()
+
+    def _restore(self):
+        while ot.viewer_count() > self._saved:
+            ot.viewer_disconnected()
+        for _ in range(self._saved - ot.viewer_count()):
+            ot.viewer_connected()
+        ot._wake.clear()
+
+    def test_interval_is_fast_with_a_viewer_and_idle_without(self):
+        with _EnvPatch("AGENT_OFFICE_TEAM_IDLE_SECS", None):
+            self.assertEqual(ot.tick_interval(1), ot.TICK_SECS)
+            self.assertEqual(ot.tick_interval(3), ot.TICK_SECS)
+            self.assertEqual(ot.tick_interval(0), 60)
+            self.assertEqual(ot.IDLE_TICK_SECS, 60)
+        self.assertEqual(ot.TICK_SECS, 10)
+
+    def test_idle_interval_env_override_and_bad_values_fall_back(self):
+        with _EnvPatch("AGENT_OFFICE_TEAM_IDLE_SECS", "300"):
+            self.assertEqual(ot.tick_interval(0), 300)
+            self.assertEqual(ot.tick_interval(1), ot.TICK_SECS)
+        for bad in ("abc", "0", "-5", ""):
+            with self.subTest(value=bad), _EnvPatch("AGENT_OFFICE_TEAM_IDLE_SECS", bad):
+                self.assertEqual(ot.tick_interval(0), 60)
+
+    def test_counter_counts_viewers_and_never_goes_negative(self):
+        start = ot.viewer_count()
+        ot.viewer_connected()
+        ot.viewer_connected()
+        self.assertEqual(ot.viewer_count(), start + 2)
+        ot.viewer_disconnected()
+        self.assertEqual(ot.viewer_count(), start + 1)
+        ot.viewer_disconnected()
+        ot.viewer_disconnected()
+        ot.viewer_disconnected()
+        self.assertEqual(ot.viewer_count(), 0)
+
+    def test_disconnect_with_no_viewers_stays_at_zero(self):
+        while ot.viewer_count() > 0:
+            ot.viewer_disconnected()
+        ot.viewer_disconnected()
+        self.assertEqual(ot.viewer_count(), 0)
+
+    def test_connect_sets_the_wake_event(self):
+        ot._wake.clear()
+        ot.viewer_connected()
+        self.assertTrue(ot._wake.is_set())
+
+    def test_disconnect_does_not_wake(self):
+        ot.viewer_connected()
+        ot._wake.clear()
+        ot.viewer_disconnected()
+        self.assertFalse(ot._wake.is_set())
+
+    def test_connect_wakes_a_sleeping_poller_immediately(self):
+        ticks = []
+        poller = ot.Poller(Path(tempfile.mkdtemp()), Path("/nonexistent/token"), 3334, post=lambda *a: True)
+        poller.tick = lambda now=None: ticks.append(time.time())
+        with _EnvPatch("AGENT_OFFICE_TEAM_IDLE_SECS", "3600"):
+            thread = threading.Thread(target=poller.run_forever, daemon=True)
+            thread.start()
+            try:
+                deadline = time.time() + 2
+                while not ticks and time.time() < deadline:
+                    time.sleep(0.01)
+                self.assertEqual(len(ticks), 1)  # first pass ran; now it sleeps the hour
+                started = time.time()
+                ot.viewer_connected()  # a viewer opens the office
+                deadline = time.time() + 2
+                while len(ticks) < 2 and time.time() < deadline:
+                    time.sleep(0.01)
+                self.assertEqual(len(ticks), 2)
+                self.assertLess(time.time() - started, 2)
+            finally:
+                poller.stop()
+                thread.join(timeout=2)
+                self.assertFalse(thread.is_alive())
+
+    def test_stop_ends_the_loop_without_waiting_out_the_interval(self):
+        poller = ot.Poller(Path(tempfile.mkdtemp()), Path("/nonexistent/token"), 3334, post=lambda *a: True)
+        poller.tick = lambda now=None: None
+        with _EnvPatch("AGENT_OFFICE_TEAM_IDLE_SECS", "3600"):
+            thread = threading.Thread(target=poller.run_forever, daemon=True)
+            thread.start()
+            time.sleep(0.05)
+            poller.stop()
+            thread.join(timeout=2)
+            self.assertFalse(thread.is_alive())
 
 
 if __name__ == "__main__":

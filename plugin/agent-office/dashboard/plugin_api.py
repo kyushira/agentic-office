@@ -99,6 +99,17 @@ async def usage_endpoint():
     return await asyncio.to_thread(usage.plan_usage)
 
 
+@router.get("/usage/breakdown")
+async def usage_breakdown_endpoint(days: str | None = None):
+    """Per-agent tokens and cost over the last `days` days (default 7). Out-of-range values are clamped to 1..30;
+    a non-integer gives 400. Cached 60s per clamped value."""
+    try:
+        window = usage.parse_days(days)
+    except ValueError:
+        return JSONResponse({"error": "days must be an integer"}, status_code=400, headers=NO_STORE)
+    return JSONResponse(await asyncio.to_thread(usage.breakdown_usage, window), headers=NO_STORE)
+
+
 @router.get("/server")
 async def server_endpoint():
     """Read-only server card: RAM, root disk, load and top-3 RSS processes. Query params are ignored. Unreadable
@@ -612,14 +623,19 @@ async def office_ws(ws: WebSocket):
             elif message.get("bytes") is not None:
                 await upstream.send(message["bytes"])
 
-    tasks = [asyncio.ensure_future(upstream_to_client()), asyncio.ensure_future(client_to_upstream())]
+    # A watching viewer makes the team poller tick fast (office_team.TICK_SECS); the count drops on any exit.
+    team.viewer_connected()
     try:
-        await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
-    finally:
-        for task in tasks:
-            task.cancel()
-        await upstream.close()
+        tasks = [asyncio.ensure_future(upstream_to_client()), asyncio.ensure_future(client_to_upstream())]
         try:
-            await ws.close()
-        except (RuntimeError, WebSocketDisconnect):
-            pass
+            await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
+        finally:
+            for task in tasks:
+                task.cancel()
+            await upstream.close()
+            try:
+                await ws.close()
+            except (RuntimeError, WebSocketDisconnect):
+                pass
+    finally:
+        team.viewer_disconnected()

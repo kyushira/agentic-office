@@ -19,6 +19,11 @@ Office mapping: working -> agent_spawned + agent_working (types at the desk); id
 -> agent_completed (walks out). Claude Office has no napping state for worker agents, so
 idle is shown the same way as gone. An agent that is idle or gone at startup is not posted.
 
+Cadence: the poller ticks every TICK_SECS while someone has the office open (a Claude Office
+WebSocket viewer, counted by viewer_connected()/viewer_disconnected() from plugin_api) and every
+IDLE_TICK_SECS (AGENT_OFFICE_TEAM_IDLE_SECS, default 60) otherwise. A viewer connecting wakes the
+poller at once, so the office is current when it is opened.
+
 Stdlib only. Never prints or logs the token or a signature. Set AGENT_OFFICE_TEAM_POLL=0
 to disable the poller.
 """
@@ -39,6 +44,7 @@ from pathlib import Path
 _log = logging.getLogger("agent_office.team")
 
 TICK_SECS = 10
+IDLE_TICK_SECS = 60
 WORKING_SECS = 90
 PENDING_SECS = 900
 GONE_SECS = 900
@@ -52,6 +58,50 @@ THREAD_NAME = "agent-office-team-poll"
 
 WORKING, IDLE, GONE = "working", "idle", "gone"
 
+# ---------------------------------------------------------------------------
+# Viewer-aware cadence
+# ---------------------------------------------------------------------------
+
+_viewer_lock = threading.Lock()
+_viewers = 0
+_wake = threading.Event()  # set when a viewer connects or the poller is stopped
+
+
+def _idle_secs_from_env():
+    raw = os.environ.get("AGENT_OFFICE_TEAM_IDLE_SECS")
+    try:
+        value = int(raw) if raw is not None else IDLE_TICK_SECS
+    except ValueError:
+        return IDLE_TICK_SECS
+    return value if value > 0 else IDLE_TICK_SECS
+
+
+def tick_interval(viewers):
+    """Seconds between ticks: TICK_SECS while anyone is watching, the idle interval otherwise."""
+    return TICK_SECS if viewers > 0 else _idle_secs_from_env()
+
+
+def viewer_connected():
+    """A Claude Office viewer opened the office: count it and wake the poller now."""
+    global _viewers
+    with _viewer_lock:
+        _viewers += 1
+    _wake.set()
+
+
+def viewer_disconnected():
+    """A viewer went away. The count never drops below zero."""
+    global _viewers
+    with _viewer_lock:
+        _viewers = max(0, _viewers - 1)
+
+
+def viewer_count():
+    with _viewer_lock:
+        return _viewers
+
+
+# ---------------------------------------------------------------------------
 # The Hermes team. `profile` is the state.db folder ("default" = the root profile, Ash).
 TEAM = (
     {"profile": "default", "id": "hermes-ash", "name": "Ash", "role": "Chief of Staff"},
@@ -238,6 +288,7 @@ class Poller:
 
     def stop(self):
         self._stop.set()
+        _wake.set()
 
     def homes(self):
         return {p["id"]: p["home"] for p in collect.discover(self.root)}
@@ -285,11 +336,16 @@ class Poller:
 
     def run_forever(self):
         while not self._stop.is_set():
+            # Clear before the tick: a viewer that connects during the tick sets the event again,
+            # so the wait below returns at once and nothing is missed.
+            _wake.clear()
             try:
                 self.tick()
             except Exception as exc:  # the poller must never die; log the class only
                 _log.warning("agent-office team poll failed (%s); retrying", type(exc).__name__)
-            self._stop.wait(TICK_SECS)
+            if self._stop.is_set():
+                break
+            _wake.wait(tick_interval(viewer_count()))
 
 
 _start_lock = threading.Lock()
