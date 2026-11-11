@@ -185,6 +185,10 @@ export interface BackgroundTask {
  */
 export interface SessionInfo {
   id: string
+  /** Phase 1d: display name, sprite role and task line (Hermes profile sessions; optional) */
+  name?: string
+  role?: string
+  task?: string
   project?: string
   cwd?: string
   title?: string
@@ -342,6 +346,10 @@ export interface OfficeEvent {
   sessionId?: string
   project?: string
   // session_started / session_ended / session_registry
+  // Phase 1d: display name, sprite role and task line for a Hermes profile's session (optional)
+  name?: string
+  role?: string
+  task?: string
   cwd?: string
   source?: string
   model?: string

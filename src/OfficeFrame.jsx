@@ -6,7 +6,7 @@
 import { React, useEffect, useRef, useState } from './sdk.js';
 import { OFFICE_BASE } from './office-model.js';
 import { diffState, connectionEvent, envelope } from './office-adapter.js';
-import { parseFrameMessage, frameScale, isKnownAgent, firstSyncEvents, ROOM_W, ROOM_H } from './office-frame-model.js';
+import { parseFrameMessage, frameScale, isKnownAgent, ROOM_W, ROOM_H } from './office-frame-model.js';
 
 const SRC = OFFICE_BASE + '/app/index.html';
 
@@ -32,11 +32,12 @@ export function OfficeFrame({ state, error, onPick }) {
     if (!w || !ready.current || events.length === 0) return;
     w.postMessage(envelope(events), '*');
   };
-  // Post what changed since the last post. sent null (first sync, or a fresh frame) gives a full snapshot.
+  // Post what changed since the last post. sent null (first sync, or a fresh frame) gives a snapshot that
+  // seats every session and helper (office-adapter.js snapshotEvents); the frame only posts it.
   const sync = () => {
     const s = latest.current;
     if (!ready.current || !s) return;
-    const events = [...(sent.current ? diffState(sent.current, s) : firstSyncEvents(s)), connectionEvent(true)];
+    const events = [...diffState(sent.current, s), connectionEvent(true)];
     sent.current = s;
     post(events);
   };

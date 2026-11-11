@@ -1,23 +1,39 @@
 // Unit tests for src/office-flag.js and src/office-frame-model.js (run by `npm test` via node:test).
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
-import { officeExactRequested, OFFICE_FLAG_KEY } from '../src/office-flag.js';
-import { parseFrameMessage, frameScale, isKnownAgent, firstSyncEvents, ROOM_W, ROOM_H } from '../src/office-frame-model.js';
+import { officeExactRequested, OFFICE_FLAG_KEY, OFFICE_POLL_MS, pollMsFor } from '../src/office-flag.js';
+import { parseFrameMessage, frameScale, isKnownAgent, ROOM_W, ROOM_H } from '../src/office-frame-model.js';
+import { diffState } from '../src/office-adapter.js';
 
 const agent = (id, extra = {}) => ({ id, name: id, role: 'developer', remit: 'R', color: '#fff', model: 'M', modelId: 'm',
   status: 'idle', activity: 'idle', lastActive: 1, helpers: [], recent: [], recentHelpers: [], events: [], tools: [], ...extra });
 
-describe('firstSyncEvents (walk-in on a fresh frame)', () => {
-  test('a snapshot plus one agent_spawned per present agent; offline ones are skipped', () => {
+describe('first sync through the adapter (the frame posts diffState(null, state))', () => {
+  test('one snapshot seats every present session; offline ones are skipped', () => {
     const state = { ts: 10, agents: [agent('default'), agent('dev'), agent('sentinel', { status: 'offline', activity: 'no data' })] };
-    const ev = firstSyncEvents(state);
+    const ev = diffState(null, state);
+    assert.equal(ev.length, 1);
     assert.equal(ev[0].type, 'snapshot');
-    const spawned = ev.filter(e => e.type === 'agent_spawned').map(e => e.agent.id);
-    assert.deepEqual(spawned, ['hermes-default', 'hermes-dev']);
+    assert.deepEqual(ev[0].sessions.map(s => s.id), ['default', 'dev']);
   });
 
   test('a non-object state gives no events (no throw)', () => {
-    assert.deepEqual(firstSyncEvents(null).filter(e => e.type === 'agent_spawned'), []);
+    assert.deepEqual(diffState(null, null), []);
+  });
+});
+
+describe('pollMsFor (Phase 1d: 4 s only while the exact office is shown)', () => {
+  test('the exact office on screen polls at 4000 ms', () => {
+    assert.equal(OFFICE_POLL_MS, 4000);
+    assert.equal(pollMsFor(true, 15000), 4000);
+    assert.equal(pollMsFor(true, 15000 * 2), 4000);
+  });
+
+  test('otherwise the base interval is kept (normal and Lite)', () => {
+    assert.equal(pollMsFor(false, 15000), 15000);
+    assert.equal(pollMsFor(false, 30000), 30000);
+    assert.equal(pollMsFor(undefined, 15000), 15000);
+    assert.equal(pollMsFor('yes', 15000), 15000);
   });
 });
 

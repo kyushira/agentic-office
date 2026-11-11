@@ -552,10 +552,11 @@ function mainCount(state: OfficeState): number {
 }
 
 /** A chat line from a session's Claude; "Claude · <project>" once several terminals are open */
+// Phase 1d: a session's Claude speaks as its own name and role (Dev's line is Dev's, not Claude's)
 function claudeMsg(state: OfficeState, claude: Agent, text: string, tag?: 'prompt' | 'reply'): OfficeEffect {
-  const cfg = cfgFor(CLAUDE_ROLE)
-  const sender = mainCount(state) > 1 && claude.project ? `${cfg.title} · ${claude.project}` : cfg.title
-  return { kind: 'msg', sender, role: CLAUDE_ROLE, color: cfg.color, text, agentId: claude.id, ...(tag ? { tag } : {}) }
+  const cfg = cfgFor(claude.role)
+  const sender = mainCount(state) > 1 && claude.project ? `${claude.name} · ${claude.project}` : claude.name
+  return { kind: 'msg', sender, role: claude.role, color: cfg.color, text, agentId: claude.id, ...(tag ? { tag } : {}) }
 }
 
 interface MainPatch {
@@ -638,6 +639,10 @@ interface SessionFields {
   cwd?: string
   model?: string
   main?: SessionMain
+  /** Phase 1d: display name and sprite role for the session's Claude (Hermes profiles). Default: Claude / CLAUDE_ROLE */
+  name?: string
+  role?: string
+  task?: string
 }
 
 /**
@@ -665,10 +670,14 @@ function ensureClaude(state: OfficeState, sessionId: string, info: SessionFields
     }
   }
   const project = info.project ?? projectFromCwd(info.cwd)
-  const cfg = cfgFor(CLAUDE_ROLE)
+  // Phase 1d: name/role/task from the session info (Hermes profiles); the default stays the Claude sprite.
+  // preferredSpotId is only a preference: spawnAgent falls back to pickSpot when that desk is taken,
+  // so a second session gets its own free desk instead of stacking on CLAUDE_HOME_SPOT.
+  const role = info.role ?? CLAUDE_ROLE
+  const cfg = cfgFor(role)
   const r = spawnAgent(cur, {
-    id, name: cfg.title, role: CLAUDE_ROLE,
-    task: project ? `Claude Code · ${project}` : 'Claude Code',
+    id, name: info.name ?? cfg.title, role,
+    task: info.task ?? (project ? `Claude Code · ${project}` : 'Claude Code'),
     statusText: 'clocked in',
     sessionId, project, model: info.model,
     preferredSpotId: CLAUDE_HOME_SPOT,
@@ -1017,7 +1026,7 @@ function reduceEvent(state: OfficeState, action: OfficeAction, env: OfficeEnv): 
             continue
           }
           if (s.id in cur.endedSessions) cur = { ...cur, endedSessions: without(cur.endedSessions, s.id) }
-          const r = ensureClaude(cur, s.id, { project: s.project, cwd: s.cwd, model: s.model, main: s.main }, env)
+          const r = ensureClaude(cur, s.id, { project: s.project, cwd: s.cwd, model: s.model, main: s.main, name: s.name, role: s.role, task: s.task }, env)
           cur = r.state
           effects.push(...r.effects)
           if (!r.created) {
@@ -1171,7 +1180,7 @@ function reduceEvent(state: OfficeState, action: OfficeAction, env: OfficeEnv): 
       // flips it to hooked and the server sends this again with hooked: true.
       if (action.hooked === false) return none
       const base = sid in state.endedSessions ? { ...state, endedSessions: without(state.endedSessions, sid) } : state
-      const r = ensureClaude(base, sid, { project: action.project, cwd: action.cwd, model: action.model, main: action.main }, env)
+      const r = ensureClaude(base, sid, { project: action.project, cwd: action.cwd, model: action.model, main: action.main, name: action.name, role: action.role, task: action.task }, env)
       if (r.created) return r
       // Already here (a resume, or compaction's SessionStart): refresh what the server knows
       const id = mainId(sid)

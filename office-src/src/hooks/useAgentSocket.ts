@@ -110,11 +110,14 @@ export function parseEnvelope(ev: MessageEvent, parent: Window | null): OfficeEv
 
 /**
  * Outbound click bridge. Only the profile id leaves the frame. Non-Hermes ids
- * (the boss, the decorative Claude) are not sent.
+ * (the boss, the decorative Claude) are not sent. Phase 1d: a profile's character
+ * is its session's Claude (`main-<profile>`) or a helper (`hermes-<profile>:helper:<id>`).
  */
 export function postPick(agentId: string | null | undefined): void {
-  if (typeof window === 'undefined' || typeof agentId !== 'string' || !agentId.startsWith('hermes-')) return
-  const profile = agentId.slice('hermes-'.length).split(':')[0]
+  if (typeof window === 'undefined' || typeof agentId !== 'string') return
+  const raw = agentId.startsWith('main-') ? agentId.slice('main-'.length)
+    : agentId.startsWith('hermes-') ? agentId.slice('hermes-'.length) : ''
+  const profile = raw.split(':')[0]
   if (!profile || window.parent === window) return
   window.parent.postMessage({ type: 'hermes-office-pick', v: PROTOCOL_V, id: profile }, '*')
 }

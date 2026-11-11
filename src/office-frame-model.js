@@ -1,18 +1,7 @@
 // Pure helpers for OfficeFrame (Phase 1c). No DOM, no React; unit-tested in test/office-flag.test.js.
-import { snapshotEvents, diffState } from './office-adapter.js';
-
 // The app's fixed room (office-src/src/styles/office.css .app-wrapper). The iframe is this size, then scaled.
 export const ROOM_W = 1056;
 export const ROOM_H = 682;
-
-/**
- * Events for the first sync into a fresh frame. The scene's `snapshot` handler refreshes agents it already
- * has but never seats new ones (officeReducer 'snapshot'), so the snapshot is followed by agent_spawned for
- * each present agent (the diff from an empty prev), which is what makes them walk in.
- */
-export function firstSyncEvents(state) {
-  return [...snapshotEvents(state), ...diffState({}, state)];
-}
 
 const MAX_ID = 64;
 
