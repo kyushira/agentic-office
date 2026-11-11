@@ -51,6 +51,24 @@ function officePatch() {
   }
 }
 
+/**
+ * Inlines embed.css into the built index.html (the proxy CSP has no style-src, so an inline <style> is allowed).
+ * It hides the office page's chat column and status strip under 900px, so the Home iframe shows only the scene.
+ */
+function embedCss() {
+  const css = readFileSync(join(HERE, 'embed.css'), 'utf8')
+  return {
+    name: 'agent-office:embed-css',
+    transformIndexHtml: {
+      order: 'post',
+      handler(html) {
+        if (!html.includes('</head>')) throw new Error('embed-css: index.html has no </head> to inject into')
+        return html.replace('</head>', `<style data-agent-office="embed">\n${css}</style>\n</head>`)
+      },
+    },
+  }
+}
+
 /** Walks the build output and fails on any root-absolute sprite/room reference left in the bundle. */
 function verifyOutput(dir) {
   const bad = []
@@ -80,7 +98,7 @@ await build({
   root: ROOT,
   configFile: join(ROOT, 'vite.config.ts'),
   base: `${OFFICE_PREFIX}/`,
-  plugins: [officePatch()],
+  plugins: [officePatch(), embedCss()],
   logLevel: 'warn',
   build: { outDir: OUT, emptyOutDir: true },
 })

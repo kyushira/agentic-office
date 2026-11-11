@@ -1,48 +1,22 @@
 // Unit tests for src/tabs-model.js (run by `node --test test/*.test.js`).
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
-import { TABS, DEFAULT_TAB, isTab, parseHash, hashFor, tabStep, ASH_ID, ashView, agentsViewOf, hashForAgentsView } from '../src/tabs-model.js';
-
-describe('Agents sub-view hash (#agents/office)', () => {
-  test('parseHash keeps #agents/office on the agents tab', () => {
-    assert.equal(parseHash('#agents/office'), 'agents');
-    assert.equal(parseHash('agents/office'), 'agents');
-    assert.equal(parseHash('#agents/anything'), 'agents');
-  });
-  test('parseHash still rejects a nested hash whose first segment is empty', () => {
-    assert.equal(parseHash('#/agents/office'), 'home');
-    assert.equal(parseHash('#chat/office'), 'home');
-  });
-  test('agentsViewOf: only #agents/office is the office view', () => {
-    assert.equal(agentsViewOf('#agents/office'), 'office');
-    assert.equal(agentsViewOf('agents/office'), 'office');
-    assert.equal(agentsViewOf('#agents'), 'grid');
-    assert.equal(agentsViewOf('#agents/office/x'), 'grid');
-    assert.equal(agentsViewOf('#inbox'), 'grid');
-    assert.equal(agentsViewOf(''), 'grid');
-    assert.equal(agentsViewOf(undefined), 'grid');
-  });
-  test('hashForAgentsView round-trips through agentsViewOf and stays on the agents tab', () => {
-    assert.equal(hashForAgentsView('office'), '#agents/office');
-    assert.equal(hashForAgentsView('grid'), '#agents');
-    assert.equal(hashForAgentsView('bogus'), '#agents');
-    for (const v of ['grid', 'office']) {
-      assert.equal(agentsViewOf(hashForAgentsView(v)), v);
-      assert.equal(parseHash(hashForAgentsView(v)), 'agents');
-    }
-  });
-});
+import { TABS, DEFAULT_TAB, isTab, parseHash, hashFor, tabStep, ASH_ID, ashView } from '../src/tabs-model.js';
 
 describe('TABS', () => {
-  test('five tabs in nav order with unique ids and labels', () => {
-    assert.deepEqual(TABS.map(t => t.id), ['home', 'agents', 'inbox', 'wiki', 'menu']);
-    assert.deepEqual(TABS.map(t => t.label), ['Home', 'Agents', 'Inbox', 'Wiki', 'Menu']);
+  test('six tabs in nav order with unique ids and labels', () => {
+    assert.deepEqual(TABS.map(t => t.id), ['home', 'agents', 'usage', 'inbox', 'wiki', 'menu']);
+    assert.deepEqual(TABS.map(t => t.label), ['Home', 'Agents', 'Usage', 'Inbox', 'Wiki', 'Menu']);
     assert.equal(new Set(TABS.map(t => t.id)).size, TABS.length);
+  });
+  test('there is no office tab: the office lives on Home', () => {
+    assert.equal(TABS.some(t => t.id === 'office'), false);
   });
   test('default tab is home', () => {
     assert.equal(DEFAULT_TAB, 'home');
     assert.equal(isTab('home'), true);
     assert.equal(isTab('chat'), false);
+    assert.equal(isTab('office'), false);
   });
 });
 
@@ -51,6 +25,8 @@ describe('parseHash', () => {
     assert.equal(parseHash('#agents'), 'agents');
     assert.equal(parseHash('inbox'), 'inbox');
     assert.equal(parseHash('#menu'), 'menu');
+    assert.equal(parseHash('#usage'), 'usage');
+    assert.equal(parseHash('#wiki'), 'wiki');
   });
   test('empty, unknown or nested hashes fall back to home', () => {
     assert.equal(parseHash(''), 'home');
@@ -60,8 +36,18 @@ describe('parseHash', () => {
     assert.equal(parseHash('#/agents'), 'home');
     assert.equal(parseHash('#chat'), 'home');
   });
-  test('is case sensitive: #Agents is not a tab', () => {
+  test('retired office hashes map to home', () => {
+    assert.equal(parseHash('#office'), 'home');
+    assert.equal(parseHash('#office=exact'), 'home');
+    assert.equal(parseHash('office=exact'), 'home');
+  });
+  test('an old Agents office sub-path keeps the agents tab (the office view itself is gone)', () => {
+    assert.equal(parseHash('#agents/office'), 'agents');
+    assert.equal(parseHash('#agents/anything'), 'agents');
+  });
+  test('is case sensitive: #Agents and #OFFICE are not tabs', () => {
     assert.equal(parseHash('#Agents'), 'home');
+    assert.equal(parseHash('#OFFICE'), 'home');
   });
 });
 
@@ -71,25 +57,26 @@ describe('hashFor', () => {
   });
   test('unknown ids map to the home hash', () => {
     assert.equal(hashFor('bogus'), '#home');
+    assert.equal(hashFor('office'), '#home');
     assert.equal(hashFor('wiki'), '#wiki');
   });
 });
 
 describe('tabStep (WAI-ARIA tablist keys)', () => {
-  const n = 5;
+  const n = 6;
   test('right and down advance and wrap', () => {
     assert.equal(tabStep(0, 'ArrowRight', n), 1);
     assert.equal(tabStep(0, 'ArrowDown', n), 1);
-    assert.equal(tabStep(4, 'ArrowRight', n), 0);
+    assert.equal(tabStep(5, 'ArrowRight', n), 0);
   });
   test('left and up go back and wrap', () => {
     assert.equal(tabStep(2, 'ArrowLeft', n), 1);
     assert.equal(tabStep(2, 'ArrowUp', n), 1);
-    assert.equal(tabStep(0, 'ArrowLeft', n), 4);
+    assert.equal(tabStep(0, 'ArrowLeft', n), 5);
   });
   test('Home and End jump to the ends', () => {
     assert.equal(tabStep(3, 'Home', n), 0);
-    assert.equal(tabStep(1, 'End', n), 4);
+    assert.equal(tabStep(1, 'End', n), 5);
   });
   test('other keys and an empty list do not move', () => {
     assert.equal(tabStep(1, 'Enter', n), -1);

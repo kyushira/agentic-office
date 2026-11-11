@@ -1,0 +1,33 @@
+/* Embed mode for the Home iframe (src/OfficeHome.jsx). Injected into the built office index.html by
+   build-office.mjs. Under 900px the iframe is the room, so: drop the chat column and the status strip,
+   and let the scene fill the frame. Selectors come from the Claude-Office checkout (read-only):
+     .app-wrapper    styles/office.css:19  (fixed 1056x682 box; App.tsx:1758 wraps the page in it)
+     .app-body       styles/office.css:37  (row: office-view + chat column; App.tsx:1804)
+     .office-view    styles/office.css:184 (the scene; App.tsx:1805)
+     .chat-column    App.tsx:1823          (chat + meters + permission cards)
+     .status-strip   styles/strip.css:21, components/StatusStrip.tsx:172 (App.tsx:1842)
+   Desktop (900px and up) is untouched: the office page keeps its own layout. */
+@media (max-width: 899px) {
+  .app-wrapper {
+    width: 100%;
+    height: 100%;
+    position: relative;
+    top: auto;
+    left: auto;
+    transform: none;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+  }
+  .chat-column,
+  .status-strip {
+    display: none !important;
+  }
+  .app-body {
+    flex: 1 1 auto;
+  }
+  .office-view {
+    flex: 1 1 auto;
+    width: 100%;
+  }
+}

@@ -1,9 +1,10 @@
-// Pure logic for the five-tab shell (unit-tested in test/tabs-model.test.js). No DOM access here.
+// Pure logic for the six-tab shell (unit-tested in test/tabs-model.test.js). No DOM access here.
 
 /** Tabs in nav order. `id` is the location.hash value (#home, #agents, ...). */
 export const TABS = [
   { id: 'home', label: 'Home' },
   { id: 'agents', label: 'Agents' },
+  { id: 'usage', label: 'Usage' },
   { id: 'inbox', label: 'Inbox' },
   { id: 'wiki', label: 'Wiki' },
   { id: 'menu', label: 'Menu' },
@@ -11,27 +12,27 @@ export const TABS = [
 
 export const DEFAULT_TAB = 'home';
 
+/**
+ * Old hashes that are no longer tabs. '#office' and '#office=exact' (the retired Claude-Office frame flag)
+ * land on Home, where the live office now is.
+ */
+const LEGACY = Object.freeze({
+  office: 'home',
+  'office=exact': 'home',
+});
+
 export function isTab(id) {
   return TABS.some(t => t.id === id);
 }
 
 /**
- * '#agents', 'agents' or '#agents/office' -> the tab id. The first path segment picks the tab, so a
- * sub-view (#agents/office) stays on its tab. Anything that is not a tab id (empty, unknown, '#/x') -> 'home'.
+ * '#agents', 'agents' or '#agents/anything' -> the tab id. The first path segment picks the tab; a sub-path
+ * stays on its tab. Legacy ids map through LEGACY. Anything else (empty, unknown, '#/x', '#Agents') -> 'home'.
  */
 export function parseHash(hash) {
   const id = String(hash || '').replace(/^#/, '').split('/')[0];
+  if (Object.prototype.hasOwnProperty.call(LEGACY, id)) return LEGACY[id];
   return isTab(id) ? id : DEFAULT_TAB;
-}
-
-/** Agents tab view from the hash: '#agents/office' -> 'office'; anything else -> 'grid'. */
-export function agentsViewOf(hash) {
-  return String(hash || '').replace(/^#/, '') === 'agents/office' ? 'office' : 'grid';
-}
-
-/** Agents view -> hash: 'office' -> '#agents/office', otherwise '#agents' (the grid). */
-export function hashForAgentsView(view) {
-  return view === 'office' ? '#agents/office' : '#agents';
 }
 
 /** Tab id -> hash string. An unknown id maps to the home hash. */

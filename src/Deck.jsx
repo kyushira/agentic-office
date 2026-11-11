@@ -11,14 +11,13 @@ import { WikiPane } from './Wiki.jsx';
 import { BrainDetail } from './BrainDetail.jsx';
 import { ProjectsList } from './ProjectsList.jsx';
 import { visibleInterval } from './visible-timer.js';
-import { parseHash, hashFor, ASH_ID, agentsViewOf, hashForAgentsView } from './tabs-model.js';
+import { parseHash, hashFor, ASH_ID } from './tabs-model.js';
 import BottomNav from './BottomNav.jsx';
 import { AshCard } from './AshCard.jsx';
 import MenuTab from './MenuTab.jsx';
 import { AgentsTab } from './AgentsTab.jsx';
-import { OfficeScene } from './OfficeScene.jsx';
-import { OfficeFrame } from './OfficeFrame.jsx';
-import { officeExactRequested, OFFICE_FLAG_KEY, pollMsFor } from './office-flag.js';
+import OfficeHome from './OfficeHome.jsx';
+import UsageTab from './UsageTab.jsx';
 import { InboxTab } from './InboxTab.jsx';
 
 
@@ -423,9 +422,6 @@ function HelperSheet({ it, now }) {
   );
 }
 
-/** The office desk's hit button for an agent (focus returns here when its sheet closes); null if none is on screen. */
-const officeHitFor = id => Array.from(document.querySelectorAll('.dk-off-hit')).find(el => el.dataset.agentId === String(id)) || null;
-
 function Sheet({ children, onClose, getReturn }) {
   const ref = useRef(null);
   useDialogFocus(ref, onClose, getReturn);
@@ -459,11 +455,10 @@ export default function Deck() {
   const [height, setHeight] = useState(600);
   const [, setTick] = useState(0);
   const [usage, setUsage] = useState(null);
-  const [tab, setTab] = useState(() => parseHash(location.hash));       // home | agents | inbox | wiki | menu, synced to #hash
+  const [tab, setTab] = useState(() => parseHash(location.hash));       // home | agents | usage | inbox | wiki | menu, synced to #hash
   const goTab = id => { if (location.hash !== hashFor(id)) location.hash = hashFor(id); setTab(id); };
-  const [hash, setHash] = useState(location.hash);                      // kept so the Agents Grid / Office view re-renders on #agents/office
   useEffect(() => {
-    const onHash = () => { setTab(parseHash(location.hash)); setHash(location.hash); };  // browser Back / Forward moves between tabs
+    const onHash = () => setTab(parseHash(location.hash));              // browser Back / Forward moves between tabs
     window.addEventListener('hashchange', onHash);
     return () => window.removeEventListener('hashchange', onHash);
   }, []);
@@ -478,10 +473,6 @@ export default function Deck() {
   const prevState = useRef(null);                                       // last /state, for the tool-call diff
   const [blips, setBlips] = useState({});                               // agent id -> blip counter
   const [hidden, setHidden] = useState(() => document.visibilityState === 'hidden');
-  // Phase 1d: the exact office is on screen (flag on, Home tab, page visible). The /state poll reads this ref.
-  const officeShown = tab === 'home' && !hidden && officeExactRequested(location.hash, () => localStorage.getItem(OFFICE_FLAG_KEY));
-  const officeShownRef = useRef(false);
-  officeShownRef.current = officeShown;
   const gridRef = useRef(null);                                         // scroll container; overlay lives inside it
   const tileRefs = useRef(new Map());                                   // agent id -> tile <button>
   const flightTimers = useRef(new Map());                               // flight key -> removal timeout
@@ -500,8 +491,7 @@ export default function Deck() {
     if (document.hidden) { timer.current = setTimeout(load, POLL_MS); return; }
     fetchJSON(API).then(s => { if (alive.current) { setState(s); setError(''); setUpdatedAt(Date.now()); } })
       .catch(e => alive.current && setError(String((e && e.message) || e)))
-      // Phase 1d: same loop and endpoint; 4 s while the exact office is shown, the normal interval otherwise.
-      .finally(() => { if (alive.current) timer.current = setTimeout(load, pollMsFor(officeShownRef.current, liteRef.current ? POLL_LITE_MS : POLL_MS)); });
+      .finally(() => { if (alive.current) timer.current = setTimeout(load, liteRef.current ? POLL_LITE_MS : POLL_MS); });
   };
   useEffect(() => { alive.current = true; load(); return () => { alive.current = false; clearTimeout(timer.current); }; }, []);
   useEffect(() => { try { localStorage.setItem('agent-deck.lite', lite ? '1' : '0'); } catch (e) { /* private mode */ } }, [lite]);
@@ -661,7 +651,7 @@ export default function Deck() {
         <div className="dk-sum">
           <span className="dk-pill dk-working-pill" title="Agents working now, of all agents">{counts ? `${counts.working} of ${counts.working + counts.idle} working` : 'loading…'}</span>
           <button id="dk-sec-usage" type="button" className={'dk-pill dk-usage dk-usage-btn is-' + ut.level} title={ut.title} aria-label={ut.aria}
-            onClick={() => goTab('menu')}>
+            onClick={() => goTab('usage')}>
             {ut.level === 'na' && ut.reason ? <span className="dk-uw-na">usage n/a</span> : ut.windows.map(w => (
               <span key={w.key} className="dk-uw" aria-hidden="true">
                 <span className="dk-uw-l">{w.short}</span><Meter pct={w.pct} decorative /><span className="dk-uw-v">{pctStr(w.pct)}</span>
@@ -682,12 +672,9 @@ export default function Deck() {
         hidden={!desktop && pane !== 'office'}>
       <h2 className="dk-pane-h">Office</h2>
       {(desktop || pane === 'office') && <>
-          {/* Agents are desks in the scene. Helper sessions have no desk, so they keep a tile row under it. */}
-          {/* Phase 1c: the exact Claude-Office frame only behind office=exact / localStorage flag; default is OfficeScene.
-              The frame is mounted only while the page is visible (hidden unmounts it, which stops its rAF loop). */}
-          {officeExactRequested(location.hash, () => localStorage.getItem(OFFICE_FLAG_KEY))
-            ? (!hidden && <OfficeFrame state={state} error={error} onPick={id => setSel('a:' + id)} />)
-            : <OfficeScene agents={(state && state.agents) || []} onPick={id => setSel('a:' + id)} />}
+          {/* The live office. Lazy: mounted only while Home is shown and the page is visible (hidden unmounts it, closing its WebSocket). */}
+          <OfficeHome active={!hidden} />
+          {/* Helper sessions have no desk in the scene, so they keep a tile row under it. */}
           {items.some(it => it.type !== 'agent') && <div className="dk-grid dk-helper-row">
             {items.filter(it => it.type !== 'agent').map(it => <HelperTile key={it.key} it={it} pressed={it.key === sel} onPick={() => setSel(it.key)} />)}
           </div>}
@@ -719,14 +706,15 @@ export default function Deck() {
       </>}
       {tab === 'agents' && <AgentsTab agents={(state && state.agents) || []} sessions={state && state.sessions} now={now}
         loading={!state && !error} error={error} onRetry={load} onPick={id => setSel('a:' + id)}
-        view={agentsViewOf(hash)} onView={v => { const h = hashForAgentsView(v); if (location.hash !== h) location.hash = h; setHash(h); }} />}
+        />}
+      {tab === 'usage' && <UsageTab usage={usage} now={Date.now()} />}
       {tab === 'inbox' && <InboxTab items={needs} loading={!state && !error} error={error} onRetry={load} onPick={id => setSel('a:' + id)} />}
       {/* Wiki mounts only while its tab is shown; it fetches on first show */}
       {tab === 'wiki' && <WikiPane hidden={false} />}
       {tab === 'menu' && <MenuTab usage={usage} now={Date.now()} full={full} standalone={standalone} lite={lite}
         onEnterFull={enterFull} onExitFull={exitFull} onToggleLite={() => setLite(!lite)} />}
       </div>
-      {picked && <Sheet onClose={closeSheet} getReturn={sel && sel.startsWith('a:') ? () => officeHitFor(sel.slice(2)) : null}>
+      {picked && <Sheet onClose={closeSheet}>
         {picked.type === 'agent'
           ? <AgentSheet key={picked.key} it={picked} sessions={(state.sessions || {})[picked.agent.id] || []} now={now}
                       det={detOk && detOk.data} detErr={!!(detOk && detOk.err)} notes={brainNotes(state.brain)}

@@ -1,9 +1,9 @@
 {
   "name": "Agent Deck",
   "short_name": "Deck",
-  "id": "/deck",
-  "start_url": "/deck?full=1",
-  "scope": "/",
+  "id": "/office",
+  "start_url": "/office",
+  "scope": "/office",
   "display": "fullscreen",
   "display_override": ["fullscreen", "standalone"],
   "orientation": "any",

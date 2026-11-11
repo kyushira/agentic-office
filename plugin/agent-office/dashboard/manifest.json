@@ -1,10 +1,10 @@
 {
   "name": "agent-office",
-  "label": "Deck",
-  "description": "Read-only deck of every recent agent session: who is working, context used, last activity.",
+  "label": "Office",
+  "description": "Agent Deck: the live Claude Office on Home, plus the agents, usage, inbox, wiki and menu tabs.",
   "icon": "Activity",
   "version": "0.3.0",
-  "tab": { "path": "/deck", "position": "end" },
+  "tab": { "path": "/office", "position": "end" },
   "entry": "dist/index.js",
   "css": "dist/style.css",
   "api": "plugin_api.py"
