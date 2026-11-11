@@ -440,3 +440,179 @@ async def wiki_search(q: str | None = Query(None)):
 async def wiki_log(tail: str | None = Query(None)):
     """Parsed log.md headings, newest first: {"entries": [{date, action, subject, body}]}. tail is 1..200, default 50."""
     return await _wiki_result(wiki.log, tail)
+
+
+# ---------------------------------------------------------------------------
+# Claude Office under /api/plugins/agent-office/office/
+#
+# The office UI (built by office-build/build-office.mjs) is served from OFFICE_DIST.
+# Every other request under /office/ is reverse-proxied to the office server on
+# loopback, with the office token added here, server side. Auth is the dashboard's:
+#   * HTTP: the dashboard's gated middleware already ran (no cookie -> 302 /login).
+#   * WebSocket: the dashboard gate does not run for upgrades, so office_ws checks the
+#     dashboard session cookie itself (same verify path as the native bearer leg).
+# Refused outright unless the dashboard runs with auth_required: an open dashboard must
+# not hand the office token to anyone who can reach its port.
+# The browser never sees the office token; the dashboard Authorization header is not
+# forwarded either (the dashboard gate would read it as its own credential).
+# ---------------------------------------------------------------------------
+
+import os
+
+import httpx
+from fastapi import WebSocket, WebSocketDisconnect
+from fastapi.responses import FileResponse
+from starlette.responses import Response
+
+OFFICE_UPSTREAM_PORT = int(os.environ.get("AGENT_OFFICE_PORT", "3334"))
+OFFICE_PUBLIC_HOST = os.environ.get("AGENT_OFFICE_PUBLIC_HOST", "hermes-agent-cnfo.srv2094552.hstgr.cloud")
+OFFICE_DIST = Path(os.environ.get("AGENT_OFFICE_DIST", Path(__file__).with_name("office-dist")))
+OFFICE_HOME = Path(os.environ.get("AGENT_OFFICE_HOME", "/opt/data/home/.agent-office"))
+OFFICE_WS_PROTOCOL = "agent-office"
+OFFICE_TOKEN_PROTOCOL_PREFIX = "agent-office.token."
+
+# Hop-by-hop, dashboard credentials and proxy markers: never forwarded upstream. The
+# office server treats any X-Forwarded-* / Forwarded / Tailscale-* header as "came through a
+# reverse proxy", so the dashboard's own proxy headers are dropped too.
+_OFFICE_DROP_REQUEST = {
+    "host", "authorization", "cookie", "connection", "keep-alive", "transfer-encoding", "te",
+    "upgrade", "proxy-authorization", "proxy-connection", "content-length", "accept-encoding",
+    "x-forwarded-for", "x-forwarded-host", "x-forwarded-proto", "x-forwarded-port", "x-real-ip",
+    "forwarded", "x-office-timestamp", "x-office-signature", "x-hermes-gateway-ticket",
+    "sec-websocket-key", "sec-websocket-version", "sec-websocket-extensions", "sec-websocket-protocol",
+}
+_OFFICE_DROP_RESPONSE = {"connection", "keep-alive", "transfer-encoding", "content-length", "content-encoding"}
+_OFFICE_METHODS = ["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
+_NO_STORE_HEADERS = {"Cache-Control": "no-store"}
+
+
+def _office_token() -> str | None:
+    """The office file token, read per use so a rotated token is picked up. Never logged."""
+    try:
+        token = (OFFICE_HOME / "auth-token").read_text(encoding="utf-8").strip()
+    except OSError:
+        return None
+    return token or None
+
+
+def _office_gate_open(conn) -> bool:
+    """True only when the dashboard runs with its auth gate engaged (see the block comment)."""
+    from hermes_cli.web_server import app as dashboard_app
+    return bool(getattr(dashboard_app.state, "auth_required", False))
+
+
+def _office_ws_session_ok(ws: WebSocket) -> bool:
+    """WebSocket upgrades bypass the dashboard HTTP middleware: verify the session cookie here."""
+    if not _office_gate_open(ws):
+        return False
+    from hermes_cli.dashboard_auth.cookies import read_session_cookies, read_session_provider
+    from hermes_cli.dashboard_auth.middleware import _verify_access_token
+    access_token, _refresh = read_session_cookies(ws)
+    if not access_token:
+        return False
+    try:
+        return _verify_access_token(
+            ws, access_token=access_token, provider_hint=read_session_provider(ws), audit=False) is not None
+    except Exception:  # a provider outage is a refusal, never an open door
+        return False
+
+
+def _office_static_file(rel: str) -> Path | None:
+    """A file of the built UI, or None. Traversal-safe: the resolved path must stay under OFFICE_DIST."""
+    if not OFFICE_DIST.is_dir():
+        return None
+    root = OFFICE_DIST.resolve()
+    target = (root / (rel.strip("/") or "index.html")).resolve()
+    try:
+        target.relative_to(root)
+    except ValueError:
+        return None
+    return target if target.is_file() else None
+
+
+@router.api_route("/office", methods=_OFFICE_METHODS, include_in_schema=False)
+@router.api_route("/office/{path:path}", methods=_OFFICE_METHODS, include_in_schema=False)
+async def office_http(request: Request, path: str = ""):
+    if not _office_gate_open(request):
+        return JSONResponse({"error": "office proxy needs dashboard auth"}, status_code=403)
+    if request.method in ("GET", "HEAD"):
+        static = _office_static_file(path)
+        if static is not None:
+            headers = _NO_STORE_HEADERS if static.name == "index.html" else None
+            return FileResponse(static, headers=headers)
+    token = _office_token()
+    if token is None:
+        return JSONResponse({"error": "office token unavailable"}, status_code=503)
+    headers = {k: v for k, v in request.headers.items() if k.lower() not in _OFFICE_DROP_REQUEST}
+    headers["host"] = OFFICE_PUBLIC_HOST
+    headers["authorization"] = f"Bearer {token}"
+    url = f"http://127.0.0.1:{OFFICE_UPSTREAM_PORT}/{path}"
+    body = await request.body()
+    try:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(30.0), follow_redirects=False) as client:
+            upstream = await client.request(
+                request.method, url, params=request.query_params, headers=headers, content=body or None)
+    except httpx.HTTPError:
+        return JSONResponse({"error": "office server unreachable"}, status_code=502)
+    response = Response(content=upstream.content, status_code=upstream.status_code)
+    for key, value in upstream.headers.multi_items():
+        if key.lower() not in _OFFICE_DROP_RESPONSE:
+            response.headers.append(key, value)
+    return response
+
+
+@router.websocket("/office/ws")
+async def office_ws(ws: WebSocket):
+    if not _office_ws_session_ok(ws):
+        await ws.close(code=1008)  # refused before accept: the client sees a handshake 403
+        return
+    token = _office_token()
+    if token is None:
+        await ws.close(code=1011)
+        return
+    import websockets
+
+    offered = ws.scope.get("subprotocols") or []
+    chosen = OFFICE_WS_PROTOCOL if OFFICE_WS_PROTOCOL in offered else None
+    origin = ws.headers.get("origin") or f"https://{OFFICE_PUBLIC_HOST}"
+    try:
+        upstream = await websockets.connect(
+            f"ws://127.0.0.1:{OFFICE_UPSTREAM_PORT}/ws",
+            subprotocols=[OFFICE_WS_PROTOCOL, f"{OFFICE_TOKEN_PROTOCOL_PREFIX}{token}"],
+            additional_headers={"Host": OFFICE_PUBLIC_HOST, "Origin": origin},
+            max_size=None,
+            open_timeout=10,
+        )
+    except Exception:
+        await ws.close(code=1011)
+        return
+    await ws.accept(subprotocol=chosen)
+
+    async def upstream_to_client():
+        async for message in upstream:
+            if isinstance(message, bytes):
+                await ws.send_bytes(message)
+            else:
+                await ws.send_text(message)
+
+    async def client_to_upstream():
+        while True:
+            message = await ws.receive()
+            if message["type"] == "websocket.disconnect":
+                return
+            if message.get("text") is not None:
+                await upstream.send(message["text"])
+            elif message.get("bytes") is not None:
+                await upstream.send(message["bytes"])
+
+    tasks = [asyncio.ensure_future(upstream_to_client()), asyncio.ensure_future(client_to_upstream())]
+    try:
+        await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
+    finally:
+        for task in tasks:
+            task.cancel()
+        await upstream.close()
+        try:
+            await ws.close()
+        except (RuntimeError, WebSocketDisconnect):
+            pass

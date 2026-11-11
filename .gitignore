@@ -2,3 +2,4 @@ node_modules/
 dev/dist/
 __pycache__/
 *.pyc
+plugin/agent-office/dashboard/office-dist/
