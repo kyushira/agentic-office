@@ -8,6 +8,11 @@ the same paths the Hermes dashboard uses. Binds to 127.0.0.1 only.
 --demo (harness only, never shipped): adds sample helpers, toasts and Brain trips on top of the
 real snapshot so the v2 animations can be checked when no agent happens to be delegating.
 
+--office-open (harness only, never shipped): no dashboard runs here, so the office proxy's auth gate is forced open
+and Home's iframe can reach the office server on 127.0.0.1:3334. Only the GET/HEAD and WebSocket paths work this way;
+the proxy's route allowlist still refuses writes. Run with AGENT_OFFICE_TEAM_POLL=0 so the team poller does not post
+into the live office server.
+
 --brain-root <dir> (ALWAYS pass it when testing the Brain editor): the Brain read and write routes use <dir>
 instead of /opt/data, and backups go to <dir>/deck-backups. <dir> must hold a copy of the agent files in the
 same layout (SOUL.md, memories/MEMORY.md, memories/USER.md, profiles/<agent>/...). Without it the harness
@@ -29,6 +34,10 @@ PLUGIN = ROOT / "plugin/agent-office/dashboard"
 spec = importlib.util.spec_from_file_location("plugin_api", PLUGIN / "plugin_api.py")
 api = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(api)
+if "--office-open" in sys.argv:
+    # Harness only: the dashboard auth gate is forced open (see the docstring). The proxy's route allowlist stays.
+    api._office_gate_open = lambda conn: True
+    api._office_ws_session_ok = lambda ws: True
 DEMO = "--demo" in sys.argv
 T0 = time.time()
 
