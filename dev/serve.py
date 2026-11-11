@@ -15,6 +15,7 @@ would write to the real agent files, so the server warns loudly. It refuses <dir
 """
 import copy
 import importlib.util
+import json
 import sys
 import time
 from pathlib import Path
@@ -74,6 +75,19 @@ if DEMO:
                       {"id": f"demo-w{k}r", "at": now - 1, "from": "red", "to": "default", "kind": "reply", "subject": "Jev research notes"}]
         s["events"] += [{"id": f"demo-ev{k}w", "at": now - 1, "kind": "walk", "agent": "default", "text": "→ Dev · new brief"}]
         return s
+
+FAKE_STATE = None
+if "--fake-state" in sys.argv:
+    # Harness only: GET /state returns the JSON file at this path, re-read on every request, so a test can
+    # script agents (working, waiting, error, offline) by rewriting the file. The real collector is not called.
+    i = sys.argv.index("--fake-state")
+    if i + 1 >= len(sys.argv) or sys.argv[i + 1].startswith("--"):
+        sys.exit("serve.py: --fake-state needs a file path")
+    FAKE_STATE = Path(sys.argv[i + 1])
+
+    @app.get("/api/plugins/agent-office/state")
+    def fake_state():
+        return json.loads(FAKE_STATE.read_text(encoding="utf-8"))
 
 app.include_router(api.router, prefix="/api/plugins/agent-office")
 app.mount("/dashboard-plugins/agent-office", StaticFiles(directory=PLUGIN), name="plugin")

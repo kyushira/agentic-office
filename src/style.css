@@ -1042,6 +1042,11 @@ html.ao-full-active { background-color: var(--bg) !important; }
 .dk-root .dk-menu-row { display: flex; flex-wrap: wrap; gap: 8px; }
 .dk-root .dk-menu-btn { min-height: 44px; min-width: 44px; height: auto; padding: 0 14px; font-size: 13px; }
 
+/* Exact Claude-Office frame on Home (OfficeFrame.jsx, behind office=exact). The 1056x682 room is scaled to the pane width. */
+.dk-root .dk-ofr { position: relative; width: 100%; overflow: hidden; background: #0d0d12; }
+.dk-root .dk-ofr-frame { position: absolute; left: 0; top: 0; display: block; border: 0; background: #0d0d12;
+  transform-origin: 0 0; }
+
 /* Office view on the Agents tab (#agents/office). Look: deck-office-look.md. Positions and sizes are inline (OfficeScene.jsx). */
 .dk-root .dk-seg.dk-ag-view { display: flex; margin: 0; }             /* shown on desktop too, unlike the pane switch */
 .dk-root .dk-off-wrap { margin: 8px; padding: 0; border: 1px solid var(--dk-line-2); border-radius: 14px; overflow: hidden;

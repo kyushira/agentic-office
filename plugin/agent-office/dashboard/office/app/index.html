@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <!-- The iframe runs with an opaque origin and no network: nothing may load but its own sprites, rooms, fonts (inlined) and script.
+         frame-ancestors is not enforceable for this static file: a meta tag cannot set it, and Hermes static
+         serving sends no CSP response header, so nothing restricts which page may embed it. The isolation is the
+         iframe's sandbox="allow-scripts" (opaque origin, no same-origin access) on the Deck side. -->
+
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; media-src 'none'; connect-src 'none'; base-uri 'none'; form-action 'none'" />
+    <meta name="referrer" content="no-referrer" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <title>Agent Office</title>
+    <style>*{box-sizing:border-box;margin:0;padding:0}body{background:#0d0d12;overflow:hidden}</style>
+    <script defer src="./assets/office.js"></script>
+    <link rel="stylesheet" href="./assets/style.css">
+  </head>
+  <body>
+    <div id="root"></div>
+  </body>
+</html>

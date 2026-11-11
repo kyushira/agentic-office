@@ -5,7 +5,7 @@
   "description": "Agent Deck: a read-only grid of the Hermes agents' sessions, as a Hermes dashboard plugin.",
   "type": "module",
   "scripts": {
-    "build": "vite build && vite build --config vite.harness.config.js",
+    "build": "vite build && vite build --config vite.harness.config.js && vite build --config vite.office.config.js",
     "icons": "node dev/make-icons.mjs",
     "test": "node --test test/*.test.js && /opt/hermes/.venv/bin/python -I -m unittest discover -s test -p 'test_*.py'"
   },

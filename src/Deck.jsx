@@ -17,6 +17,8 @@ import { AshCard } from './AshCard.jsx';
 import MenuTab from './MenuTab.jsx';
 import { AgentsTab } from './AgentsTab.jsx';
 import { OfficeScene } from './OfficeScene.jsx';
+import { OfficeFrame } from './OfficeFrame.jsx';
+import { officeExactRequested, OFFICE_FLAG_KEY, pollMsFor } from './office-flag.js';
 import { InboxTab } from './InboxTab.jsx';
 
 
@@ -476,6 +478,10 @@ export default function Deck() {
   const prevState = useRef(null);                                       // last /state, for the tool-call diff
   const [blips, setBlips] = useState({});                               // agent id -> blip counter
   const [hidden, setHidden] = useState(() => document.visibilityState === 'hidden');
+  // Phase 1d: the exact office is on screen (flag on, Home tab, page visible). The /state poll reads this ref.
+  const officeShown = tab === 'home' && !hidden && officeExactRequested(location.hash, () => localStorage.getItem(OFFICE_FLAG_KEY));
+  const officeShownRef = useRef(false);
+  officeShownRef.current = officeShown;
   const gridRef = useRef(null);                                         // scroll container; overlay lives inside it
   const tileRefs = useRef(new Map());                                   // agent id -> tile <button>
   const flightTimers = useRef(new Map());                               // flight key -> removal timeout
@@ -494,7 +500,8 @@ export default function Deck() {
     if (document.hidden) { timer.current = setTimeout(load, POLL_MS); return; }
     fetchJSON(API).then(s => { if (alive.current) { setState(s); setError(''); setUpdatedAt(Date.now()); } })
       .catch(e => alive.current && setError(String((e && e.message) || e)))
-      .finally(() => { if (alive.current) timer.current = setTimeout(load, liteRef.current ? POLL_LITE_MS : POLL_MS); });
+      // Phase 1d: same loop and endpoint; 4 s while the exact office is shown, the normal interval otherwise.
+      .finally(() => { if (alive.current) timer.current = setTimeout(load, pollMsFor(officeShownRef.current, liteRef.current ? POLL_LITE_MS : POLL_MS)); });
   };
   useEffect(() => { alive.current = true; load(); return () => { alive.current = false; clearTimeout(timer.current); }; }, []);
   useEffect(() => { try { localStorage.setItem('agent-deck.lite', lite ? '1' : '0'); } catch (e) { /* private mode */ } }, [lite]);
@@ -676,7 +683,11 @@ export default function Deck() {
       <h2 className="dk-pane-h">Office</h2>
       {(desktop || pane === 'office') && <>
           {/* Agents are desks in the scene. Helper sessions have no desk, so they keep a tile row under it. */}
-          <OfficeScene agents={(state && state.agents) || []} onPick={id => setSel('a:' + id)} />
+          {/* Phase 1c: the exact Claude-Office frame only behind office=exact / localStorage flag; default is OfficeScene.
+              The frame is mounted only while the page is visible (hidden unmounts it, which stops its rAF loop). */}
+          {officeExactRequested(location.hash, () => localStorage.getItem(OFFICE_FLAG_KEY))
+            ? (!hidden && <OfficeFrame state={state} error={error} onPick={id => setSel('a:' + id)} />)
+            : <OfficeScene agents={(state && state.agents) || []} onPick={id => setSel('a:' + id)} />}
           {items.some(it => it.type !== 'agent') && <div className="dk-grid dk-helper-row">
             {items.filter(it => it.type !== 'agent').map(it => <HelperTile key={it.key} it={it} pressed={it.key === sel} onPick={() => setSel(it.key)} />)}
           </div>}
