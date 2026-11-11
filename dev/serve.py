@@ -85,6 +85,24 @@ if DEMO:
         s["events"] += [{"id": f"demo-ev{k}w", "at": now - 1, "kind": "walk", "agent": "default", "text": "→ Dev · new brief"}]
         return s
 
+class OfficeWsOrigin:
+    """Harness only, with --office-open: the office WS Origin becomes the public host.
+
+    The plugin accepts the browser's own origin (127.0.0.1) but forwards it upstream, and the upstream accepts only
+    https://<OFFICE_PUBLIC_HOST>. In production the browser's Origin is already the public host, so this rewrite
+    never happens there. Only the /office/ws WebSocket scope is touched.
+    """
+
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] == "websocket" and scope.get("path", "").endswith("/office/ws"):
+            origin = f"https://{api.OFFICE_PUBLIC_HOST}".encode()
+            scope = {**scope, "headers": [(k, origin if k == b"origin" else v) for k, v in scope["headers"]]}
+        await self.app(scope, receive, send)
+
+
 FAKE_STATE = None
 if "--fake-state" in sys.argv:
     # Harness only: GET /state returns the JSON file at this path, re-read on every request, so a test can
@@ -104,4 +122,4 @@ app.mount("/", StaticFiles(directory=ROOT / "dev/dist", html=True), name="harnes
 
 if __name__ == "__main__":
     port = next((int(a) for a in sys.argv[1:] if a.isdigit()), 8790)
-    uvicorn.run(app, host="127.0.0.1", port=port, log_level="warning")
+    uvicorn.run(OfficeWsOrigin(app) if "--office-open" in sys.argv else app, host="127.0.0.1", port=port, log_level="warning")
