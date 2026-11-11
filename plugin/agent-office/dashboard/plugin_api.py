@@ -495,6 +495,13 @@ def _office_token() -> str | None:
     return token or None
 
 
+# The Hermes team as Claude Office characters: one daemon poller, started once (AGENT_OFFICE_TEAM_POLL=0 disables).
+_tspec = importlib.util.spec_from_file_location("agent_office_team", Path(__file__).with_name("office_team.py"))
+team = importlib.util.module_from_spec(_tspec)
+_tspec.loader.exec_module(team)
+team.start(collect.root_home(), OFFICE_HOME / "auth-token", OFFICE_UPSTREAM_PORT)
+
+
 def _office_gate_open(conn) -> bool:
     """True only when the dashboard runs with its auth gate engaged (see the block comment)."""
     from hermes_cli.web_server import app as dashboard_app
