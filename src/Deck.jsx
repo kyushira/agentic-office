@@ -16,6 +16,7 @@ import BottomNav from './BottomNav.jsx';
 import { AshCard } from './AshCard.jsx';
 import MenuTab from './MenuTab.jsx';
 import { AgentsTab } from './AgentsTab.jsx';
+import { OfficeScene } from './OfficeScene.jsx';
 import { InboxTab } from './InboxTab.jsx';
 
 
@@ -420,6 +421,9 @@ function HelperSheet({ it, now }) {
   );
 }
 
+/** The office desk's hit button for an agent (focus returns here when its sheet closes); null if none is on screen. */
+const officeHitFor = id => Array.from(document.querySelectorAll('.dk-off-hit')).find(el => el.dataset.agentId === String(id)) || null;
+
 function Sheet({ children, onClose, getReturn }) {
   const ref = useRef(null);
   useDialogFocus(ref, onClose, getReturn);
@@ -670,16 +674,13 @@ export default function Deck() {
       <section id="dk-pane-office" role="tabpanel" aria-labelledby="dk-pane-tab-office" className="dk-pane dk-pane-office"
         hidden={!desktop && pane !== 'office'}>
       <h2 className="dk-pane-h">Office</h2>
-      {(desktop || pane === 'office') && <main ref={gridRef} className="dk-grid">
-            {items.map(it => it.type === 'agent'
-              ? <AgentTile key={it.key} it={it} pressed={it.key === sel} blip={blips[it.agent.id] || 0} still={lite || hidden} onPick={() => setSel(it.key)}
-                  setRef={el => { setTileRef(it.agent.id, el); }} pulses={brainPulses[it.agent.id]} fx={swarmFx[it.agent.id]} />
-              : <HelperTile key={it.key} it={it} pressed={it.key === sel} onPick={() => setSel(it.key)} />)}
-            {!state && !error && Array.from({ length: 4 }, (_, i) => <div key={i} className="dk-tile is-ghost" />)}
-            <div className="dk-flights" aria-hidden="true">
-              {flights.map(f => <FlightLayer key={f.key} f={f} />)}
-            </div>
-          </main>}
+      {(desktop || pane === 'office') && <>
+          {/* Agents are desks in the scene. Helper sessions have no desk, so they keep a tile row under it. */}
+          <OfficeScene agents={(state && state.agents) || []} onPick={id => setSel('a:' + id)} />
+          {items.some(it => it.type !== 'agent') && <div className="dk-grid dk-helper-row">
+            {items.filter(it => it.type !== 'agent').map(it => <HelperTile key={it.key} it={it} pressed={it.key === sel} onPick={() => setSel(it.key)} />)}
+          </div>}
+        </>}
       </section>
       {/* phone only (hidden on desktop, where Live is the right pane below): the same all-agents feed, mounted only while shown */}
       <section id="dk-pane-live" role="tabpanel" aria-labelledby="dk-pane-tab-live" className="dk-pane dk-pane-live"
@@ -714,7 +715,7 @@ export default function Deck() {
       {tab === 'menu' && <MenuTab usage={usage} now={Date.now()} full={full} standalone={standalone} lite={lite}
         onEnterFull={enterFull} onExitFull={exitFull} onToggleLite={() => setLite(!lite)} />}
       </div>
-      {picked && <Sheet onClose={closeSheet} getReturn={sel && sel.startsWith('a:') ? () => tileRefs.current.get(sel.slice(2)) : null}>
+      {picked && <Sheet onClose={closeSheet} getReturn={sel && sel.startsWith('a:') ? () => officeHitFor(sel.slice(2)) : null}>
         {picked.type === 'agent'
           ? <AgentSheet key={picked.key} it={picked} sessions={(state.sessions || {})[picked.agent.id] || []} now={now}
                       det={detOk && detOk.data} detErr={!!(detOk && detOk.err)} notes={brainNotes(state.brain)}

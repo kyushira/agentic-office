@@ -172,8 +172,9 @@ export function sceneFor(agent) {
   const status = statusOf(agent);
   const present = agent != null && a.status !== 'offline' && a.activity !== 'no data';
   const name = agent == null ? 'Agent' : a.name || a.id || 'Agent';
+  // tag is the name only: the desk tag must fit in its box. No-data shows as a faint ring dot (CSS), and label says it.
   if (!present) {
-    return { status, present: false, pose: 'sit', screen: 'off', glow: 0, ring: false, bang: false, label: `${name}, no data` };
+    return { status, present: false, pose: 'sit', screen: 'off', glow: 0, ring: false, bang: false, tag: name, label: `${name}, no data` };
   }
   const reason = speechText(a.activity).trim();
   const suffix = reason && reason.toLowerCase() !== 'idle' ? `: ${reason}` : '';
@@ -187,6 +188,7 @@ export function sceneFor(agent) {
     glow: GLOW[status],
     ring: waiting,
     bang: waiting,
+    tag: name,
     label: `${name}, ${WORD[status]}${suffix}`,
   };
 }

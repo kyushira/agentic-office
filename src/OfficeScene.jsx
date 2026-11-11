@@ -33,9 +33,7 @@ export function OfficeScene({ agents, onPick }) {
     return () => document.removeEventListener('visibilitychange', sync);
   }, []);
 
-  const list = Array.isArray(agents) ? agents.filter(Boolean) : [];
-  const byId = new Map(list.map(a => [String(a.id), a]));
-  const scene = sceneModel(list);
+  const scene = sceneModel(Array.isArray(agents) ? agents.filter(Boolean) : []);
 
   return (
     <div className="dk-off-wrap">
@@ -49,8 +47,6 @@ export function OfficeScene({ agents, onPick }) {
           style={{ left: '87%', top: '64%', height: '32%' }} />
 
         {scene.map(s => {
-          const a = byId.get(s.id) || {};
-          const name = a.name || s.id;
           const cx = s.x + CHAR_DX;
           const deskX = s.x + DESK_DX;
           const deskTop = s.y - (DESK_H - 2);
@@ -60,7 +56,6 @@ export function OfficeScene({ agents, onPick }) {
           const scrW = 0.64 * DESK_W;
           const scrT = deskTop + 0.01 * DESK_H;
           const scrH = 0.42 * DESK_H;
-          const tagText = s.present ? name : `${name} · no data`;
           return (
             <div key={s.id} className="dk-off-agent" style={{ '--off-c': s.color, '--off-rgb': s.rgb }}>
               <img className={'dk-off-desk' + (s.present ? '' : ' is-off')} src={src('desk.webp')} alt=""
@@ -87,10 +82,10 @@ export function OfficeScene({ agents, onPick }) {
               <span className={'dk-off-tag' + (s.present ? '' : ' is-off') + (s.present && s.status === 'error' ? ' is-error' : '')}
                 aria-hidden="true" style={{ left: pct(cx), top: `calc(${pct(s.y)} + 3px)` }}>
                 <span className="dk-off-tag-dot" />
-                <span className="dk-off-tag-t">{tagText}</span>
+                <span className="dk-off-tag-t">{s.tag}</span>
                 {s.present && s.status === 'error' && <span className="dk-off-errdot" />}
               </span>
-              <button type="button" className="dk-off-hit" aria-label={s.label}
+              <button type="button" className="dk-off-hit" aria-label={s.label} data-agent-id={s.id}
                 style={{ left: pct(cx), top: pct(s.y - CHAR_H / 2) }} onClick={() => onPick && onPick(s.id)} />
             </div>
           );

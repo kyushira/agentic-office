@@ -221,6 +221,15 @@ describe('sceneFor', () => {
     assert.equal(s.bang, false);
     assert.equal(s.label, 'Pixel, no data');
   });
+  test('desk tag is the name only, even with no data (the no-data state is the ring dot and the label)', () => {
+    assert.equal(sceneFor(ag('sentinel', 'offline', { activity: 'no data' })).tag, 'Sentinel');
+    assert.equal(sceneFor(ag('sentinel', 'offline', { error: 'OSError', activity: 'data unavailable' })).tag, 'Sentinel');
+    assert.equal(sceneFor(ag('nova', 'running', { activity: 'editing code' })).tag, 'Nova');
+    assert.equal(sceneFor(null).tag, 'Agent');
+    const [m] = sceneModel([ag('sentinel', 'offline', { activity: 'no data' })]);
+    assert.equal(m.tag, 'Sentinel');
+    assert.equal(m.label, 'Sentinel, no data');
+  });
   test('offline with an error (data unavailable): status still matches statusOf, but not present', () => {
     const a = ag('sentinel', 'offline', { activity: 'data unavailable', error: 'OperationalError' });
     const s = sceneFor(a);
