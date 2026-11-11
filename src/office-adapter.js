@@ -179,23 +179,22 @@ function transitionEvents(profile, a1, b0, b1) {
   return [{ type: 'session_error', sessionId: sid, error: errorText(a1), main: mainOf(a1) }];
 }
 
-/** One online session row for the snapshot's sessions[] (the reducer's SessionInfo). */
-function sessionRow(profile, a) {
-  return { id: profile, ...sessionFields(profile, a), state: 'active', hooked: true, main: mainOf(a) };
-}
-
-/** First sync: every online profile as a session (seats its Claude) plus its live helpers. One snapshot. */
+/**
+ * First sync into a fresh frame: a snapshot (timestamp only) followed by one session_started per online profile
+ * and one agent_spawned per live helper. The bridge (useAgentSocket clean) drops container items
+ * nested too deep, so a snapshot's sessions[] objects never arrive (MAX_DEPTH 3 keeps main.needsYou / main.error,
+ * which sit at depth 2). The snapshot's sessions/activeAgents stay empty; each row is its own event. Seats everyone.
+ */
 export function snapshotEvents(state, opts = {}) {
-  const activeAgents = [];
-  const sessions = [];
+  const events = [{ type: 'snapshot', activeAgents: [], sessions: [], timestamp: timestampOf(state, opts) }];
   for (const [pid, a] of agentsById(state)) {
     if (!present(a)) continue;
-    sessions.push(sessionRow(pid, a));
+    events.push({ type: 'session_started', ...sessionFields(pid, a), main: mainOf(a) });
     for (const [hid, h] of helpersOf(a)) {
-      activeAgents.push({ ...helperFields(pid, a, hid, h), state: 'working' });
+      events.push({ type: 'agent_spawned', agent: helperFields(pid, a, hid, h) });
     }
   }
-  return [{ type: 'snapshot', activeAgents, sessions, timestamp: timestampOf(state, opts) }];
+  return events;
 }
 
 function timestampOf(state, opts) {

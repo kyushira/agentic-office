@@ -26,20 +26,33 @@ const withAgent = (state, id, patch) => ({
 });
 const byType = (events, type) => events.filter(e => e.type === type);
 
-describe('first sync: snapshot seats every session and helper', () => {
+describe('first sync: a snapshot, then one session_started per online profile', () => {
   test('all 7 profiles become sessions with name, role and task; no helpers', () => {
-    const [snap] = snapshotEvents(seven());
-    assert.equal(snap.type, 'snapshot');
-    assert.equal(snap.sessions.length, 7);
-    assert.deepEqual(snap.activeAgents, []);
-    const byId = Object.fromEntries(snap.sessions.map(s => [s.id, s]));
+    const ev = snapshotEvents(seven());
+    assert.equal(ev[0].type, 'snapshot');
+    const starts = byType(ev, 'session_started');
+    assert.equal(starts.length, 7);
+    assert.equal(byType(ev, 'agent_spawned').length, 0);
+    const byId = Object.fromEntries(starts.map(s => [s.sessionId, s]));
     assert.equal(byId.default.name, 'Ash');
     assert.equal(byId.default.role, 'assistant');
     assert.equal(byId.dev.role, 'debugger');
     assert.equal(byId.red.role, 'Explore');
     assert.equal(byId.sentinel.role, 'security-auditor');
     assert.equal(byId.dev.task, 'Dev remit');
-    assert.ok(snap.sessions.every(s => s.state === 'active' && s.hooked === true && s.main.state === 'idle'));
+    assert.ok(starts.every(s => s.main.state === 'idle'));
+  });
+
+  test('every event stays within the bridge depth limit (no container two levels deep)', () => {
+    // useAgentSocket clean() with MAX_DEPTH 3: a container at depth 3 (event.field.sub.deeper = object) is dropped.
+    // So no value may be an object whose field is itself an object-of-object at depth 3.
+    const deep = (v, d) => v && typeof v === 'object' && (d >= 3 || Object.values(v).some(x => deep(x, d + 1)));
+    const s = seven({ dev: { helpers: [{ id: 'h', task: 't', activity: 'x' }] } });
+    const waiting = withAgent(seven(), 'dev', { status: 'waiting', activity: 'waiting for approval' });
+    const errored = withAgent(seven(), 'prism', { status: 'offline', activity: 'data unavailable', error: 'E' });
+    for (const e of [...snapshotEvents(s), ...diffState(seven(), waiting), ...diffState(seven(), errored)]) {
+      assert.equal(deep(e, 0), false, `${e.type} has a container at depth 3 (the bridge would drop it)`);
+    }
   });
 
   test('the role table covers the seven profiles with the ROLE_TO_CHAR keys', () => {
@@ -49,12 +62,12 @@ describe('first sync: snapshot seats every session and helper', () => {
     assert.equal(ROLE_BY_PROFILE.prism, 'code-reviewer');
   });
 
-  test('a helper present at the first sync is an activeAgent under its parent session', () => {
+  test('a helper present at the first sync is an agent_spawned under its parent session', () => {
     const h = { id: 'h1', task: 't', activity: 'reading' };
-    const [snap] = snapshotEvents(seven({ dev: { helpers: [h] } }));
-    assert.equal(snap.activeAgents.length, 1);
-    assert.equal(snap.activeAgents[0].id, 'hermes-dev:helper:h1');
-    assert.equal(snap.activeAgents[0].sessionId, 'dev');
+    const spawned = byType(snapshotEvents(seven({ dev: { helpers: [h] } })), 'agent_spawned');
+    assert.equal(spawned.length, 1);
+    assert.equal(spawned[0].agent.id, 'hermes-dev:helper:h1');
+    assert.equal(spawned[0].agent.sessionId, 'dev');
   });
 
   test('diffState with no prev is the same snapshot', () => {
@@ -62,16 +75,17 @@ describe('first sync: snapshot seats every session and helper', () => {
   });
 
   test('a profile with no DB (offline, no data) is left out', () => {
-    const [snap] = snapshotEvents(seven({ red: { status: 'offline', activity: 'no data' } }));
-    assert.equal(snap.sessions.length, 6);
-    assert.ok(!snap.sessions.some(s => s.id === 'red'));
+    const starts = byType(snapshotEvents(seven({ red: { status: 'offline', activity: 'no data' } })), 'session_started');
+    assert.equal(starts.length, 6);
+    assert.ok(!starts.some(s => s.sessionId === 'red'));
   });
 
   test('a read failure (offline with an error) is still seated, in error', () => {
-    const [snap] = snapshotEvents(seven({ prism: { status: 'offline', activity: 'data unavailable', error: 'OperationalError' } }));
-    const prism = snap.sessions.find(s => s.id === 'prism');
+    const ev = snapshotEvents(seven({ prism: { status: 'offline', activity: 'data unavailable', error: 'OperationalError' } }));
+    const prism = byType(ev, 'session_started').find(s => s.sessionId === 'prism');
     assert.ok(prism);
     assert.equal(prism.main.state, 'error');
+    assert.equal(prism.main.error.error, 'OperationalError');
   });
 });
 
@@ -249,7 +263,9 @@ describe('connection and envelope', () => {
     const env = envelope(snapshotEvents(seven()));
     assert.equal(env.type, 'hermes-office');
     assert.equal(env.v, 1);
-    assert.equal(env.events.length, 1);
+    // one snapshot + one session_started per online profile (7)
+    assert.equal(env.events.length, 8);
+    assert.equal(env.events[0].type, 'snapshot');
     assert.deepEqual(envelope(null).events, []);
   });
 

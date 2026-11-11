@@ -12,9 +12,8 @@ describe('first sync through the adapter (the frame posts diffState(null, state)
   test('one snapshot seats every present session; offline ones are skipped', () => {
     const state = { ts: 10, agents: [agent('default'), agent('dev'), agent('sentinel', { status: 'offline', activity: 'no data' })] };
     const ev = diffState(null, state);
-    assert.equal(ev.length, 1);
     assert.equal(ev[0].type, 'snapshot');
-    assert.deepEqual(ev[0].sessions.map(s => s.id), ['default', 'dev']);
+    assert.deepEqual(ev.filter(e => e.type === 'session_started').map(s => s.sessionId), ['default', 'dev']);
   });
 
   test('a non-object state gives no events (no throw)', () => {

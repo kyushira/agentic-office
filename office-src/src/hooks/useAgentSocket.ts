@@ -42,7 +42,9 @@ export interface AgentSocketResult {
 const PROTOCOL = 'hermes-office'
 const PROTOCOL_V = 1
 const MAX_EVENTS = 200
-const MAX_DEPTH = 2
+// 3, not 2: a session event carries main.needsYou / main.error one level below main (SessionMain shape in
+// types.ts), and a depth-2 cap dropped those objects, so a soft/hard wait lost its kind. Still a bound on input.
+const MAX_DEPTH = 3
 const MAX_ITEMS = 200
 const MAX_STRING = 2000
 
