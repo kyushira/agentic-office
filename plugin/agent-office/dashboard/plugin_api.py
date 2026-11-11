@@ -469,6 +469,7 @@ async def wiki_log(tail: str | None = Query(None)):
 # ---------------------------------------------------------------------------
 
 import os
+from urllib.parse import urlsplit
 
 import httpx
 from fastapi import WebSocket, WebSocketDisconnect
@@ -504,6 +505,111 @@ def _office_token() -> str | None:
     except OSError:
         return None
     return token or None
+
+
+# ---- Browser allowlist, CSP and WebSocket origin (Sentinel fixes 2 and 3) ---------------------------------
+# The proxy holds the office token, so a browser request reaches the office only on a route the office page
+# itself uses. The policy is pure so it can be unit-tested (test/test_office_proxy_policy.py).
+_OFFICE_BROWSER_METHODS = ("GET", "HEAD", "POST")
+# Destructive or token-tier routes, refused for every method (express routes are case-insensitive, so the
+# policy compares lowercase segments).
+_OFFICE_BLOCKED_HEADS = frozenset({"clear", "event", "status"})
+_OFFICE_BLOCKED_HEAD_PREFIXES = ("a2a",)  # /a2a and /a2a/agents: the agent-to-agent JSON-RPC surface
+# POST is allowed only on these: POST /chat (a plain line), POST /settings (UI token), POST /permission/<id>.
+_OFFICE_POST_EXACT = frozenset({"chat", "settings"})
+_OFFICE_POST_PERMISSION = "permission"
+# Characters that would change how the upstream reads the path once decoded: separators, backslash, control
+# characters, spaces, and any leftover '%' (a double-encoded byte).
+_OFFICE_BAD_PATH = re.compile(r"[\\?#%\x00-\x20\x7f]")
+# A chat line the upstream treats as a privileged slash command (/clear): it needs the office token, which the
+# proxy holds, so the browser may not send it.
+_OFFICE_PRIVILEGED_CHAT = re.compile(r"\s*/clear(\s|$)", re.IGNORECASE)
+_HOST_LABELS = re.compile(r"[A-Za-z0-9.-]+")
+
+
+def _office_segments(path: str) -> list[str] | None:
+    """The path after /office as the router decoded it -> lowercase segments, or None when refused.
+
+    Empty segments collapse, so '//clear' and '/clear/' are '/clear' (express routes them the same way).
+    A '.' or '..' segment, or any character in _OFFICE_BAD_PATH, refuses the whole path.
+    """
+    if not isinstance(path, str) or _OFFICE_BAD_PATH.search(path):
+        return None
+    segs = [s for s in path.split("/") if s]
+    if any(s in (".", "..") for s in segs):
+        return None
+    return [s.lower() for s in segs]
+
+
+def office_route_allowed(method: str, path: str) -> bool:
+    """True when the browser may reach this office route through the proxy.
+
+    GET and HEAD reach any office path except the blocked heads. POST reaches only POST /chat, POST /settings
+    and POST /permission/<id>[/...]. Every other method (PUT, PATCH, DELETE, OPTIONS, ...) is refused here, and
+    the caller answers 405 for it.
+    """
+    m = (method or "").upper()
+    if m not in _OFFICE_BROWSER_METHODS:
+        return False
+    segs = _office_segments(path)
+    if segs is None:
+        return False
+    head = segs[0] if segs else ""
+    if head in _OFFICE_BLOCKED_HEADS or head.startswith(_OFFICE_BLOCKED_HEAD_PREFIXES):
+        return False
+    if m != "POST":
+        return True
+    if len(segs) == 1 and head in _OFFICE_POST_EXACT:
+        return True
+    return head == _OFFICE_POST_PERMISSION and len(segs) >= 2
+
+
+def office_chat_body_allowed(body: bytes) -> bool:
+    """False when a POST /chat body is a privileged slash command or cannot be parsed (fail closed).
+
+    An empty body is passed on: the upstream answers it with 400 and never reaches the command.
+    """
+    if not body:
+        return True
+    try:
+        data = json.loads(body)
+    except (ValueError, RecursionError):
+        return False
+    if not isinstance(data, dict):
+        return True
+    text = data.get("text")
+    return not (isinstance(text, str) and _OFFICE_PRIVILEGED_CHAT.match(text))
+
+
+def office_ws_origin_allowed(origin: str | None, host: str | None, public_host: str | None) -> bool:
+    """True when the WebSocket Origin is http(s) and its host[:port] equals the public host or the request's Host.
+
+    Missing, 'null', pathful, userinfo-bearing and lookalike origins (evil-<host>, <host>.evil.com) are refused.
+    """
+    if not origin:
+        return False
+    try:
+        parts = urlsplit(origin)
+    except ValueError:
+        return False
+    if parts.scheme not in ("http", "https") or parts.path or parts.query or parts.fragment:
+        return False
+    netloc = parts.netloc.lower()
+    if not netloc or "@" in netloc:
+        return False
+    allowed = {h.strip().lower() for h in (public_host, host) if h and h.strip()}
+    return netloc in allowed
+
+
+def _office_csp() -> str:
+    """CSP for the office HTML document. No script-src: the built bundle is one external module script
+    (verified: office-dist/index.html has no inline script). connect-src keeps 'self' and adds the public
+    host's wss: form so the same-origin WebSocket works in browsers that do not match 'self' for ws/wss."""
+    ws = f" wss://{OFFICE_PUBLIC_HOST}" if _HOST_LABELS.fullmatch(OFFICE_PUBLIC_HOST or "") else ""
+    return f"frame-ancestors 'self'; connect-src 'self'{ws}; object-src 'none'; base-uri 'self'"
+
+
+OFFICE_CSP = _office_csp()
 
 
 # The Hermes team as Claude Office characters: one daemon poller, started once (AGENT_OFFICE_TEAM_POLL=0 disables).
@@ -553,10 +659,17 @@ def _office_static_file(rel: str) -> Path | None:
 async def office_http(request: Request, path: str = ""):
     if not _office_gate_open(request):
         return JSONResponse({"error": "office proxy needs dashboard auth"}, status_code=403)
+    # Route policy first, for every method, so a refused request never reaches the upstream (and never reaches
+    # the static files either). See office_route_allowed.
+    if request.method not in _OFFICE_BROWSER_METHODS:
+        return JSONResponse({"error": "method not allowed"}, status_code=405,
+                            headers={**NO_STORE, "Allow": "GET, HEAD, POST"})
+    if not office_route_allowed(request.method, path):
+        return JSONResponse({"error": "office route not allowed"}, status_code=403, headers=NO_STORE)
     if request.method in ("GET", "HEAD"):
         static = _office_static_file(path)
         if static is not None:
-            headers = _NO_STORE_HEADERS if static.name == "index.html" else None
+            headers = {**_NO_STORE_HEADERS, "Content-Security-Policy": OFFICE_CSP} if static.name == "index.html" else None
             return FileResponse(static, headers=headers)
     token = _office_token()
     if token is None:
@@ -566,6 +679,8 @@ async def office_http(request: Request, path: str = ""):
     headers["authorization"] = f"Bearer {token}"
     url = f"http://127.0.0.1:{OFFICE_UPSTREAM_PORT}/{path}"
     body = await request.body()
+    if request.method == "POST" and _office_segments(path) == ["chat"] and not office_chat_body_allowed(body):
+        return JSONResponse({"error": "office route not allowed"}, status_code=403, headers=NO_STORE)
     try:
         async with httpx.AsyncClient(timeout=httpx.Timeout(30.0), follow_redirects=False) as client:
             upstream = await client.request(
@@ -576,11 +691,17 @@ async def office_http(request: Request, path: str = ""):
     for key, value in upstream.headers.multi_items():
         if key.lower() not in _OFFICE_DROP_RESPONSE:
             response.headers.append(key, value)
+    if (upstream.headers.get("content-type") or "").lower().startswith("text/html"):
+        response.headers["Content-Security-Policy"] = OFFICE_CSP  # the HTML document only
     return response
 
 
 @router.websocket("/office/ws")
 async def office_ws(ws: WebSocket):
+    # Origin first, before the session check and before any upstream dial: a page on another origin is refused.
+    if not office_ws_origin_allowed(ws.headers.get("origin"), ws.headers.get("host"), OFFICE_PUBLIC_HOST):
+        await ws.close(code=1008)
+        return
     if not _office_ws_session_ok(ws):
         await ws.close(code=1008)  # refused before accept: the client sees a handshake 403
         return

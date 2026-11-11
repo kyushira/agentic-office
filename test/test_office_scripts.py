@@ -156,7 +156,7 @@ class ScriptSyntaxTests(unittest.TestCase):
     def test_server_script_calls_the_guard_before_starting_anything(self):
         text = SERVER.read_text(encoding="utf-8")
         guard_at = text.index("guard-upstream.sh")
-        server_at = text.index("setsid node server/index.js")
+        server_at = text.index("setsid env -i")  # the server launch (env -i scrub, see Sentinel fix 1)
         self.assertLess(guard_at, server_at)
         self.assertIn("AGENT_OFFICE_CHAT_AI", text)
         self.assertIn('"paused"', text)

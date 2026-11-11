@@ -79,3 +79,24 @@ Notes saved to the inbox folder (`/opt/data/memory/inbox`, or `$AGENT_DECK_INBOX
     mv /opt/data/plugins/agent-office /opt/data/agent-office.disabled
 
 The dashboard notices the folder is gone and drops the tab. Optionally remove `agent-office` from `plugins.enabled` too.
+
+## Office server service
+
+The Claude Office server (node, port 3334) runs as an s6 longrun, so it restarts after a crash. Source:
+`plugin/agent-office/office-build/s6/agent-office-server/`. The run file execs
+`start-office-server.sh --foreground`, which scrubs the environment (`env -i`: only PATH, HOME, LANG and
+`AGENT_OFFICE_*` reach node) and writes `server.pid` in the runtime dir.
+
+Install (run as root, in the container, from this checkout):
+
+    bash plugin/agent-office/office-build/install-office-service.sh
+
+Rollback:
+
+    bash plugin/agent-office/office-build/install-office-service.sh --remove
+
+Persistence: `/run/service` is tmpfs and is wiped on every container restart. Hermes re-creates only
+`gateway-<profile>` slots at boot (`docker/cont-init.d/02-reconcile-profiles` runs `hermes_cli/container_boot.py`,
+which reads `$HERMES_HOME/profiles/`), and there is no hermes-supported hook for other services. So after a
+restart, run the install line again. To make it automatic, add a `/etc/cont-init.d/` script in the image that
+runs the install line (an image change, outside this repo).

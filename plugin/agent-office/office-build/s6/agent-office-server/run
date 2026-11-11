@@ -1,0 +1,14 @@
+#!/command/with-contenv sh
+# shellcheck shell=sh
+# s6 longrun for the Claude Office server. Installed by install-office-service.sh, which replaces
+# @OFFICE_BUILD_DIR@ with the absolute office-build directory of the checkout it runs from (the run file
+# lives in /run/service, which is tmpfs, so it cannot find its own checkout at run time).
+#
+# Runs start-office-server.sh in --foreground mode: that script scrubs the environment (env -i) and
+# exec's node, so this supervised process is the office server itself, with pid in server.pid.
+set -e
+export HOME=/opt/data
+export OFFICE_BUILD_DIR="@OFFICE_BUILD_DIR@"
+cd /opt/data
+[ "$(id -u)" = 0 ] || exec "$OFFICE_BUILD_DIR/start-office-server.sh" --foreground
+exec s6-setuidgid hermes "$OFFICE_BUILD_DIR/start-office-server.sh" --foreground

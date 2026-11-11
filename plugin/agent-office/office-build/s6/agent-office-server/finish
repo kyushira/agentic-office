@@ -1,0 +1,7 @@
+#!/command/with-contenv sh
+# shellcheck shell=sh
+# $1 = exit code of the run script. s6 restarts a longrun after finish, so a crash loop is slowed to one
+# attempt every 2 seconds. Nothing is marked down here: a clean stop is also restarted, because this service is
+# meant to stay up. To stop it for good, use the rollback in README.md.
+sleep 2
+exit 0
