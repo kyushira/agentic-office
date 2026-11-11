@@ -1,11 +1,15 @@
 // Probe mapping for OfficeHome (src/office-probe-model.js).
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
-import { probeOutcome, OFFICE_URL } from '../src/office-probe-model.js';
+import { probeOutcome, OFFICE_URL, OFFICE_PROBE_URL } from '../src/office-probe-model.js';
 
 describe('probeOutcome', () => {
   test('the proxy path is the same-origin office page', () => {
     assert.equal(OFFICE_URL, '/api/plugins/agent-office/office/');
+  });
+  test('the probe is GET on the upstream-backed /health route, not the static office page', () => {
+    assert.equal(OFFICE_PROBE_URL, '/api/plugins/agent-office/office/health');
+    assert.notEqual(OFFICE_PROBE_URL, OFFICE_URL);
   });
   test('2xx mounts the iframe', () => {
     assert.equal(probeOutcome(200), 'ready');

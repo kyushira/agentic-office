@@ -3,6 +3,11 @@
 
 export const OFFICE_URL = '/api/plugins/agent-office/office/';
 
+// The probe is GET on /health, not HEAD on OFFICE_URL: the plugin serves office/ index.html statically (from
+// office-dist) without reaching the office server, so a probe there answers 200 even when the server is down.
+// /health is not a built file, so it is proxied upstream and its status reflects the office server.
+export const OFFICE_PROBE_URL = '/api/plugins/agent-office/office/health';
+
 /**
  * status: the HTTP status of the probe response, or null when there was no response (network error).
  * redirectType: response.type for a manual redirect ('opaqueredirect'), else undefined.

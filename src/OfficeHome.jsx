@@ -2,16 +2,16 @@
 //
 // Lazy: nothing is fetched or mounted unless `active` (Deck passes it: Home tab shown, page visible, and on
 // phone the Office pane selected). When `active` goes false the iframe unmounts, which closes its WebSocket
-// (the server's viewer count drops). Before the iframe mounts, a HEAD probe of the proxy decides the state:
+// (the server's viewer count drops). Before the iframe mounts, a GET probe of the proxy's /health decides the state:
 // 2xx -> iframe, 401/403/login redirect -> "needs dashboard login", anything else -> "Office server offline".
 import { React, useState, useEffect, useRef } from './sdk.js';
 import { ROOM_W, ROOM_H, ZOOM_ONE, frameScale, zoomNext, defaultZoomMode } from './office-zoom-model.js';
-import { OFFICE_URL, probeOutcome } from './office-probe-model.js';
+import { OFFICE_URL, OFFICE_PROBE_URL, probeOutcome } from './office-probe-model.js';
 
-/** HEAD on the proxy with the dashboard session cookie (same-origin). Redirects are not followed: a login redirect is 'login'. */
+/** GET on the upstream-backed /health route with the dashboard session cookie (same-origin). Redirects are not followed: a login redirect is 'login'. */
 async function probeOffice() {
   try {
-    const r = await fetch(OFFICE_URL, { method: 'HEAD', credentials: 'same-origin', cache: 'no-store', redirect: 'manual' });
+    const r = await fetch(OFFICE_PROBE_URL, { method: 'GET', credentials: 'same-origin', cache: 'no-store', redirect: 'manual' });
     return probeOutcome(r.status, r.type);
   } catch (e) {
     return probeOutcome(null);

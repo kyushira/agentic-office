@@ -17,6 +17,7 @@ const ICONS = {
   agents: svg(<><circle cx="9" cy="8.5" r="3.2" /><path d="M3.5 19.5c.6-3 2.8-4.8 5.5-4.8s4.9 1.8 5.5 4.8" />
     <circle cx="16.5" cy="9.5" r="2.5" /><path d="M16 14.8c2.3.2 4 1.8 4.5 4.2" /></>),
   inbox: svg(<><path d="M4 13l2.5-7.5h11L20 13v5.5H4z" /><path d="M4 13h4.5l1 2h5l1-2H20" /></>),
+  usage: svg(<><path d="M4.5 16a7.5 7.5 0 1 1 15 0" /><path d="M12 16l3.5-4" /></>),
   wiki: svg(<><path d="M5 4.5h10.5a2.5 2.5 0 0 1 2.5 2.5V19.5H7.5A2.5 2.5 0 0 1 5 17z" /><path d="M5 17a2.5 2.5 0 0 1 2.5-2.5H18" /></>),
   menu: svg(<path d="M4 7h16M4 12h16M4 17h16" />),
 };
