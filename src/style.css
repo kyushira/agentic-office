@@ -1154,3 +1154,31 @@ html.ao-full-active { background-color: var(--bg) !important; }
 @media (max-width: 399px) {
   .dk-root .dk-tok, .dk-root .dk-clock { display: none; }
 }
+/* R1: under 599px `.dk-root .dk-usage-btn.dk-pill { min-height: 28px }` (earlier in this file) beat the 44px rule
+   above, so the 'usage n/a' pill was 36px. Same specificity, later in the file, so this wins. */
+.dk-root .dk-usage-btn.dk-pill { min-height: 44px; }
+/* R2: the stray purple line was the active-tab indicator (2px, --c-accent #8b5cf6, BottomNav .dk-tabnav-btn.is-on::before).
+   It sat on the nav's top border, the same y as the lower edge of the Home scene when the scene runs under the bar.
+   Moved 4px inside the bar so it no longer reads as a line on the scene edge. */
+.dk-root .dk-tabnav:not(.dk-rail) .dk-tabnav-btn.is-on::before { top: 4px; }
+
+/* R3 (desktop, 900px+): Usage rings were 3 columns of ~390px around a ~107px ring. Cap the grid so the rings
+   sit together and centre; the grid still auto-fits down to 160px per ring. */
+@media (min-width: 900px) {
+  .dk-root .dk-urings { grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); max-width: 720px; margin: 0 auto; }
+}
+/* R3 (desktop, 1100px+): the Home team strip was a row under the scene, below the fold at 1366x800, and the scene
+   column left ~90px gutters. The strip now sits beside the scene as one column (150px). The scene keeps its
+   height cap. Phone and tablet keep the 4 + 3 strip under the scene. */
+@media (min-width: 1100px) {
+  .dk-root .dk-pane-office { display: grid; grid-template-columns: minmax(0, 1fr) 150px; column-gap: 12px; align-items: start; }
+  .dk-root .dk-pane-office > .dk-pane-h { grid-column: 1 / -1; }
+  .dk-root .dk-pane-office > .dk-oh { grid-column: 1; grid-row: 2; }
+  .dk-root .dk-pane-office > .dk-ts { grid-column: 2; grid-row: 2; margin: 0; grid-template-columns: minmax(0, 1fr); }
+  .dk-root .dk-pane-office > .dk-grid { grid-column: 1 / -1; }
+  .dk-root .dk-pane-office .dk-ts-chip { display: grid; grid-template-columns: 32px minmax(0, 1fr); grid-template-areas: "art name" "art st";
+    align-items: center; column-gap: 8px; row-gap: 2px; min-height: 52px; padding: 8px 10px; text-align: left; }
+  .dk-root .dk-pane-office .dk-ts-art { grid-area: art; }
+  .dk-root .dk-pane-office .dk-ts-name { grid-area: name; }
+  .dk-root .dk-pane-office .dk-ts-st { grid-area: st; }
+}

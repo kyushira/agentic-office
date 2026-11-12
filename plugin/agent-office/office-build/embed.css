@@ -30,4 +30,51 @@
     flex: 1 1 auto;
     width: 100%;
   }
+
+  /* In-scene name tags for the Hermes team (ids from dashboard/office_team.py TEAM: hermes-<profile>).
+   Relies on upstream DOM and styles, checked against Claude-Office at the commit this was built from:
+     .character-wrapper            Character.tsx:220  (translate(-50%,-100%), so its bottom edge is the feet)
+     .char-body-group[data-agent-id] Character.tsx:261-267 (position: relative; the click target)
+     .char-sprite-stack / .char-sprite  Character.tsx (bob animation; the sprite image)
+     .state-idle                   styles/office.css:536
+   The tag uses ::before on the body group: upstream uses ::after for the click ring and the inspect ring
+   (office.css:417, :434), and ::before is unused there. The rim is a drop-shadow on the sprite image, not the
+   body group, because office.css:1526 sets the body group's own filter for main-needs-you.
+   Size: the Home iframe is scaled to the pane (346px at 360 wide -> 0.46), so 24px here is ~11px on screen. */
+  .char-body-group[data-agent-id^="hermes-"]::before {
+    position: absolute;
+    left: 50%;
+    top: 100%;
+    transform: translate(-50%, 6px);
+    padding: 5px 12px 5px 22px;
+    border: 1px solid var(--tag-accent);
+    border-radius: 999px;
+    background:
+      radial-gradient(circle at 10px 50%, var(--tag-accent) 0 4px, transparent 4.5px),
+      rgba(7, 7, 10, 0.82);
+    color: #f2f2f4;
+    font: 600 24px/1 system-ui, -apple-system, "Segoe UI", sans-serif;
+    white-space: nowrap;
+    pointer-events: none;
+    z-index: 2;
+  }
+  /* Team sprites and their tags sit above the other sprites, so a neighbour's sprite does not cover a name.
+     The wrapper's inline z-index (Character.tsx:227, the y position) needs !important to be overridden. */
+  .character-wrapper:has(> .char-body-group[data-agent-id^="hermes-"]) {
+    z-index: 200 !important;
+  }
+  .character-wrapper.state-idle > .char-body-group[data-agent-id^="hermes-"] {
+    opacity: 0.72;
+  }
+  .char-body-group[data-agent-id^="hermes-"] .char-sprite {
+    filter: drop-shadow(0 0 1px var(--tag-accent)) drop-shadow(0 0 3px var(--tag-accent));
+  }
+  /* Per-agent accent and name (CSS cannot build content from another attribute, so each agent gets a rule). */
+  .char-body-group[data-agent-id="hermes-ash"]::before      { content: "Ash";      --tag-accent: #6e9bff; }
+  .char-body-group[data-agent-id="hermes-dev"]::before      { content: "Dev";      --tag-accent: #4fd983; }
+  .char-body-group[data-agent-id="hermes-red"]::before      { content: "Red";      --tag-accent: #ff6a3d; }
+  .char-body-group[data-agent-id="hermes-nova"]::before     { content: "Nova";     --tag-accent: #8b5cf6; }
+  .char-body-group[data-agent-id="hermes-pixel"]::before    { content: "Pixel";    --tag-accent: #ec4899; }
+  .char-body-group[data-agent-id="hermes-sentinel"]::before { content: "Sentinel"; --tag-accent: #14b8a6; }
+  .char-body-group[data-agent-id="hermes-prism"]::before    { content: "Prism";    --tag-accent: #facc15; }
 }
