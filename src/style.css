@@ -1044,8 +1044,10 @@ html.ao-full-active { background-color: var(--bg) !important; }
 
 /* Home's live office (OfficeHome.jsx): a fitted iframe in the dark glow frame. Tokens only, no new palette. */
 .dk-root .dk-oh { position: relative; width: 100%; border: 1px solid var(--dk-line); border-radius: 12px; background: var(--dk-bg); box-shadow: 0 0 0 1px var(--dk-glow-soft), 0 0 24px var(--dk-glow-soft); overflow: hidden; }
-.dk-root .dk-oh-bar { display: flex; justify-content: flex-end; padding: 6px 8px 0; }
-.dk-root .dk-oh-zoom { font: inherit; font-family: var(--dk-mono); font-size: 12px; color: var(--dk-ink); background: var(--dk-raise); border: 1px solid var(--dk-line); border-radius: 999px; padding: 4px 10px; min-height: 28px; cursor: pointer; }
+/* Zoom row: its own 44px strip above the scene (not over it), right-aligned, quiet until pressed. */
+.dk-root .dk-oh-bar { display: flex; justify-content: flex-end; align-items: center; min-height: 44px; padding: 0 8px; border-bottom: 1px solid var(--dk-line); }
+.dk-root .dk-oh-zoom { font: inherit; font-family: var(--dk-mono); font-size: 12px; color: var(--dk-mut); background: transparent; border: 1px solid transparent; border-radius: 8px; padding: 4px 10px; min-height: 44px; cursor: pointer; }
+.dk-root .dk-oh-zoom:hover { color: var(--dk-ink); border-color: var(--dk-line); }
 .dk-root .dk-oh-zoom[aria-pressed="true"] { color: var(--dk-on-hot); background: var(--dk-hot); border-color: var(--dk-hot); }
 .dk-root .dk-oh-zoom:focus-visible, .dk-root .dk-oh-retry:focus-visible { outline: 2px solid var(--dk-hot); outline-offset: 2px; }
 .dk-root .dk-oh-box { position: relative; width: 100%; touch-action: pan-x pan-y pinch-zoom; }
@@ -1133,6 +1135,10 @@ html.ao-full-active { background-color: var(--bg) !important; }
 /* phone: the scroll body ends at the top of the fixed bottom nav, so rows at rest are never under it */
 @media (max-width: 899px) {
   .dk-root .dk-tabbody { margin-bottom: calc(64px + env(safe-area-inset-bottom)); padding-bottom: 12px; }
+  /* Phone: no bar on the scroll body. Touch scrolls without one, and the thumb (Chrome draws it over the right
+     edge at 360px) sat on top of the content. The stable gutter is for desktop only, so it is off here. */
+  .dk-root .dk-tabbody { scrollbar-width: none; scrollbar-gutter: auto; }
+  .dk-root .dk-tabbody::-webkit-scrollbar { display: none; }
 }
 .dk-root .dk-usage-tab dt, .dk-root .dk-usage-tab dd, .dk-root .dk-ut-cost, .dk-root .dk-status, .dk-root .dk-projects-h,
 .dk-root .dk-projects-n, .dk-root .dk-zz, .dk-root .dk-menu-h, .dk-root .dk-pane-h, .dk-root .dk-rseg-btn, .dk-root .dk-tabnav-badge,

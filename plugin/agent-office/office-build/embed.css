@@ -31,6 +31,18 @@
     width: 100%;
   }
 
+  /* Upstream HUD text that renders under 10px at the 0.46 frame scale (3-4px on screen), so it is hidden:
+     .title-bar         App.tsx:1759 window chrome (dots, app name, session pills, day/night, phase, gear;
+                        styles/office.css:44). The room then fills the 28px it used (checked at 360px).
+     .room-switcher     App.tsx:1809 bottom-left room legend, 6px (styles/room-switcher.css:15)
+     .days-sign-digits  IncidentLayer.tsx:57 day count on the wall sign, 7px (styles/incident.css:159).
+                        The sign board itself stays. */
+  .title-bar,
+  .room-switcher,
+  .days-sign-digits {
+    display: none !important;
+  }
+
   /* In-scene name tags for the Hermes team (ids from dashboard/office_team.py TEAM: hermes-<profile>).
    Relies on upstream DOM and styles, checked against Claude-Office at the commit this was built from:
      .character-wrapper            Character.tsx:220  (translate(-50%,-100%), so its bottom edge is the feet)
@@ -69,12 +81,21 @@
   .char-body-group[data-agent-id^="hermes-"] .char-sprite {
     filter: drop-shadow(0 0 1px var(--tag-accent)) drop-shadow(0 0 3px var(--tag-accent));
   }
-  /* Per-agent accent and name (CSS cannot build content from another attribute, so each agent gets a rule). */
-  .char-body-group[data-agent-id="hermes-ash"]::before      { content: "Ash";      --tag-accent: #6e9bff; }
-  .char-body-group[data-agent-id="hermes-dev"]::before      { content: "Dev";      --tag-accent: #4fd983; }
-  .char-body-group[data-agent-id="hermes-red"]::before      { content: "Red";      --tag-accent: #ff6a3d; }
-  .char-body-group[data-agent-id="hermes-nova"]::before     { content: "Nova";     --tag-accent: #8b5cf6; }
-  .char-body-group[data-agent-id="hermes-pixel"]::before    { content: "Pixel";    --tag-accent: #ec4899; }
-  .char-body-group[data-agent-id="hermes-sentinel"]::before { content: "Sentinel"; --tag-accent: #14b8a6; }
-  .char-body-group[data-agent-id="hermes-prism"]::before    { content: "Prism";    --tag-accent: #facc15; }
+  /* Per-agent accent and name (CSS cannot build content from another attribute, so each agent gets a rule).
+     The accent is set on the body group itself, so the ::before tag and the sprite glow both inherit it.
+     Hex values are the ACCENT table in dashboard/collect.py:30. */
+  .char-body-group[data-agent-id="hermes-ash"]      { --tag-accent: #6e9bff; }
+  .char-body-group[data-agent-id="hermes-dev"]      { --tag-accent: #4fd983; }
+  .char-body-group[data-agent-id="hermes-red"]      { --tag-accent: #ff6a3d; }
+  .char-body-group[data-agent-id="hermes-nova"]     { --tag-accent: #8b5cf6; }
+  .char-body-group[data-agent-id="hermes-pixel"]    { --tag-accent: #ec4899; }
+  .char-body-group[data-agent-id="hermes-sentinel"] { --tag-accent: #14b8a6; }
+  .char-body-group[data-agent-id="hermes-prism"]    { --tag-accent: #facc15; }
+  .char-body-group[data-agent-id="hermes-ash"]::before      { content: "Ash"; }
+  .char-body-group[data-agent-id="hermes-dev"]::before      { content: "Dev"; }
+  .char-body-group[data-agent-id="hermes-red"]::before      { content: "Red"; }
+  .char-body-group[data-agent-id="hermes-nova"]::before     { content: "Nova"; }
+  .char-body-group[data-agent-id="hermes-pixel"]::before    { content: "Pixel"; }
+  .char-body-group[data-agent-id="hermes-sentinel"]::before { content: "Sentinel"; }
+  .char-body-group[data-agent-id="hermes-prism"]::before    { content: "Prism"; }
 }
