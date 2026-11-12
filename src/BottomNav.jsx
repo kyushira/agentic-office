@@ -42,7 +42,7 @@ export default function BottomNav({ tab, onTab, needsCount = 0, desktop = false 
   return (
     <nav className={'dk-tabnav' + (desktop ? ' dk-rail' : '')} aria-label="Sections">
       {desktop && <span className="dk-rail-logo" aria-hidden="true">{LOGO}</span>}
-      <div className={'dk-tabnav-list' + (desktop ? ' dk-rail-list' : '')} role="tablist" aria-label="Agent Deck"
+      <div className={'dk-tabnav-list' + (desktop ? ' dk-rail-list' : '')} role="tablist" aria-label="Office"
         aria-orientation={desktop ? 'vertical' : 'horizontal'}>
         {TABS.map(({ id, label }, i) => {
           const on = tab === id;

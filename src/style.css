@@ -1110,3 +1110,47 @@ html.ao-full-active { background-color: var(--bg) !important; }
 .dk-root .dk-ut-rowbtn:focus-visible, .dk-root .dk-ut-col:focus-visible, .dk-root .dk-seg-btn:focus-visible { outline: 2px solid var(--c-accent); outline-offset: 2px; }
 @media (prefers-reduced-motion: reduce) { .dk-root .dk-ut-skel span { animation: none; } }
 @media (prefers-reduced-motion: reduce) { .dk-root .dk-oh-skel { animation: none; } }
+
+/* ---- polish pass (phone + desktop audit): safe area, one-row header, 44px targets, >=12px text, scrollbars ---- */
+.dk-root { padding-left: env(safe-area-inset-left); padding-right: env(safe-area-inset-right); }
+.dk-root .dk-top { padding-top: max(8px, env(safe-area-inset-top)); }
+.dk-root .dk-title { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.dk-root .dk-usage-btn, .dk-root .dk-bell, .dk-root .dk-oh-zoom, .dk-root .dk-rseg-btn, .dk-root .dk-tb-zoom { min-height: 44px; min-width: 44px; }
+.dk-root .dk-rseg-btn { height: auto; padding-top: 10px; padding-bottom: 10px; }
+.dk-root .dk-seg-btn { min-height: 44px; }
+.dk-root .dk-ut-col { min-width: 44px; }
+.dk-root .dk-tabbody, .dk-root .dk-scroll, .dk-root .dk-ut-bars, .dk-root .dk-wk-main { scrollbar-gutter: stable; }
+.dk-root .dk-tabnav-lbl { font-size: 12px; }
+.dk-root .dk-pill, .dk-root .dk-sub, .dk-root .dk-pstate, .dk-root .dk-ptime, .dk-root .dk-ag-n, .dk-root .dk-ag-chip,
+.dk-root .dk-ag-time, .dk-root .dk-mc-t, .dk-root .dk-mc-who, .dk-root .dk-ut-badge, .dk-root .dk-ut-sub,
+.dk-root .dk-sc-h, .dk-root .dk-sc-meta, .dk-root .dk-ib-time, .dk-root .dk-wk-act, .dk-root .dk-wk-grp,
+.dk-root .dk-tok-lbl, .dk-root .dk-uw-l, .dk-root .dk-ut-tok small, .dk-root .dk-wk-rd, .dk-root .dk-ut-axis span,
+.dk-root .dk-ut-dl dt, .dk-root .dk-ut-dl dd, .dk-root .demo-badge, .dk-root .dk-note, .dk-root .dk-uscope { font-size: max(12px, 1em); }
+.dk-root .dk-ut-badge, .dk-root .demo-badge { font-size: 12px; }
+.dk-root .dk-ut-dl dt, .dk-root .dk-ut-dl dd { font-size: 13px; }
+.dk-root dt, .dk-root .dk-name, .dk-root .dk-parent, .dk-root .dk-urings-h, .dk-root .dk-uring-unit, .dk-root .dk-uring-sub,
+.dk-root .dk-sc-centre, .dk-root .dk-sc-th, .dk-root .dk-uring-name, .dk-root small { font-size: 12px; }
+/* phone: the scroll body ends at the top of the fixed bottom nav, so rows at rest are never under it */
+@media (max-width: 899px) {
+  .dk-root .dk-tabbody { margin-bottom: calc(64px + env(safe-area-inset-bottom)); padding-bottom: 12px; }
+}
+.dk-root .dk-usage-tab dt, .dk-root .dk-usage-tab dd, .dk-root .dk-ut-cost, .dk-root .dk-status, .dk-root .dk-projects-h,
+.dk-root .dk-projects-n, .dk-root .dk-zz, .dk-root .dk-menu-h, .dk-root .dk-pane-h, .dk-root .dk-rseg-btn, .dk-root .dk-tabnav-badge,
+.dk-root .dk-wk-h, .dk-root .dk-wk-seg-h, .dk-root .dk-ut-meta span { font-size: 12px; }
+.dk-root .dk-usage-btn { height: auto; min-height: 44px; padding-top: 10px; padding-bottom: 10px; }
+/* desktop: cap the Home scene to the viewport height (room is 756x613, so width caps height), and stop
+   controls from stretching across dead bands (Agents filter, Wiki view, server card) */
+@media (min-width: 900px) {
+  .dk-root .dk-oh { max-width: calc((100dvh - 300px) * 1.233); margin: 0 auto; }
+  .dk-root .dk-ag-seg { width: min(100%, 420px); margin: 0 auto; }
+  .dk-root .dk-wk-seg { width: fit-content; }
+  .dk-root .dk-sc { max-width: 640px; margin-left: auto; margin-right: auto; }
+}
+@media (max-width: 479px) {
+  .dk-root .dk-top { flex-wrap: nowrap; }
+  .dk-root .dk-acts { flex-wrap: nowrap; gap: 4px; }
+  .dk-root .dk-title { font-size: 16px; }
+}
+@media (max-width: 399px) {
+  .dk-root .dk-tok, .dk-root .dk-clock { display: none; }
+}

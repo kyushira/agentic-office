@@ -602,7 +602,7 @@ export default function Deck() {
     <div ref={rootRef} className={'dk-root' + (lite ? ' is-lite' : '') + (hidden ? ' is-hidden' : '') + (items.length && items.length <= 6 ? ' is-few' : '')} style={{ height: full ? '100%' : height }}>
       <header className="dk-top dk-topbar">
         <div className="dk-brand">
-          <h1 className="dk-title">Agent Deck</h1>
+          <h1 className="dk-title">Office</h1>
           <span className="dk-pill dk-local" title="Served from this machine">local</span>
         </div>
         <div className="dk-acts">
@@ -693,6 +693,6 @@ export default function Deck() {
     </div>
   );
   return full
-    ? <div ref={fullRef} className="ao-full" role="region" aria-label="Agent Deck fullscreen"><i className="ao-edge ao-edge-top" aria-hidden="true" />{root}<i className="ao-edge ao-edge-bot" aria-hidden="true" /></div>
+    ? <div ref={fullRef} className="ao-full" role="region" aria-label="Office fullscreen"><i className="ao-edge ao-edge-top" aria-hidden="true" />{root}<i className="ao-edge ao-edge-bot" aria-hidden="true" /></div>
     : root;
 }

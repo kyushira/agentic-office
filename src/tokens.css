@@ -12,7 +12,7 @@
   --border-strong: #3E3A50;
   --text-1: #F2F1F6;   /* >= 17:1 on bg */
   --text-2: #B3B0BF;   /* >= 9:1 */
-  --text-3: #8A8697;   /* >= 5:1, metadata only */
+  --text-3: #9C98AB;   /* >= 5:1 on surface-3, metadata only (was #8A8697: 4.47 on #23212E) */
 
   /* semantic: one hue per meaning */
   --c-accent: #8B5CF6;  --c-accent-hover: #A855F7;  --c-accent-rgb: 139, 92, 246;   /* primary action, violet */
