@@ -1,6 +1,8 @@
 // Agents tab: filter control and one card per agent. Pure logic lives in agents-model.js.
 import { React, useState } from './sdk.js';
 import { FILTERS, filterAgents, counts, pulseIds, cardView } from './agents-model.js';
+import { Sprite } from './Sprite.jsx';
+import './team-strip.css';
 const FILTER_LABEL = { all: 'All', running: 'Running', waiting: 'Waiting', error: 'Error' };
 const SKELETON = [0, 1, 2, 3, 4, 5];
 
@@ -67,7 +69,10 @@ export function AgentsTab({ agents, sessions, now, loading, error, onRetry, onPi
                     {v.harness && <span className="dk-ag-chip">{v.harness}</span>}
                     <span className="dk-ag-time">{v.time}</span>
                   </span>
-                  <span className="dk-ag-name">{v.name}</span>
+                  <span className="dk-ag-who">
+                    <span className="dk-bust" aria-hidden="true"><Sprite who={v.id} working={v.status === 'running'} /></span>
+                    <span className="dk-ag-name">{v.name}</span>
+                  </span>
                   <span className="dk-ag-task">{v.task}</span>
                 </button>
               </li>

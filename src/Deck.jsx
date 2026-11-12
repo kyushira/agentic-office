@@ -17,6 +17,7 @@ import { AshCard } from './AshCard.jsx';
 import MenuTab from './MenuTab.jsx';
 import { AgentsTab } from './AgentsTab.jsx';
 import OfficeHome from './OfficeHome.jsx';
+import { TeamStrip } from './TeamStrip.jsx';
 import UsageTab from './UsageTab.jsx';
 import { InboxTab } from './InboxTab.jsx';
 
@@ -217,39 +218,6 @@ function Swarm({ live, fx, still }) {
         {dots.map((d, i) => <span key={d.key} className="dk-hslot" style={{ transform: `rotate(${(i * 360) / n}deg)` }}><i className={'dk-hdot' + d.cls} /></span>)}
       </span>
     </span>
-  );
-}
-
-function AgentTile({ it, pressed, onPick, blip, still, setRef, pulses, fx }) {
-  const a = it.agent, working = it.working;
-  const ring = toolRing(a.tools, a.activity, a.status);
-  const hs = Array.isArray(a.helpers) ? a.helpers.filter(h => h && h.id != null) : [];
-  return (
-    <button ref={setRef} className={'dk-tile is-agent' + (working ? ' is-working' : ' is-rest') + (pressed ? ' is-pressed' : '') + (it.chip ? ' has-chip' : '') + (it.helperCount > 0 || it.ctxPct != null ? ' has-top' : '') + (working ? ' has-say' : '')} onClick={onPick}
-      style={{ '--dk-c': it.color, gridColumnStart: it.rowStart ? 1 : undefined }}
-      aria-label={`${a.name}, ${a.role}, ${it.status}` + (hs.length ? `, ${hs.length} helper${hs.length === 1 ? '' : 's'} running` : '')}
-      title={swarmTip(hs) || undefined}>
-      {(hs.length > 0 || (fx || []).some(x => x.kind === 'out')) && <Swarm live={hs} fx={fx || []} still={still} />}
-      {working && <i className="dk-badge" />}
-      {it.helperCount > 0 && <span className="dk-count-chip">{it.helperCount} helper{it.helperCount > 1 ? 's' : ''}</span>}
-      {it.ctxPct != null && !it.helperCount && <span className="dk-ctx">{it.ctxPct}% ctx</span>}
-      {working && a.activity && <span className="dk-say" aria-hidden="true">
-        <span className="dk-say-t">{speechText(a.activity)}</span>
-        {a.status === 'working' && <span className="dk-typing"><i /><i /><i /></span>}
-      </span>}
-      <span className="dk-art"><Sprite who={a.id} working={working} />{!working && <em className="dk-zz">zz</em>}
-        {ring.segments.length > 0 && <span className="dk-ring-wrap"><ToolRing model={ring} /></span>}
-        <BrainNode trips={a.brainTrips} pulses={still ? null : pulses} /></span>
-      <b className="dk-name">{a.name}</b>
-      <span className="dk-role">{a.role}</span>
-      {a.remit && <span className="dk-remit" title={a.remit}>{a.remit}</span>}
-      <span className="dk-status">{it.status}</span>
-      <ActivityStrip spark={a.spark} working={working} blip={blip} />
-      <TodayLine a={a} still={still} />
-      {it.ctxPct != null && <Meter pct={it.ctxPct} decorative />}
-      <span className="dk-models" title={modelText(a)}><ModelLines a={a} /></span>
-      {it.chip && <span className="dk-handoff" style={{ '--dk-from': it.chip.color }}>← {it.chip.text}</span>}
-    </button>
   );
 }
 
@@ -674,6 +642,7 @@ export default function Deck() {
       {(desktop || pane === 'office') && <>
           {/* The live office. Lazy: mounted only while Home is shown and the page is visible (hidden unmounts it, closing its WebSocket). */}
           <OfficeHome active={!hidden} />
+          <TeamStrip agents={(state && state.agents) || []} onPick={id => setSel('a:' + id)} />
           {/* Helper sessions have no desk in the scene, so they keep a tile row under it. */}
           {items.some(it => it.type !== 'agent') && <div className="dk-grid dk-helper-row">
             {items.filter(it => it.type !== 'agent').map(it => <HelperTile key={it.key} it={it} pressed={it.key === sel} onPick={() => setSel(it.key)} />)}

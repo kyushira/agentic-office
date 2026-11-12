@@ -1,5 +1,4 @@
 import { React, useState, useEffect } from './sdk.js';
-import { Sprite } from './Sprite.jsx';
 import { clockText, paneTabNext } from './deck-model.js';
 import { visibleInterval } from './visible-timer.js';
 

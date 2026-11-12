@@ -1,0 +1,39 @@
+/* Team strip under the Home office scene, and the shared pixel-bust frame used on the Agents cards and
+   Ash's card. Colours come from tokens (--text-*, --c-*) or the agent's accent (--a, set in TeamStrip). */
+
+/* Shared bust frame: 32px is exactly 1 pixel per art cell (32×32 grid), so edges stay crisp. */
+.dk-root .dk-bust { display: inline-block; flex: none; width: 32px; height: 32px; }
+.dk-root .dk-bust .dk-sprite { width: 100%; height: 100%; image-rendering: pixelated; }
+
+/* Name row with the bust on its left: Agents cards and Ash's card. */
+.dk-root .dk-ag-who, .dk-root .dk-ash-who { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.dk-root .dk-ag-who .dk-ag-name { min-width: 0; }
+.dk-root .dk-ash-who { flex: 1 1 auto; }
+
+/* Strip: 4 + 3 on a phone (no horizontal scroll), 7 across from 720px. */
+.dk-root .dk-ts { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; list-style: none; margin: 8px 8px 0; padding: 0; }
+@media (min-width: 720px) { .dk-root .dk-ts { grid-template-columns: repeat(7, minmax(0, 1fr)); } }
+.dk-root .dk-ts-item { min-width: 0; }
+
+.dk-root .dk-ts-chip { display: flex; flex-direction: column; align-items: center; gap: 4px; box-sizing: border-box; width: 100%; min-height: 44px; padding: 8px 4px 6px;
+  font: inherit; color: var(--text-1); text-align: center; cursor: pointer;
+  background: var(--surface-1); border: 1px solid var(--border); border-top: 2px solid var(--a, var(--border-strong)); border-radius: var(--radius-control); }
+.dk-root .dk-ts-chip:focus-visible { outline: 2px solid var(--c-accent); outline-offset: 2px; }
+.dk-root .dk-ts-chip.is-working { box-shadow: 0 0 12px color-mix(in srgb, var(--a) 35%, transparent); }
+
+.dk-root .dk-ts-art { display: block; width: 32px; height: 32px; }
+.dk-root .dk-ts-art .dk-sprite { width: 100%; height: 100%; image-rendering: pixelated; }
+
+/* Offline: the bust is dimmed and greyed; the name and status text keep full contrast. */
+.dk-root .dk-ts-chip.is-dim .dk-ts-art { opacity: .5; filter: grayscale(1); }
+
+.dk-root .dk-ts-name { display: block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 700 13px/1.2 var(--font-sans); color: var(--text-1); }
+.dk-root .dk-ts-st { display: inline-flex; align-items: center; gap: 4px; font: 600 12px/1 var(--font-sans); color: var(--text-2); }
+.dk-root .dk-ts-st i { flex: none; width: 6px; height: 6px; border-radius: 50%; background: var(--text-3); }
+.dk-root .dk-ts-chip.is-working .dk-ts-st { color: var(--c-live); }
+.dk-root .dk-ts-chip.is-working .dk-ts-st i { background: var(--c-live); }
+.dk-root .dk-ts-chip.is-waiting .dk-ts-st i { background: var(--c-gold); }
+.dk-root .dk-ts-chip.is-error .dk-ts-st { color: var(--c-danger); }
+.dk-root .dk-ts-chip.is-error .dk-ts-st i { background: var(--c-danger); }
+
+@media (prefers-reduced-motion: reduce) { .dk-root .dk-ts-chip { transition: none; } }
