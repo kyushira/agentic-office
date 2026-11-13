@@ -6,7 +6,7 @@
 // 2xx -> iframe, 401/403/login redirect -> "needs dashboard login", anything else -> "Office server offline".
 import { React, useState, useEffect, useRef } from './sdk.js';
 import { ROOM_W, ROOM_H, ZOOM_ONE, frameScale, zoomNext, defaultZoomMode } from './office-zoom-model.js';
-import { OFFICE_URL, OFFICE_PROBE_URL, probeOutcome } from './office-probe-model.js';
+import { OFFICE_PROBE_URL, DESKTOP_QUERY, officeFrameUrl, probeOutcome } from './office-probe-model.js';
 
 /** GET on the upstream-backed /health route with the dashboard session cookie (same-origin). Redirects are not followed: a login redirect is 'login'. */
 async function probeOffice() {
@@ -22,11 +22,16 @@ const coarseLandscape = () =>
   typeof window !== 'undefined' && typeof window.matchMedia === 'function'
   && window.matchMedia('(pointer: coarse) and (orientation: landscape)').matches;
 
+// Desktop-width viewport (the Deck's own 900px split). Read once per mount: changing the src would reload the office.
+const desktopViewport = () =>
+  typeof window !== 'undefined' && typeof window.matchMedia === 'function' && window.matchMedia(DESKTOP_QUERY).matches;
+
 export default function OfficeHome({ active }) {
   const [phase, setPhase] = useState('idle');        // idle | checking | ready | offline | login
   const [attempt, setAttempt] = useState(0);         // bumped by Retry to probe again
   const [mode, setMode] = useState(() => defaultZoomMode({ coarseLandscape: coarseLandscape() }));
   const [width, setWidth] = useState(0);             // pane width in CSS px (0 until measured)
+  const [frameUrl] = useState(() => officeFrameUrl({ desktop: desktopViewport() }));
   const boxRef = useRef(null);
 
   // Probe only while active; leaving Home (or hiding the page) drops back to idle and unmounts the iframe.
@@ -76,7 +81,7 @@ export default function OfficeHome({ active }) {
           </button>
         </div>
         <div ref={boxRef} className="dk-oh-box" style={boxStyle}>
-          <iframe className="dk-oh-frame" title="Claude Office: live office scene" src={OFFICE_URL}
+          <iframe className="dk-oh-frame" title="Claude Office: live office scene" src={frameUrl}
             style={{ width: ROOM_W + 'px', height: ROOM_H + 'px', transform: `scale(${scale})`, visibility: width ? 'visible' : 'hidden' }} />
         </div>
       </>

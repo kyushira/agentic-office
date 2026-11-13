@@ -1,7 +1,20 @@
 // Probe mapping for OfficeHome (src/office-probe-model.js).
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
-import { probeOutcome, OFFICE_URL, OFFICE_PROBE_URL } from '../src/office-probe-model.js';
+import { probeOutcome, officeFrameUrl, OFFICE_URL, OFFICE_PROBE_URL, DESKTOP_QUERY } from '../src/office-probe-model.js';
+
+describe('officeFrameUrl', () => {
+  test('phone (default) gets the plain office page, so its 24px tags are unchanged', () => {
+    assert.equal(officeFrameUrl(), OFFICE_URL);
+    assert.equal(officeFrameUrl({ desktop: false }), OFFICE_URL);
+  });
+  test('desktop adds the ao-tags flag that office-patch turns into a class', () => {
+    assert.equal(officeFrameUrl({ desktop: true }), '/api/plugins/agent-office/office/?ao-tags=desktop');
+  });
+  test('desktop is the Deck 900px split', () => {
+    assert.equal(DESKTOP_QUERY, '(min-width: 900px)');
+  });
+});
 
 describe('probeOutcome', () => {
   test('the proxy path is the same-origin office page', () => {

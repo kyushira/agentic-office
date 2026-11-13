@@ -28,6 +28,18 @@ export const PATCHES = {
     },
     { name: 'ws url carries the prefix', find: WS_FIND, replace: WS_REPLACE },
   ],
+  'src/main.tsx': [
+    {
+      // The Home iframe is the 756px room whatever the device, so embed.css cannot use a media query to tell a
+      // desktop from a phone. OfficeHome.jsx adds ?ao-tags=desktop on a desktop viewport; this turns it into a
+      // class on <html> before the first render, and embed.css draws smaller team name tags under it.
+      name: 'desktop flag from the Home iframe becomes the ao-tags-desktop class',
+      find: 'const params = new URLSearchParams(window.location.search)\n',
+      replace:
+        'const params = new URLSearchParams(window.location.search)\n' +
+        "if (params.get('ao-tags') === 'desktop') document.documentElement.classList.add('ao-tags-desktop')\n",
+    },
+  ],
   'src/officeAuth.ts': [
     {
       // The dashboard gate reads any Authorization header as its own credential and answers 401

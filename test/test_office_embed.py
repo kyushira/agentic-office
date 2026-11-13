@@ -29,6 +29,7 @@ def media_blocks(css, max_width):
 def rules(body):
     """Map selector -> declarations text for a flat block of rules."""
     out = {}
+    body = re.sub(r"/\*.*?\*/", "", body, flags=re.S)
     for sels, decl in re.findall(r"([^{}]+)\{([^{}]*)\}", body):
         for sel in sels.split(","):
             out[sel.strip()] = decl
@@ -81,6 +82,21 @@ class EmbedCss(unittest.TestCase):
             self.assertIn(sel, self.css)
         self.assertIn("App.tsx:1823", self.css)
         self.assertIn("StatusStrip.tsx:172", self.css)
+
+    def test_phone_tag_stays_24px(self):
+        base = self.r['.char-body-group[data-agent-id^="hermes-"]::before']
+        self.assertRegex(base, r"font:\s*600 24px/1")
+
+    def test_desktop_tag_is_smaller_under_the_flag_class(self):
+        sel = '.ao-tags-desktop .char-body-group[data-agent-id^="hermes-"]::before'
+        self.assertIn(sel, self.r)
+        self.assertRegex(self.r[sel], r"font-size:\s*12px")
+
+    def test_main_tsx_patch_sets_the_flag_class(self):
+        src = read("office-patch.mjs")
+        self.assertIn("'src/main.tsx'", src)
+        self.assertIn("params.get('ao-tags') === 'desktop'", src)
+        self.assertIn("classList.add('ao-tags-desktop')", src)
 
 
 if __name__ == "__main__":

@@ -3,6 +3,17 @@
 
 export const OFFICE_URL = '/api/plugins/agent-office/office/';
 
+// The iframe is always the 756px room inside, so the office page cannot tell a phone from a desktop with a media
+// query. The parent says so in the URL instead; office-patch.mjs (src/main.tsx) turns ?ao-tags=desktop into the
+// class ao-tags-desktop on <html>, and embed.css draws the team name tags smaller under it.
+export const DESKTOP_TAGS_PARAM = 'ao-tags';
+export const DESKTOP_QUERY = '(min-width: 900px)';
+
+/** The iframe src: the office page, plus ?ao-tags=desktop on a desktop-width viewport. */
+export function officeFrameUrl({ desktop = false } = {}) {
+  return desktop ? OFFICE_URL + '?' + DESKTOP_TAGS_PARAM + '=desktop' : OFFICE_URL;
+}
+
 // The probe is GET on /health, not HEAD on OFFICE_URL: the plugin serves office/ index.html statically (from
 // office-dist) without reaching the office server, so a probe there answers 200 even when the server is down.
 // /health is not a built file, so it is proxied upstream and its status reflects the office server.

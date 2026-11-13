@@ -70,6 +70,18 @@
     pointer-events: none;
     z-index: 2;
   }
+  /* Desktop: the Home pane shows the frame at 0.75x (1024-1280 wide) to ~1x (1920), so 24px would be 18-24px on
+     screen. OfficeHome.jsx adds ?ao-tags=desktop on a desktop viewport and office-patch.mjs (src/main.tsx) puts
+     .ao-tags-desktop on <html>; the tag is then 12px, 9-12px on screen (measured in dev/serve.py: 0.747 at 1280,
+     0.976 at 1920). Phones never get the class and keep the 24px rule above (0.46 -> ~11px). */
+  .ao-tags-desktop .char-body-group[data-agent-id^="hermes-"]::before {
+    transform: translate(-50%, 3px);
+    padding: 2px 7px 2px 15px;
+    background:
+      radial-gradient(circle at 7px 50%, var(--tag-accent) 0 3px, transparent 3.5px),
+      rgba(7, 7, 10, 0.82);
+    font-size: 12px;
+  }
   /* Team sprites and their tags sit above the other sprites, so a neighbour's sprite does not cover a name.
      The wrapper's inline z-index (Character.tsx:227, the y position) needs !important to be overridden. */
   .character-wrapper:has(> .char-body-group[data-agent-id^="hermes-"]) {
