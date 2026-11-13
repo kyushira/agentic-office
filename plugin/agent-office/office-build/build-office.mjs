@@ -11,6 +11,7 @@ import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
 import { dirname, join, relative, resolve, sep } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { OFFICE_PREFIX, PATCHES, patchSource } from './office-patch.mjs'
+import { POSES, SHEET_IDS, WALK_FRAMES, WALK_POSES, sheetName, walkName } from './agent-sprites.mjs'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 const ROOT = resolve(process.env.CLAUDE_OFFICE_DIR || '/opt/data/projects/Claude-Office')
@@ -46,6 +47,29 @@ function officePatch() {
     buildEnd() {
       for (const rel of Object.keys(PATCHES)) {
         if (!seen.has(rel)) throw new Error(`office-patch: ${rel} was never transformed (file moved upstream?)`)
+      }
+    },
+  }
+}
+
+/**
+ * Emits the committed per-agent sheets (agent-sprites/, made by agent-sprites.mjs) as sprites/agents/ in
+ * the build. Upstream public/ is never written. Fails if any expected sheet is missing.
+ */
+function agentSheets() {
+  const dir = join(HERE, 'agent-sprites')
+  const expected = []
+  for (const id of Object.keys(SHEET_IDS)) {
+    for (const pose of POSES) expected.push(sheetName(id, pose))
+    for (const pose of WALK_POSES) for (let n = 1; n <= WALK_FRAMES; n++) expected.push(walkName(id, pose, n))
+  }
+  return {
+    name: 'agent-office:agent-sprites',
+    generateBundle() {
+      const missing = expected.filter(name => !existsSync(join(dir, name)))
+      if (missing.length) throw new Error(`agent-sprites: ${missing.length} sheet(s) missing in ${dir}, e.g. ${missing[0]}; run node agent-sprites.mjs`)
+      for (const name of expected) {
+        this.emitFile({ type: 'asset', fileName: `sprites/agents/${name}`, source: readFileSync(join(dir, name)) })
       }
     },
   }
@@ -98,7 +122,7 @@ await build({
   root: ROOT,
   configFile: join(ROOT, 'vite.config.ts'),
   base: `${OFFICE_PREFIX}/`,
-  plugins: [officePatch(), embedCss()],
+  plugins: [officePatch(), embedCss()].concat(agentSheets()),
   logLevel: 'warn',
   build: { outDir: OUT, emptyOutDir: true },
 })

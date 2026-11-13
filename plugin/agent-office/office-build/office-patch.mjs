@@ -5,6 +5,8 @@
 // Every edit states how many times its `find` text must occur. A miss throws, so an upstream
 // change fails the build loudly instead of shipping a page that calls the wrong URLs.
 
+import { POSES, SHEET_IDS } from './agent-sprites.mjs'
+
 export const OFFICE_PREFIX = '/api/plugins/agent-office/office'
 
 // Root-absolute sprite and room URLs in string literals: '/sprites/x.png', "/rooms/y.webp",
@@ -18,8 +20,21 @@ const WS_REPLACE =
   OFFICE_PREFIX +
   "/ws`"
 
+// The seven Hermes team ids draw their own recoloured sheet (agent-sprites.mjs, copied to sprites/agents/
+// by build-office.mjs). getSpritePath already receives agent.id and ignored it; every other id, and any
+// direction outside the four poses, falls through to the upstream sheet unchanged.
+const AGENT_SHEET_FIND =
+  'export function getSpritePath(_agentId: string, role: string, defaultBase: string, direction: string): string {\n'
+const AGENT_SHEET_REPLACE =
+  AGENT_SHEET_FIND +
+  `  if (${JSON.stringify(Object.keys(SHEET_IDS))}.includes(_agentId) && ${JSON.stringify(POSES)}.includes(direction)) ` +
+  "return seasonalUrl('/sprites/agents/' + _agentId + '-' + direction + '.webp')\n"
+
 // Exact-text edits per file. `count` defaults to 1.
 export const PATCHES = {
+  'src/theme.ts': [
+    { name: 'Hermes team ids draw their own sheet (sprites/agents/)', find: AGENT_SHEET_FIND, replace: AGENT_SHEET_REPLACE },
+  ],
   'src/serverUrl.ts': [
     {
       name: 'http base is the page origin plus the prefix',

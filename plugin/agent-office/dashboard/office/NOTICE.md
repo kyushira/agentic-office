@@ -37,4 +37,20 @@ Only static front-left poses are shipped. Walk frames, rear views, right-hand vi
 
 ## Changes made to the art
 
-The sprites were converted to WebP and scaled down, and nothing else was changed. No recolouring, no retouching. Tinting, glows and name tags are applied in CSS at render time.
+The sprites above were converted to WebP and scaled down, and nothing else was changed. No recolouring, no retouching. Tinting, glows and name tags are applied in CSS at render time.
+
+## Derived per-agent sheets (recoloured)
+
+The seven Hermes agent sheets in `plugin/agent-office/office-build/agent-sprites/` (`hermes-<id>-<pose>.webp` and `hermes-<id>-<pose>-walk<N>.webp`, 112 files) are **derivatives of Claude-Office art** (MIT, Copyright (c) 2026 W17ANT, as above). Each is a copy of one upstream character sheet with its skin, hair, top, inner and accent colours mapped onto the agent's palette from `src/portrait.js`. Outlines, shading steps, alpha and frame sizes are unchanged. The generator is `plugin/agent-office/office-build/agent-sprites.mjs`, and it is deterministic.
+
+| Agent id | Upstream base sheet (`public/sprites/characters/`) |
+|---|---|
+| hermes-ash | Claude-1 |
+| hermes-dev | dev-2 |
+| hermes-red | employee-2 |
+| hermes-nova | explore-1 |
+| hermes-pixel | Frontend-dev-1 |
+| hermes-sentinel | security-audit-1 |
+| hermes-prism | employee-3 |
+
+Standing poses are lossy WebP (quality 92); walk frames are lossless WebP. Walk frames exist for front-left, front-right and rear-left only.
