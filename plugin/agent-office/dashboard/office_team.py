@@ -103,14 +103,15 @@ def viewer_count():
 
 # ---------------------------------------------------------------------------
 # The Hermes team. `profile` is the state.db folder ("default" = the root profile, Ash).
+# role = a Claude Office sprite key (src/config.ts ROLE_TO_CHAR) so each member looks different
 TEAM = (
     {"profile": "default", "id": "hermes-ash", "name": "Ash", "role": "Chief of Staff"},
-    {"profile": "dev", "id": "hermes-dev", "name": "Dev", "role": "Lead Developer"},
-    {"profile": "red", "id": "hermes-red", "name": "Red", "role": "Research Assistant"},
-    {"profile": "nova", "id": "hermes-nova", "name": "Nova", "role": "Head of Product and Game Design"},
-    {"profile": "pixel", "id": "hermes-pixel", "name": "Pixel", "role": "Head of Creative and Content"},
-    {"profile": "prism", "id": "hermes-prism", "name": "Prism", "role": "Head of UI and Visual Design"},
-    {"profile": "sentinel", "id": "hermes-sentinel", "name": "Sentinel", "role": "Head of Quality and Security"},
+    {"profile": "dev", "id": "hermes-dev", "name": "Dev", "role": "debugger"},
+    {"profile": "red", "id": "hermes-red", "name": "Red", "role": "Explore"},
+    {"profile": "nova", "id": "hermes-nova", "name": "Nova", "role": "architect-reviewer"},
+    {"profile": "pixel", "id": "hermes-pixel", "name": "Pixel", "role": "test-engineer"},
+    {"profile": "prism", "id": "hermes-prism", "name": "Prism", "role": "frontend-developer"},
+    {"profile": "sentinel", "id": "hermes-sentinel", "name": "Sentinel", "role": "security-auditor"},
 )
 
 
@@ -327,6 +328,8 @@ class Poller:
             except sqlite3.Error:
                 continue  # unreadable this tick: keep what the office was told
             state, status, tool = classify(row, now)
+            if state != WORKING:  # Sir 2026-11-13: the whole team is always in the office
+                state, status, tool = WORKING, "at their desk", None
             meta = self.meta.get(member["id"], {})
             for event in plan(member, meta, state, status, tool, now):
                 if not self._post(event, token, now):

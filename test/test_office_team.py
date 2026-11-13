@@ -30,6 +30,11 @@ def _kinds(events):
     return [e["type"] for e in events]
 
 
+def _of(events, agent_id):
+    """Only one member's events (the whole team is always posted now)."""
+    return [e for e in events if (e.get("agentId") or e.get("agent", {}).get("id")) == agent_id]
+
+
 class ClassifyTests(unittest.TestCase):
     def test_no_database_row_is_gone(self):
         self.assertEqual(ot.classify(None, NOW), (ot.GONE, None, None))
@@ -78,17 +83,19 @@ class PlanTests(unittest.TestCase):
         spawn = ot.spawn_event(DEV)["agent"]
         self.assertEqual(spawn["id"], "hermes-dev")
         self.assertEqual(spawn["name"], "Dev")
-        self.assertEqual(spawn["role"], "Lead Developer")
+        self.assertEqual(spawn["role"], "debugger")
 
-    def test_team_titles_match_the_profiles(self):
+    def test_team_roles_are_claude_office_sprite_keys(self):
+        # role picks the sprite (Claude-Office src/config.ts ROLE_TO_CHAR), so each member looks different
         titles = {m["name"]: m["role"] for m in ot.TEAM}
         self.assertEqual(titles["Ash"], "Chief of Staff")
-        self.assertEqual(titles["Dev"], "Lead Developer")
-        self.assertEqual(titles["Red"], "Research Assistant")
-        self.assertEqual(titles["Nova"], "Head of Product and Game Design")
-        self.assertEqual(titles["Pixel"], "Head of Creative and Content")
-        self.assertEqual(titles["Prism"], "Head of UI and Visual Design")
-        self.assertEqual(titles["Sentinel"], "Head of Quality and Security")
+        self.assertEqual(titles["Dev"], "debugger")
+        self.assertEqual(titles["Red"], "Explore")
+        self.assertEqual(titles["Nova"], "architect-reviewer")
+        self.assertEqual(titles["Pixel"], "test-engineer")
+        self.assertEqual(titles["Prism"], "frontend-developer")
+        self.assertEqual(titles["Sentinel"], "security-auditor")
+        self.assertEqual(len(set(titles.values())), 7)
         self.assertEqual(len(ot.TEAM), 7)
         self.assertEqual(len({m["id"] for m in ot.TEAM}), 7)
 
@@ -252,22 +259,38 @@ class PollerTests(unittest.TestCase):
     def _poller(self):
         return ot.Poller(self.root, self.token, 3334, post=self._post)
 
-    def test_startup_with_quiet_profiles_posts_nothing(self):
+    def test_startup_with_quiet_profiles_puts_whole_team_at_their_desks(self):
+        # Sir 2026-11-13: the whole team is always in the office, idle or gone included
         self._db(self.root, [("assistant", None, NOW - 3000)])
         self._db(self.root / "profiles" / "dev", [("assistant", None, NOW - 600)])
         p = self._poller()
         p.tick(NOW)
-        self.assertEqual(self.sent, [])
+        spawned = [e["agent"]["id"] for e in self.sent if e["type"] == "agent_spawned"]
+        self.assertEqual(spawned, [m["id"] for m in ot.TEAM])
+        working = [e for e in self.sent if e["type"] == "agent_working"]
+        self.assertEqual(len(working), len(ot.TEAM))
+        self.assertTrue(all(e["status"] == "at their desk" and e.get("tool") is None for e in working))
+        self.assertNotIn("agent_completed", _kinds(self.sent))
 
-    def test_fresh_activity_spawns_only_that_agent_then_keepalive_and_clock_out(self):
+    def test_quiet_team_never_clocks_out(self):
+        self._db(self.root / "profiles" / "dev", [("assistant", None, NOW - 600)])
+        p = self._poller()
+        for t in (NOW, NOW + 61, NOW + 2000, NOW + 5000):
+            p.tick(t)
+        self.assertNotIn("agent_completed", _kinds(self.sent))
+
+    def test_fresh_activity_spawns_that_agent_then_keepalive_then_at_desk(self):
         self._db(self.root, [("assistant", None, NOW - 3000)])
         self._db(self.root / "profiles" / "dev", [("tool", "terminal", NOW - 4)])
         p = self._poller()
         p.tick(NOW)
-        self.assertEqual([(e["type"], e.get("agentId") or e["agent"]["id"]) for e in self.sent],
-                         [("agent_spawned", "hermes-dev"), ("agent_working", "hermes-dev")])
-        self.assertEqual(self.sent[1]["status"], "running commands")
-        self.assertEqual(self.sent[1]["tool"], "terminal")
+        dev = _of(self.sent, "hermes-dev")
+        self.assertEqual(_kinds(dev), ["agent_spawned", "agent_working"])
+        self.assertEqual(dev[1]["status"], "running commands")
+        self.assertEqual(dev[1]["tool"], "terminal")
+        ash = _of(self.sent, "hermes-ash")  # quiet for 50 min, still placed at the desk
+        self.assertEqual([(e["type"], e.get("status")) for e in ash],
+                         [("agent_spawned", None), ("agent_working", "at their desk")])
 
         self.sent.clear()
         p.tick(NOW + 5)  # nothing changed, inside the keepalive window
@@ -275,12 +298,13 @@ class PollerTests(unittest.TestCase):
 
         self.sent.clear()
         p.tick(NOW + 61)  # 65 s since dev's last row: still working, and 60 s since the last post, so keepalive
-        self.assertEqual(_kinds(self.sent), ["agent_spawned", "agent_working"])
+        self.assertEqual(_kinds(_of(self.sent, "hermes-dev")), ["agent_spawned", "agent_working"])
 
         self.sent.clear()
-        p.tick(NOW + 95)  # 99 s since the last row: past the working window, so it clocks out
-        self.assertEqual(self.sent, [{"type": "agent_completed", "agentId": "hermes-dev",
-                                      "result": "clocked out (idle)"}])
+        p.tick(NOW + 95)  # 99 s since the last row: past the working window, so dev stays at the desk
+        dev = _of(self.sent, "hermes-dev")
+        self.assertEqual([(e["type"], e["status"]) for e in dev], [("agent_working", "at their desk")])
+        self.assertNotIn("agent_completed", _kinds(self.sent))
 
     def test_keepalive_resends_while_working(self):
         self._db(self.root / "profiles" / "dev", [("assistant", None, NOW)])
@@ -299,11 +323,13 @@ class PollerTests(unittest.TestCase):
         p = self._poller()
         self.accept = False
         p.tick(NOW)
-        self.assertEqual(_kinds(self.sent), ["agent_spawned"])  # first post failed, so the rest was not tried
+        # each member's first post failed, so the rest of that member's events were not tried
+        self.assertEqual(_kinds(self.sent), ["agent_spawned"] * len(ot.TEAM))
         self.sent.clear()
         self.accept = True
         p.tick(NOW + 10)
-        self.assertEqual(_kinds(self.sent), ["agent_spawned", "agent_working"])
+        self.assertEqual(_kinds(_of(self.sent, "hermes-dev")), ["agent_spawned", "agent_working"])
+        self.assertEqual(_kinds(self.sent), ["agent_spawned", "agent_working"] * len(ot.TEAM))
 
     def test_missing_token_posts_nothing(self):
         self.token.unlink()
@@ -325,10 +351,11 @@ class PollerTests(unittest.TestCase):
 
         ot.read_row = broken
         try:
-            p.tick(NOW + 600)  # would be gone, but the read failed: no clock-out
+            p.tick(NOW + 600)  # dev's read failed: nothing posted for dev (the others get keepalives)
         finally:
             ot.read_row = real
-        self.assertEqual(self.sent, [])
+        self.assertEqual(_of(self.sent, "hermes-dev"), [])
+        self.assertNotIn("agent_completed", _kinds(self.sent))
 
 
 class HttpRoundTripTests(unittest.TestCase):
